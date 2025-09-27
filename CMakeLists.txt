@@ -34,8 +34,6 @@ if (ENABLE_LTO)
   endif()
 endif()
 
-include_directories(${CMAKE_SOURCE_DIR}/include)
-
 file(GLOB_RECURSE SRC_FILES
   src/*.cpp
 )
@@ -44,9 +42,10 @@ set(MAIN_SOURCE ${CMAKE_SOURCE_DIR}/src/main.cpp)
 list(REMOVE_ITEM SRC_FILES ${MAIN_SOURCE})
 
 add_library(sirio_core ${SRC_FILES})
+target_include_directories(sirio_core PUBLIC ${CMAKE_SOURCE_DIR}/include)
 target_compile_definitions(sirio_core PUBLIC
-  ENGINE_NAME=\"SirioC\"
-  ENGINE_VERSION=\"0.1.0\"
+  ENGINE_NAME="SirioC"
+  ENGINE_VERSION="0.1.0"
 )
 
 add_executable(SirioC ${MAIN_SOURCE})
@@ -64,25 +63,15 @@ if (MINGW)
   target_link_libraries(movegen_tests PRIVATE stdc++ stdc++fs)
 endif()
 
- codex/implement-legal-move-generation-and-testing
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
-enable_testing()
+
+add_executable(SirioCTests tests/board_fen_tests.cpp)
+target_link_libraries(SirioCTests PRIVATE sirio_core)
+
 add_test(NAME movegen_unit_tests COMMAND movegen_tests)
 add_test(NAME go_command_responds_with_legal_move
          COMMAND Python3::Interpreter
                  ${CMAKE_SOURCE_DIR}/tests/test_go.py
                  $<TARGET_FILE:SirioC>
-                 $<TARGET_FILE
-target_compile_definitions(SirioC PRIVATE
-  ENGINE_NAME=\"SirioC\"
-  ENGINE_VERSION=\"0.1.0\"
-)
-
-add_executable(SirioCTests
-  tests/board_fen_tests.cpp
-  src/core/board.cpp
-  src/core/fen.cpp
-)
-
+                 $<TARGET_FILE:legal_moves_cli>)
 add_test(NAME board_fen_tests COMMAND SirioCTests)
-main
