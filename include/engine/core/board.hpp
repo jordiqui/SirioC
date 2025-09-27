@@ -59,7 +59,7 @@ public:
     const std::string& last_fen() const { return last_fen_; }
     const std::array<uint64_t, PIECE_NB>& piece_bitboards() const { return piece_bitboards_; }
     const std::array<uint64_t, OCC_NB>& occupancy() const { return occupancy_; }
-    char piece_on(int square) const { return board_[square]; }
+    char piece_on(int square) const { return squares_[square]; }
     uint8_t castling_rights() const { return castling_rights_; }
     int en_passant_square() const { return en_passant_square_; }
     int halfmove_clock() const { return halfmove_clock_; }
@@ -96,15 +96,12 @@ private:
     bool stm_white_ = true;
     std::array<uint64_t, PIECE_NB> piece_bitboards_{};
     std::array<uint64_t, OCC_NB> occupancy_{};
-    std::array<char, 64> board_{};
     uint8_t castling_rights_ = 0;
     int en_passant_square_ = INVALID_SQUARE;
     int halfmove_clock_ = 0;
     int fullmove_number_ = 1;
     std::string last_fen_;
     std::array<char, 64> squares_{};
-    uint8_t castling_rights_ = 0;
-    int en_passant_square_ = -1;
 };
 
 } // namespace engine
