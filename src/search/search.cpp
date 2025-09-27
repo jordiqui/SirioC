@@ -3,6 +3,7 @@
 #include "engine/core/board.hpp"
 #include "engine/eval/eval.hpp"
 #include "engine/eval/nnue/evaluator.hpp"
+#include "engine/syzygy/syzygy.hpp"
 #include "engine/util/time.hpp"
 
 #include <algorithm>
@@ -72,9 +73,26 @@ void Search::set_hash(int megabytes) {
 
 void Search::stop() { stop_.store(true, std::memory_order_relaxed); }
 
-void Search::set_use_syzygy(bool enable) { use_syzygy_ = enable; }
+void Search::set_use_syzygy(bool enable) {
+    use_syzygy_ = enable;
+    if (!enable) {
+        syzygy::shutdown();
+    } else if (!syzygy_path_.empty()) {
+        syzygy::init(syzygy_path_);
+    }
+}
 
-void Search::set_syzygy_path(std::string path) { syzygy_path_ = std::move(path); }
+void Search::set_syzygy_path(std::string path) {
+    syzygy_path_ = std::move(path);
+    if (!use_syzygy_) {
+        return;
+    }
+    if (syzygy_path_.empty()) {
+        syzygy::shutdown();
+    } else {
+        syzygy::init(syzygy_path_);
+    }
+}
 
 void Search::set_numa_offset(int offset) { numa_offset_ = offset; }
 
@@ -495,39 +513,20 @@ int Search::evaluate(const Board& board) const {
 
 std::optional<int> Search::probe_syzygy(const Board& board) const {
     if (!use_syzygy_) return std::nullopt;
-    int white_non_king = 0;
-    int black_non_king = 0;
-    char white_piece = 0;
-    char black_piece = 0;
-    for (char piece : board.squares()) {
-        if (piece == '.' || piece == 'K' || piece == 'k') continue;
-        if (std::isupper(static_cast<unsigned char>(piece))) {
-            ++white_non_king;
-            white_piece = piece;
-        } else {
-            ++black_non_king;
-            black_piece = piece;
-        }
-        if (white_non_king > 1 || black_non_king > 1) return std::nullopt;
-    }
-    if (white_non_king == 0 && black_non_king == 0) return 0;
-    auto tb_value = [](char piece) {
-        switch (std::tolower(static_cast<unsigned char>(piece))) {
-        case 'q': return 9500;
-        case 'r': return 5000;
-        case 'b': return 3300;
-        case 'n': return 3200;
-        case 'p': return 1200;
-        default: return 0;
-        }
-    };
-    if (white_non_king == 1 && black_non_king == 0) {
-        int val = tb_value(white_piece) + kMateValue / 4;
-        return board.white_to_move() ? val : -val;
-    }
-    if (white_non_king == 0 && black_non_king == 1) {
-        int val = tb_value(black_piece) + kMateValue / 4;
-        return board.white_to_move() ? -val : val;
+    auto result = syzygy::probe_wdl(board);
+    if (!result) return std::nullopt;
+
+    switch (result->wdl) {
+    case syzygy::WdlOutcome::Win:
+        return kMateValue - 1;
+    case syzygy::WdlOutcome::Loss:
+        return -kMateValue + 1;
+    case syzygy::WdlOutcome::Draw:
+        return 0;
+    case syzygy::WdlOutcome::CursedWin:
+        return 200;
+    case syzygy::WdlOutcome::BlessedLoss:
+        return -200;
     }
     return std::nullopt;
 }

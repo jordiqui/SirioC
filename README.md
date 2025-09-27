@@ -48,6 +48,8 @@ and POPCNT.
   heuristics, and tapered evaluation.
 * Quiet-move pruning and search stability refinements inspired by Berserk and
   Stockfish to supply competitive default play.
+* Optional Syzygy 5-7-man tablebase probing via the `UseSyzygy` and
+  `SyzygyPath` options for perfect endgame information.
 
 ## Engine heuristics
 
