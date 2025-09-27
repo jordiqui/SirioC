@@ -14,6 +14,7 @@
 #include <limits>
 #include <mutex>
 #include <thread>
+#include <atomic>
 
 namespace engine {
 namespace {
@@ -145,6 +146,10 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
     std::vector<Move> root_moves = legal;
     Move best_move = root_moves.front();
     int best_score = 0;
+    result.bestmove = best_move;
+    result.depth = 0;
+    result.score = best_score;
+    result.is_mate = false;
 
     int depth_limit = lim.depth > 0 ? lim.depth : 64;
     depth_limit = std::min(depth_limit, 64);
@@ -154,6 +159,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
 
         std::vector<std::pair<Move, int>> scores(root_moves.size());
         std::atomic<size_t> next_index{0};
+        std::atomic<size_t> completed{0};
         size_t thread_count = std::max(1, threads_);
         std::vector<ThreadData> thread_data(thread_count);
         for (auto& td : thread_data) {
@@ -169,6 +175,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
                 Board child = board.after_move(move);
                 int score = -negamax(child, depth - 1, -kInfiniteScore, kInfiniteScore, true, 1, td);
                 scores[idx] = {move, score};
+                completed.fetch_add(1, std::memory_order_relaxed);
             }
         };
 
@@ -181,6 +188,13 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
         for (auto& th : workers) th.join();
 
         if (stop_.load(std::memory_order_relaxed)) break;
+
+        size_t finished = std::min(completed.load(std::memory_order_relaxed), scores.size());
+        scores.resize(finished);
+
+        if (finished == 0) {
+            break;
+        }
 
         // Determine best move at this depth
         std::sort(scores.begin(), scores.end(), [](const auto& lhs, const auto& rhs) {
