@@ -45,12 +45,43 @@ constexpr int history_index(Move move) {
 }
 
 constexpr std::array<int, 4> kFutilityMargins{0, 120, 200, 320};
+constexpr int kAspirationWindow = 25;
+constexpr int kNullMoveBaseReduction = 2;
+constexpr int kMaxNullMoveReduction = 3;
+constexpr int kReverseFutilityMargin = 200;
+constexpr int kRazoringMargin = 400;
+
+bool has_non_pawn_material(const Board& board, bool white) {
+    const auto& bb = board.piece_bitboards();
+    if (white) {
+        for (int idx = Board::WHITE_KNIGHT; idx <= Board::WHITE_QUEEN; ++idx) {
+            if (bb[static_cast<size_t>(idx)] != 0ULL) return true;
+        }
+    } else {
+        for (int idx = Board::BLACK_KNIGHT; idx <= Board::BLACK_QUEEN; ++idx) {
+            if (bb[static_cast<size_t>(idx)] != 0ULL) return true;
+        }
+    }
+    return false;
+}
+
+int static_exchange_eval(const Board& board, Move move) {
+    char captured = board.piece_on(move_to(move));
+    if (move_is_enpassant(move)) {
+        captured = board.white_to_move() ? 'p' : 'P';
+    }
+    if (captured == '.') return 0;
+    char mover = board.piece_on(move_from(move));
+    int gain = piece_value(captured) - piece_value(mover);
+    return gain;
+}
 
 } // namespace
 
 struct Search::ThreadData {
     std::vector<std::array<Move, 2>> killers;
     std::array<int, 64 * 64> history{};
+    std::array<Move, 64 * 64> countermoves{};
 };
 
 Search::Search() : nodes_(0), stop_(false) {
@@ -161,73 +192,117 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
     for (int depth = 1; depth <= depth_limit; ++depth) {
         if (stop_.load(std::memory_order_relaxed)) break;
 
-        std::vector<std::pair<Move, int>> scores(root_moves.size());
-        std::atomic<size_t> next_index{0};
-        std::atomic<size_t> completed{0};
-        size_t thread_count = std::max(1, threads_);
-        std::vector<ThreadData> thread_data(thread_count);
-        for (auto& td : thread_data) {
-            td.killers.assign(kMaxPly, {MOVE_NONE, MOVE_NONE});
-            td.history.fill(0);
+        int alpha_window = -kInfiniteScore;
+        int beta_window = kInfiniteScore;
+        int delta = kAspirationWindow;
+        if (depth > 1 && result.depth > 0) {
+            alpha_window = std::max(-kInfiniteScore, best_score - delta);
+            beta_window = std::min(kInfiniteScore, best_score + delta);
         }
 
-        auto worker = [&](ThreadData& td) {
-            while (!stop_.load(std::memory_order_relaxed)) {
-                size_t idx = next_index.fetch_add(1, std::memory_order_relaxed);
-                if (idx >= root_moves.size()) break;
-                Move move = root_moves[idx];
-                Board child = board.after_move(move);
-                int score = -negamax(child, depth - 1, -kInfiniteScore, kInfiniteScore, true, 1, td);
-                scores[idx] = {move, score};
-                completed.fetch_add(1, std::memory_order_relaxed);
-            }
-        };
+        std::vector<std::pair<Move, int>> best_scores;
 
-        std::vector<std::thread> workers;
-        workers.reserve(thread_count > 0 ? thread_count - 1 : 0);
-        for (size_t t = 1; t < thread_count; ++t) {
-            workers.emplace_back(worker, std::ref(thread_data[t]));
-        }
-        worker(thread_data[0]);
-        for (auto& th : workers) th.join();
-
-        if (stop_.load(std::memory_order_relaxed)) break;
-
-        size_t finished = std::min(completed.load(std::memory_order_relaxed), scores.size());
-        scores.resize(finished);
-
-        if (finished == 0) {
-            break;
-        }
-
-        // Determine best move at this depth
-        std::sort(scores.begin(), scores.end(), [](const auto& lhs, const auto& rhs) {
-            return lhs.second > rhs.second;
-        });
-
-        if (!scores.empty()) {
-            best_move = scores.front().first;
-            best_score = scores.front().second;
-            result.bestmove = best_move;
-            result.depth = depth;
-            result.score = best_score;
-            result.is_mate = std::abs(best_score) >= kMateThreshold;
-
-            if (info_callback_) {
-                Info info;
-                info.depth = depth;
-                info.score = best_score;
-                info.nodes = nodes_.load(std::memory_order_relaxed);
-                info.time_ms = static_cast<int>(
-                    std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::steady_clock::now() - start)
-                        .count());
-                info.pv = extract_pv(board, best_move);
-                info_callback_(info);
+        while (!stop_.load(std::memory_order_relaxed)) {
+            int search_alpha = alpha_window;
+            int search_beta = beta_window;
+            std::vector<std::pair<Move, int>> scores(root_moves.size());
+            std::atomic<size_t> next_index{0};
+            std::atomic<size_t> completed{0};
+            size_t thread_count = std::max(1, threads_);
+            std::vector<ThreadData> thread_data(thread_count);
+            for (auto& td : thread_data) {
+                td.killers.assign(kMaxPly, {MOVE_NONE, MOVE_NONE});
+                td.history.fill(0);
+                td.countermoves.fill(MOVE_NONE);
             }
 
+            auto worker = [&](ThreadData& td) {
+                while (!stop_.load(std::memory_order_relaxed)) {
+                    size_t idx = next_index.fetch_add(1, std::memory_order_relaxed);
+                    if (idx >= root_moves.size()) break;
+                    Move move = root_moves[idx];
+                    Board child = board.after_move(move);
+                    int score = -negamax(child, depth - 1, -search_beta, -search_alpha, true, 1, td, move);
+                    scores[idx] = {move, score};
+                    completed.fetch_add(1, std::memory_order_relaxed);
+                }
+            };
+
+            std::vector<std::thread> workers;
+            workers.reserve(thread_count > 0 ? thread_count - 1 : 0);
+            for (size_t t = 1; t < thread_count; ++t) {
+                workers.emplace_back(worker, std::ref(thread_data[t]));
+            }
+            worker(thread_data[0]);
+            for (auto& th : workers) th.join();
+
+            if (stop_.load(std::memory_order_relaxed)) break;
+
+            size_t finished = std::min(completed.load(std::memory_order_relaxed), scores.size());
+            scores.resize(finished);
+
+            if (finished == 0) {
+                break;
+            }
+
+            std::sort(scores.begin(), scores.end(), [](const auto& lhs, const auto& rhs) {
+                return lhs.second > rhs.second;
+            });
+
+            if (!scores.empty()) {
+                best_scores = scores;
+                best_move = scores.front().first;
+                best_score = scores.front().second;
+                bool failed_low = best_score <= search_alpha;
+                bool failed_high = best_score >= search_beta;
+
+                if (failed_low) {
+                    delta *= 2;
+                    alpha_window = std::max(-kInfiniteScore, best_score - delta);
+                    beta_window = search_beta;
+                    if (alpha_window <= -kInfiniteScore + 1 || search_alpha == -kInfiniteScore) {
+                        alpha_window = -kInfiniteScore;
+                        beta_window = search_beta;
+                        break;
+                    }
+                    continue;
+                }
+                if (failed_high) {
+                    delta *= 2;
+                    beta_window = std::min(kInfiniteScore, best_score + delta);
+                    alpha_window = search_alpha;
+                    if (beta_window >= kInfiniteScore - 1 || search_beta == kInfiniteScore) {
+                        beta_window = kInfiniteScore;
+                        alpha_window = search_alpha;
+                        break;
+                    }
+                    continue;
+                }
+
+                result.bestmove = best_move;
+                result.depth = depth;
+                result.score = best_score;
+                result.is_mate = std::abs(best_score) >= kMateThreshold;
+
+                if (info_callback_) {
+                    Info info;
+                    info.depth = depth;
+                    info.score = best_score;
+                    info.nodes = nodes_.load(std::memory_order_relaxed);
+                    info.time_ms = static_cast<int>(
+                        std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::steady_clock::now() - start)
+                            .count());
+                    info.pv = extract_pv(board, best_move);
+                    info_callback_(info);
+                }
+                break;
+            }
+        }
+
+        if (!best_scores.empty()) {
             root_moves.clear();
-            for (const auto& [move, score] : scores) {
+            for (const auto& [move, score] : best_scores) {
                 root_moves.push_back(move);
             }
         }
@@ -259,7 +334,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
 }
 
 int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, int ply,
-                    ThreadData& thread_data) {
+                    ThreadData& thread_data, Move prev_move) {
     if (stop_.load(std::memory_order_relaxed)) return 0;
     if (deadline_ && std::chrono::steady_clock::now() >= *deadline_) {
         stop_.store(true, std::memory_order_relaxed);
@@ -295,13 +370,37 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
         return tt_score;
     }
 
+    if (!pv_node && depth <= 3 && !in_check) {
+        int margin = static_eval - kReverseFutilityMargin * depth;
+        if (margin >= beta) return margin;
+    }
+
+    if (!pv_node && depth <= 3 && !in_check && static_eval + kRazoringMargin <= alpha) {
+        int razor = quiescence(board, alpha - 1, alpha, ply, thread_data);
+        if (razor <= alpha) return razor;
+    }
+
+    if (!pv_node && depth >= 2 && !in_check && static_eval >= beta &&
+        has_non_pawn_material(board, board.white_to_move())) {
+        Board::State null_state;
+        board.apply_null_move(null_state);
+        int reduction = kNullMoveBaseReduction + std::min(kMaxNullMoveReduction, depth / 4);
+        int score = -negamax(board, depth - 1 - reduction, -beta, -beta + 1, false, ply + 1,
+                              thread_data, MOVE_NONE);
+        board.undo_move(null_state);
+        if (stop_.load(std::memory_order_relaxed)) return beta;
+        if (score >= beta) {
+            return score;
+        }
+    }
+
     auto moves = board.generate_legal_moves();
     if (moves.empty()) {
         if (board.side_to_move_in_check()) return -kMateValue + ply;
         return 0;
     }
 
-    auto ordered = order_moves(board, moves, tt_move, ply, thread_data);
+    auto ordered = order_moves(board, moves, tt_move, ply, thread_data, prev_move);
 
     int best_score = -kInfiniteScore;
     Move best_move = MOVE_NONE;
@@ -315,6 +414,21 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
         bool is_capture = move_is_capture(move);
         bool is_promo = move_promo(move) != 0;
         bool quiet = !is_capture && !is_promo;
+        int history_score = thread_data.history[static_cast<size_t>(history_index(move))];
+
+        if (!pv_node && quiet) {
+            if (depth <= 2 && move_count > 8 && !in_check) {
+                continue;
+            }
+            if (depth <= 3 && move_count > 5 && history_score < 0) {
+                continue;
+            }
+        }
+
+        if (!pv_node && is_capture && depth <= 1 && static_exchange_eval(board, move) < 0) {
+            continue;
+        }
+
         Board::State state;
         board.apply_move(move, state);
         bool gives_check = board.side_to_move_in_check();
@@ -327,25 +441,33 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
             }
         }
 
+        if (!pv_node && quiet && depth <= 2 && move_count > 8 && !gives_check) {
+            board.undo_move(state);
+            continue;
+        }
+
         int score;
         if (first) {
-            score = -negamax(board, depth - 1, -beta, -alpha, pv_node, ply + 1, thread_data);
+            score = -negamax(board, depth - 1, -beta, -alpha, pv_node, ply + 1, thread_data, move);
             first = false;
         } else {
             int new_depth = depth - 1;
             bool apply_lmr = new_depth > 0 && depth >= 3 && move_count > 3 && quiet && !gives_check && !pv_node;
             if (apply_lmr) {
                 int reduction = 1 + (move_count > 6) + (depth > 5);
+                if (history_score < 0) {
+                    reduction += 1;
+                }
                 new_depth = std::max(1, new_depth - reduction);
-                score = -negamax(board, new_depth, -alpha - 1, -alpha, false, ply + 1, thread_data);
+                score = -negamax(board, new_depth, -alpha - 1, -alpha, false, ply + 1, thread_data, move);
                 if (score > alpha) {
-                    score = -negamax(board, depth - 1, -alpha - 1, -alpha, false, ply + 1, thread_data);
+                    score = -negamax(board, depth - 1, -alpha - 1, -alpha, false, ply + 1, thread_data, move);
                 }
             } else {
-                score = -negamax(board, depth - 1, -alpha - 1, -alpha, false, ply + 1, thread_data);
+                score = -negamax(board, depth - 1, -alpha - 1, -alpha, false, ply + 1, thread_data, move);
             }
             if (score > alpha && score < beta) {
-                score = -negamax(board, depth - 1, -beta, -alpha, true, ply + 1, thread_data);
+                score = -negamax(board, depth - 1, -beta, -alpha, true, ply + 1, thread_data, move);
             }
         }
 
@@ -365,7 +487,11 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
             if (quiet) {
                 update_killers(thread_data, ply, move);
                 update_history(thread_data, move, depth * depth);
+                if (prev_move != MOVE_NONE) {
+                    thread_data.countermoves[static_cast<size_t>(history_index(prev_move))] = move;
+                }
             }
+            best_score = alpha;
             break;
         }
         if (quiet && !improved) {
@@ -457,9 +583,13 @@ void Search::store_tt(uint64_t key, Move best, int depth, int score, int flag, i
 }
 
 std::vector<Move> Search::order_moves(const Board& board, std::vector<Move>& moves, Move tt_move,
-                                      int ply, const ThreadData& thread_data) const {
+                                      int ply, const ThreadData& thread_data, Move prev_move) const {
     std::vector<std::pair<int, Move>> scored;
     scored.reserve(moves.size());
+    Move counter = MOVE_NONE;
+    if (prev_move != MOVE_NONE) {
+        counter = thread_data.countermoves[static_cast<size_t>(history_index(prev_move))];
+    }
     for (Move move : moves) {
         int score = 0;
         if (move == tt_move) {
@@ -476,6 +606,9 @@ std::vector<Move> Search::order_moves(const Board& board, std::vector<Move>& mov
                 const auto& killers = thread_data.killers[ply];
                 if (move == killers[0]) score = 300'000;
                 else if (move == killers[1]) score = 299'000;
+            }
+            if (score == 0 && counter != MOVE_NONE && move == counter) {
+                score = 298'500;
             }
             if (score == 0) {
                 score = 200'000 + thread_data.history[static_cast<size_t>(history_index(move))];

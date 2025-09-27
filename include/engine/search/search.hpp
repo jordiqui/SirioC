@@ -65,14 +65,15 @@ private:
 
     Result search_position(Board& board, const Limits& lim);
     int negamax(Board& board, int depth, int alpha, int beta, bool pv_node, int ply,
-                ThreadData& thread_data);
+                ThreadData& thread_data, Move prev_move);
     int quiescence(Board& board, int alpha, int beta, int ply, ThreadData& thread_data);
     void store_tt(uint64_t key, Move best, int depth, int score, int flag, int ply,
                   int eval);
     bool probe_tt(const Board& board, int depth, int alpha, int beta, Move& tt_move,
                   int& score, int ply) const;
     std::vector<Move> order_moves(const Board& board, std::vector<Move>& moves,
-                                  Move tt_move, int ply, const ThreadData& thread_data) const;
+                                  Move tt_move, int ply, const ThreadData& thread_data,
+                                  Move prev_move) const;
     void update_killers(ThreadData& thread_data, int ply, Move move);
     void update_history(ThreadData& thread_data, Move move, int delta);
     std::vector<Move> extract_pv(const Board& board, Move best) const;
