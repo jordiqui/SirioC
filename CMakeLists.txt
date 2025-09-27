@@ -58,9 +58,16 @@ add_executable(movegen_tests tests/movegen_tests.cpp)
 target_link_libraries(movegen_tests PRIVATE sirio_core)
 
 if (MINGW)
-  target_link_libraries(SirioC PRIVATE stdc++ stdc++fs)
-  target_link_libraries(legal_moves_cli PRIVATE stdc++ stdc++fs)
-  target_link_libraries(movegen_tests PRIVATE stdc++ stdc++fs)
+  foreach(target SirioC legal_moves_cli movegen_tests)
+    target_link_libraries(${target} PRIVATE stdc++)
+  endforeach()
+
+  if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND
+      CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
+    foreach(target SirioC legal_moves_cli movegen_tests)
+      target_link_libraries(${target} PRIVATE stdc++fs)
+    endforeach()
+  endif()
 endif()
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
