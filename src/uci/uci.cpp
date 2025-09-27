@@ -15,9 +15,14 @@ static Board g_board;
 static Search g_search;
 static nnue::Evaluator g_eval;
 static bool g_use_nnue = true;
-static std::string g_eval_file = "nn-000000.nnue";
+static std::string g_eval_file = "nn-1c0000000000.nnue";
+static std::string g_eval_file_small = "nn-37f18f62d772.nnue";
 static int g_hash_mb = 64;
 static int g_threads = 1;
+static int g_numa_offset = 0;
+static bool g_ponder = true;
+static int g_multi_pv = 1;
+static int g_move_overhead = 10;
 static bool g_stop = false;
 static bool g_use_syzygy = false;
 static std::string g_syzygy_path;
@@ -44,11 +49,16 @@ void Uci::handle_line(const std::string& line) {
 
 void Uci::cmd_uci() {
     std::cout << "id name " << engine::kEngineName << " " << engine::kEngineVersion << "\n";
-    std::cout << "id author Your Name\n";
+    std::cout << "id author Jorge Ruiz, Codex ChatGPT\n";
     std::cout << "option name Hash type spin default 64 min 1 max 4096\n";
     std::cout << "option name Threads type spin default 1 min 1 max 256\n";
+    std::cout << "option name NUMA Offset type spin default 0 min -1 max 32\n";
+    std::cout << "option name Ponder type check default true\n";
+    std::cout << "option name MultiPV type spin default 1 min 1 max 218\n";
     std::cout << "option name UseNNUE type check default true\n";
-    std::cout << "option name EvalFile type string default nn-000000.nnue\n";
+    std::cout << "option name EvalFile type string default nn-1c0000000000.nnue\n";
+    std::cout << "option name EvalFileSmall type string default nn-37f18f62d772.nnue\n";
+    std::cout << "option name Move Overhead type spin default 10 min 0 max 5000\n";
     std::cout << "option name UseSyzygy type check default false\n";
     std::cout << "option name SyzygyPath type string default \"\"\n";
     std::cout << "uciok\n" << std::flush;
@@ -77,26 +87,54 @@ void Uci::cmd_setoption(const std::string& s) {
     // setoption name X value Y
     auto t = split(s);
     // naive parse
-    for (size_t i=0;i<t.size();++i) {
-        if (t[i]=="name" && i+1<t.size()) {
-            std::string name = t[i+1];
-            // find "value"
-            size_t j = i+2;
-            while (j<t.size() && t[j]!="value") ++j;
-            std::string value;
-            if (j+1<t.size()) value = t[j+1];
+    for (size_t i = 0; i < t.size(); ++i) {
+        if (t[i] == "name" && i + 1 < t.size()) {
+            size_t name_start = i + 1;
+            size_t value_pos = t.size();
+            for (size_t j = name_start; j < t.size(); ++j) {
+                if (t[j] == "value") {
+                    value_pos = j;
+                    break;
+                }
+            }
 
-            if (name=="Hash") g_hash_mb = std::stoi(value);
-            else if (name=="Threads") g_threads = std::stoi(value);
-            else if (name=="UseNNUE") g_use_nnue = (value=="true"||value=="1");
-            else if (name=="EvalFile") g_eval_file = value;
-            else if (name=="UseSyzygy") g_use_syzygy = (value=="true"||value=="1");
-            else if (name=="SyzygyPath") g_syzygy_path = value;
+            std::string name;
+            for (size_t j = name_start; j < value_pos && j < t.size(); ++j) {
+                if (!name.empty()) name.push_back(' ');
+                name += t[j];
+            }
+
+            std::string value;
+            if (value_pos < t.size() && value_pos + 1 < t.size()) {
+                value = t[value_pos + 1];
+            }
+
+            auto parse_bool = [](const std::string& v) {
+                return v.empty() || v == "true" || v == "1" || v == "on";
+            };
+
+            if (name == "Hash" && !value.empty()) g_hash_mb = std::stoi(value);
+            else if (name == "Threads" && !value.empty()) g_threads = std::stoi(value);
+            else if (name == "NUMA Offset" && !value.empty()) g_numa_offset = std::stoi(value);
+            else if (name == "Ponder") g_ponder = parse_bool(value);
+            else if (name == "MultiPV" && !value.empty()) g_multi_pv = std::stoi(value);
+            else if (name == "UseNNUE") g_use_nnue = parse_bool(value);
+            else if (name == "EvalFile" && !value.empty()) g_eval_file = value;
+            else if (name == "EvalFileSmall" && !value.empty()) g_eval_file_small = value;
+            else if (name == "Move Overhead" && !value.empty()) g_move_overhead = std::stoi(value);
+            else if (name == "UseSyzygy") g_use_syzygy = parse_bool(value);
+            else if (name == "SyzygyPath" && !value.empty()) g_syzygy_path = value;
             break;
         }
     }
     g_search.set_hash(g_hash_mb);
     g_search.set_threads(g_threads);
+    g_search.set_numa_offset(g_numa_offset);
+    g_search.set_ponder(g_ponder);
+    g_search.set_multi_pv(g_multi_pv);
+    g_search.set_move_overhead(g_move_overhead);
+    g_search.set_eval_file(g_eval_file);
+    g_search.set_eval_file_small(g_eval_file_small);
     g_search.set_use_syzygy(g_use_syzygy);
     g_search.set_syzygy_path(g_syzygy_path);
 }
@@ -152,6 +190,12 @@ void Uci::cmd_go(const std::string& s) {
 
     g_search.set_threads(g_threads);
     g_search.set_hash(g_hash_mb);
+    g_search.set_numa_offset(g_numa_offset);
+    g_search.set_ponder(g_ponder);
+    g_search.set_multi_pv(g_multi_pv);
+    g_search.set_move_overhead(g_move_overhead);
+    g_search.set_eval_file(g_eval_file);
+    g_search.set_eval_file_small(g_eval_file_small);
     g_search.set_use_syzygy(g_use_syzygy);
     g_search.set_syzygy_path(g_syzygy_path);
 

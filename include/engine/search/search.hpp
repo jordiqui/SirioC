@@ -30,6 +30,12 @@ public:
     void stop();
     void set_use_syzygy(bool enable);
     void set_syzygy_path(std::string path);
+    void set_numa_offset(int offset);
+    void set_ponder(bool enable);
+    void set_multi_pv(int multi_pv);
+    void set_move_overhead(int overhead_ms);
+    void set_eval_file(std::string path);
+    void set_eval_file_small(std::string path);
 
 private:
     struct TTEntry {
@@ -65,6 +71,12 @@ private:
     int threads_ = 1;
     bool use_syzygy_ = false;
     std::string syzygy_path_;
+    int numa_offset_ = 0;
+    bool ponder_ = true;
+    int multi_pv_ = 1;
+    int move_overhead_ms_ = 10;
+    std::string eval_file_ = "nn-1c0000000000.nnue";
+    std::string eval_file_small_ = "nn-37f18f62d772.nnue";
     std::optional<std::chrono::steady_clock::time_point> deadline_;
 };
 
