@@ -228,15 +228,19 @@ void Board::generate_king_moves(int sq, std::vector<Move>& moves) const {
         int e1 = to_index(4, 0);
         int f1 = to_index(5, 0);
         int g1 = to_index(6, 0);
+        int h1 = to_index(7, 0);
         int d1 = to_index(3, 0);
         int c1 = to_index(2, 0);
+        int a1 = to_index(0, 0);
         if ((castling_rights_ & CASTLE_WHITE_K) &&
+            squares_[h1] == 'R' &&
             is_empty(squares_[f1]) && is_empty(squares_[g1]) &&
             !in_check(true) && !is_square_attacked(f1, false) &&
             !is_square_attacked(g1, false)) {
             moves.push_back(::engine::make_move(e1, g1, 0, false, false, false, true));
         }
         if ((castling_rights_ & CASTLE_WHITE_Q) &&
+            squares_[a1] == 'R' &&
             is_empty(squares_[d1]) && is_empty(squares_[c1]) &&
             is_empty(squares_[to_index(1, 0)]) &&
             !in_check(true) && !is_square_attacked(d1, false) &&
@@ -247,15 +251,19 @@ void Board::generate_king_moves(int sq, std::vector<Move>& moves) const {
         int e8 = to_index(4, 7);
         int f8 = to_index(5, 7);
         int g8 = to_index(6, 7);
+        int h8 = to_index(7, 7);
         int d8 = to_index(3, 7);
         int c8 = to_index(2, 7);
+        int a8 = to_index(0, 7);
         if ((castling_rights_ & CASTLE_BLACK_K) &&
+            squares_[h8] == 'r' &&
             is_empty(squares_[f8]) && is_empty(squares_[g8]) &&
             !in_check(false) && !is_square_attacked(f8, true) &&
             !is_square_attacked(g8, true)) {
             moves.push_back(::engine::make_move(e8, g8, 0, false, false, false, true));
         }
         if ((castling_rights_ & CASTLE_BLACK_Q) &&
+            squares_[a8] == 'r' &&
             is_empty(squares_[d8]) && is_empty(squares_[c8]) &&
             is_empty(squares_[to_index(1, 7)]) &&
             !in_check(false) && !is_square_attacked(d8, true) &&
