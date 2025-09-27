@@ -52,7 +52,10 @@ target_compile_definitions(SirioC PRIVATE
   ENGINE_VERSION=\"0.1.0\"
 )
 
-add_executable(nnue_eval_test tests/nnue_eval_test.cpp ${SRC_FILES_NO_MAIN})
-
 enable_testing()
+
+add_executable(SirioCTests tests/board_fen_tests.cpp ${SRC_FILES_NO_MAIN})
+add_test(NAME board_fen_tests COMMAND SirioCTests)
+
+add_executable(nnue_eval_test tests/nnue_eval_test.cpp ${SRC_FILES_NO_MAIN})
 add_test(NAME nnue_eval COMMAND nnue_eval_test)

@@ -7,8 +7,10 @@ namespace engine {
 Board::Board() { set_startpos(); }
 
 void Board::set_startpos() {
-    last_fen_ = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    stm_white_ = true;
+    if (!set_fen(std::string(fen::kStartposFEN))) {
+        last_fen_ = fen::kStartposFEN;
+        stm_white_ = true;
+    }
 }
 
 bool Board::set_fen(const std::string& fen) {
