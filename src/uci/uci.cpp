@@ -4,6 +4,7 @@
 #include "engine/core/fen.hpp"
 #include "engine/search/search.hpp"
 #include "engine/eval/nnue/evaluator.hpp"
+#include <cmath>
 #include <iostream>
 #include <sstream>
 #include <vector>
@@ -18,6 +19,8 @@ static std::string g_eval_file = "nn-000000.nnue";
 static int g_hash_mb = 64;
 static int g_threads = 1;
 static bool g_stop = false;
+static bool g_use_syzygy = false;
+static std::string g_syzygy_path;
 
 void Uci::loop() {
     std::string line;
@@ -46,6 +49,8 @@ void Uci::cmd_uci() {
     std::cout << "option name Threads type spin default 1 min 1 max 256\n";
     std::cout << "option name UseNNUE type check default true\n";
     std::cout << "option name EvalFile type string default nn-000000.nnue\n";
+    std::cout << "option name UseSyzygy type check default false\n";
+    std::cout << "option name SyzygyPath type string default \"\"\n";
     std::cout << "uciok\n" << std::flush;
 }
 
@@ -85,9 +90,15 @@ void Uci::cmd_setoption(const std::string& s) {
             else if (name=="Threads") g_threads = std::stoi(value);
             else if (name=="UseNNUE") g_use_nnue = (value=="true"||value=="1");
             else if (name=="EvalFile") g_eval_file = value;
+            else if (name=="UseSyzygy") g_use_syzygy = (value=="true"||value=="1");
+            else if (name=="SyzygyPath") g_syzygy_path = value;
             break;
         }
     }
+    g_search.set_hash(g_hash_mb);
+    g_search.set_threads(g_threads);
+    g_search.set_use_syzygy(g_use_syzygy);
+    g_search.set_syzygy_path(g_syzygy_path);
 }
 
 void Uci::cmd_position(const std::string& s) {
@@ -139,11 +150,37 @@ void Uci::cmd_go(const std::string& s) {
     Limits lim = parse_go_tokens(t);
     (void)lim;
 
-    auto best = g_search.find_bestmove(g_board, lim);
-    std::string best_uci = g_board.move_to_uci(best);
+    g_search.set_threads(g_threads);
+    g_search.set_hash(g_hash_mb);
+    g_search.set_use_syzygy(g_use_syzygy);
+    g_search.set_syzygy_path(g_syzygy_path);
 
-    std::cout << "info depth 1 score cp 0 nodes 1 time 0 pv" << "\n";
-    if (best == MOVE_NONE) {
+    auto result = g_search.find_bestmove(g_board, lim);
+    std::string best_uci = g_board.move_to_uci(result.bestmove);
+
+    auto format_score = [](int score) {
+        constexpr int kMateValue = 30000;
+        constexpr int kMateThreshold = 29000;
+        if (std::abs(score) >= kMateThreshold) {
+            int mate = (kMateValue - std::abs(score) + 1) / 2;
+            if (score < 0) mate = -mate;
+            return std::string("mate ") + std::to_string(mate);
+        }
+        return std::string("cp ") + std::to_string(score);
+    };
+
+    std::cout << "info depth " << result.depth << " score " << format_score(result.score)
+              << " nodes " << result.nodes << " time " << result.time_ms << " pv";
+    Board pv_board = g_board;
+    for (Move mv : result.pv) {
+        std::string uci = pv_board.move_to_uci(mv);
+        if (uci == "0000") break;
+        std::cout << ' ' << uci;
+        pv_board = pv_board.after_move(mv);
+    }
+    std::cout << "\n";
+
+    if (result.bestmove == MOVE_NONE) {
         std::cout << "bestmove (none)\n";
     } else {
         std::cout << "bestmove " << best_uci << "\n";
@@ -151,6 +188,9 @@ void Uci::cmd_go(const std::string& s) {
     std::cout << std::flush;
 }
 
-void Uci::cmd_stop() { g_stop = true; }
+void Uci::cmd_stop() {
+    g_stop = true;
+    g_search.stop();
+}
 
 } // namespace engine

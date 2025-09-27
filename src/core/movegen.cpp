@@ -357,26 +357,94 @@ void Board::do_move(Move move) {
     int to = move_to(move);
     char piece = squares_[from];
     bool white = is_white_piece(piece);
+    char captured = squares_[to];
+    int capture_sq = to;
+
+    if (move_is_enpassant(move)) {
+        capture_sq = white ? to - 8 : to + 8;
+        captured = squares_[capture_sq];
+    }
+
+    auto piece_index = [](char pc) {
+        switch (pc) {
+        case 'P': return static_cast<int>(WHITE_PAWN);
+        case 'N': return static_cast<int>(WHITE_KNIGHT);
+        case 'B': return static_cast<int>(WHITE_BISHOP);
+        case 'R': return static_cast<int>(WHITE_ROOK);
+        case 'Q': return static_cast<int>(WHITE_QUEEN);
+        case 'K': return static_cast<int>(WHITE_KING);
+        case 'p': return static_cast<int>(BLACK_PAWN);
+        case 'n': return static_cast<int>(BLACK_KNIGHT);
+        case 'b': return static_cast<int>(BLACK_BISHOP);
+        case 'r': return static_cast<int>(BLACK_ROOK);
+        case 'q': return static_cast<int>(BLACK_QUEEN);
+        case 'k': return static_cast<int>(BLACK_KING);
+        default: return -1;
+        }
+    };
+
+    auto remove_piece = [&](char pc, int sq) {
+        int idx = piece_index(pc);
+        if (idx == -1) return;
+        uint64_t mask = 1ULL << sq;
+        piece_bitboards_[static_cast<size_t>(idx)] &= ~mask;
+        if (idx <= WHITE_KING) {
+            occupancy_[OCC_WHITE] &= ~mask;
+        } else {
+            occupancy_[OCC_BLACK] &= ~mask;
+        }
+        occupancy_[OCC_BOTH] &= ~mask;
+    };
+
+    auto add_piece = [&](char pc, int sq) {
+        int idx = piece_index(pc);
+        if (idx == -1) return;
+        uint64_t mask = 1ULL << sq;
+        piece_bitboards_[static_cast<size_t>(idx)] |= mask;
+        if (idx <= WHITE_KING) {
+            occupancy_[OCC_WHITE] |= mask;
+        } else {
+            occupancy_[OCC_BLACK] |= mask;
+        }
+        occupancy_[OCC_BOTH] |= mask;
+    };
+
+    remove_piece(piece, from);
+    if (captured != '.') {
+        remove_piece(captured, capture_sq);
+    }
+
     squares_[from] = '.';
 
     if (move_is_enpassant(move)) {
-        int capture_sq = white ? to - 8 : to + 8;
         squares_[capture_sq] = '.';
     }
 
     if (move_is_castling(move)) {
         if (piece == 'K' && to == to_index(6, 0)) {
-            squares_[to_index(5, 0)] = squares_[to_index(7, 0)];
+            char rook = squares_[to_index(7, 0)];
+            squares_[to_index(5, 0)] = rook;
             squares_[to_index(7, 0)] = '.';
+            remove_piece(rook, to_index(7, 0));
+            add_piece(rook, to_index(5, 0));
         } else if (piece == 'K' && to == to_index(2, 0)) {
-            squares_[to_index(3, 0)] = squares_[to_index(0, 0)];
+            char rook = squares_[to_index(0, 0)];
+            squares_[to_index(3, 0)] = rook;
             squares_[to_index(0, 0)] = '.';
+            remove_piece(rook, to_index(0, 0));
+            add_piece(rook, to_index(3, 0));
         } else if (piece == 'k' && to == to_index(6, 7)) {
-            squares_[to_index(5, 7)] = squares_[to_index(7, 7)];
+            char rook = squares_[to_index(7, 7)];
+            squares_[to_index(5, 7)] = rook;
             squares_[to_index(7, 7)] = '.';
+            remove_piece(rook, to_index(7, 7));
+            add_piece(rook, to_index(5, 7));
         } else if (piece == 'k' && to == to_index(2, 7)) {
-            squares_[to_index(3, 7)] = squares_[to_index(0, 7)];
+            char rook = squares_[to_index(0, 7)];
+            squares_[to_index(3, 7)] = rook;
             squares_[to_index(0, 7)] = '.';
+            remove_piece(rook, to_index(0, 7));
+            add_piece(rook, to_index(3, 7));
         }
     }
 
@@ -386,6 +454,7 @@ void Board::do_move(Move move) {
     }
 
     squares_[to] = piece;
+    add_piece(piece, to);
 
     // Update castling rights
     if (piece == 'K') {
@@ -412,7 +481,18 @@ void Board::do_move(Move move) {
         en_passant_square_ = white ? to - 8 : to + 8;
     }
 
+    bool capture_happened = move_is_capture(move) || move_is_enpassant(move) || captured != '.';
+    bool pawn_move = std::tolower(static_cast<unsigned char>(piece)) == 'p';
+    if (capture_happened || pawn_move) {
+        halfmove_clock_ = 0;
+    } else {
+        ++halfmove_clock_;
+    }
+
     stm_white_ = !stm_white_;
+    if (stm_white_) {
+        ++fullmove_number_;
+    }
 }
 
 } // namespace engine
