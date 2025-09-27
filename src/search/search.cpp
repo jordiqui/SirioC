@@ -60,6 +60,18 @@ void Search::set_use_syzygy(bool enable) { use_syzygy_ = enable; }
 
 void Search::set_syzygy_path(std::string path) { syzygy_path_ = std::move(path); }
 
+void Search::set_numa_offset(int offset) { numa_offset_ = offset; }
+
+void Search::set_ponder(bool enable) { ponder_ = enable; }
+
+void Search::set_multi_pv(int multi_pv) { multi_pv_ = std::max(1, multi_pv); }
+
+void Search::set_move_overhead(int overhead_ms) { move_overhead_ms_ = std::max(0, overhead_ms); }
+
+void Search::set_eval_file(std::string path) { eval_file_ = std::move(path); }
+
+void Search::set_eval_file_small(std::string path) { eval_file_small_ = std::move(path); }
+
 Search::Result Search::find_bestmove(Board& board, const Limits& lim) {
     stop_.store(false, std::memory_order_relaxed);
     return search_position(board, lim);
