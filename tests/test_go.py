@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import subprocess
+import subprocess  # Needed to spawn the engine and helper processes
 import sys
 import textwrap
 
