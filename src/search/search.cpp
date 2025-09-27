@@ -10,6 +10,7 @@
 #include <array>
 #include <chrono>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <limits>
 #include <mutex>
@@ -49,6 +50,7 @@ constexpr std::array<int, 4> kFutilityMargins{0, 120, 200, 320};
 constexpr int kAspirationWindow = 25;
 constexpr int kNullMoveBaseReduction = 2;
 constexpr int kMaxNullMoveReduction = 3;
+constexpr int kNullMoveDepthDivisor = 4;
 constexpr int kReverseFutilityMargin = 200;
 constexpr int kRazoringMargin = 400;
 constexpr int kProbCutMargin = 200;
@@ -90,10 +92,160 @@ struct Search::ThreadData {
     std::array<Move, 64 * 64> countermoves{};
 };
 
+void Search::AdaptiveTuning::reset() {
+    futility_margins_ = kFutilityMargins;
+    late_move_limits_ = kLateMovePruningLimits;
+    beta_margins_ = kEnhancedBetaMargins;
+    probcut_margin_ = kProbCutMargin;
+    singular_margin_scale_ = kSingularMarginScale;
+    singular_reduction_base_ = kSingularReductionBase;
+    null_move_base_reduction_ = kNullMoveBaseReduction;
+    null_move_max_reduction_ = kMaxNullMoveReduction;
+    null_move_depth_divisor_ = kNullMoveDepthDivisor;
+    reverse_futility_margin_ = kReverseFutilityMargin;
+    razoring_margin_ = kRazoringMargin;
+    lmr_scale_ = 1.0;
+    threads_ = 1;
+    target_time_ms_ = -1;
+    has_baseline_speed_ = false;
+    baseline_nodes_per_ms_ = 1.0;
+    speed_ema_ = 1.0;
+    iteration_nodes_start_ = 0;
+    iteration_start_ = {};
+}
+
+void Search::AdaptiveTuning::prepare(int threads, int64_t target_time_ms) {
+    threads_ = std::max(1, threads);
+    target_time_ms_ = target_time_ms;
+    has_baseline_speed_ = false;
+    baseline_nodes_per_ms_ = 1.0;
+    speed_ema_ = 1.0;
+    apply_scaling();
+}
+
+void Search::AdaptiveTuning::begin_iteration(
+    uint64_t nodes, std::chrono::steady_clock::time_point start_time) {
+    iteration_nodes_start_ = nodes;
+    iteration_start_ = start_time;
+}
+
+void Search::AdaptiveTuning::end_iteration(
+    uint64_t nodes, std::chrono::steady_clock::time_point end_time) {
+    if (iteration_nodes_start_ > nodes) {
+        iteration_nodes_start_ = nodes;
+    }
+    auto elapsed = std::chrono::duration<double, std::milli>(end_time - iteration_start_).count();
+    if (elapsed <= 0.0) {
+        return;
+    }
+    double explored = static_cast<double>(nodes - iteration_nodes_start_);
+    if (explored <= 0.0) {
+        return;
+    }
+    double nodes_per_ms = explored / elapsed;
+    if (!has_baseline_speed_) {
+        baseline_nodes_per_ms_ = std::max(1e-6, nodes_per_ms);
+        has_baseline_speed_ = true;
+        speed_ema_ = 1.0;
+    } else {
+        double ratio = nodes_per_ms / std::max(1e-6, baseline_nodes_per_ms_);
+        speed_ema_ = 0.85 * speed_ema_ + 0.15 * std::clamp(ratio, 0.2, 5.0);
+    }
+    apply_scaling();
+}
+
+int Search::AdaptiveTuning::futility_margin(int depth) const {
+    size_t idx = static_cast<size_t>(std::min(depth, static_cast<int>(futility_margins_.size() - 1)));
+    return futility_margins_[idx];
+}
+
+int Search::AdaptiveTuning::reverse_futility_margin() const { return reverse_futility_margin_; }
+
+int Search::AdaptiveTuning::razoring_margin() const { return razoring_margin_; }
+
+int Search::AdaptiveTuning::late_move_limit(int depth, int move_overhead_ms, int history_score,
+                                            int move_count) const {
+    size_t idx = static_cast<size_t>(std::min(depth, static_cast<int>(late_move_limits_.size() - 1)));
+    int limit = late_move_limits_[idx] + move_overhead_ms / 40;
+    if (history_score < 0) {
+        --limit;
+        if (move_count > limit) {
+            --limit;
+        }
+    }
+    return std::max(0, limit);
+}
+
+int Search::AdaptiveTuning::beta_margin(int depth) const {
+    size_t idx = static_cast<size_t>(std::min(depth, static_cast<int>(beta_margins_.size() - 1)));
+    return beta_margins_[idx];
+}
+
+int Search::AdaptiveTuning::probcut_margin() const { return probcut_margin_; }
+
+int Search::AdaptiveTuning::singular_margin_scale() const { return singular_margin_scale_; }
+
+int Search::AdaptiveTuning::singular_reduction_base() const { return singular_reduction_base_; }
+
+int Search::AdaptiveTuning::null_move_base_reduction() const { return null_move_base_reduction_; }
+
+int Search::AdaptiveTuning::null_move_max_reduction() const { return null_move_max_reduction_; }
+
+int Search::AdaptiveTuning::null_move_depth_divisor() const { return null_move_depth_divisor_; }
+
+double Search::AdaptiveTuning::lmr_scale() const { return lmr_scale_; }
+
+void Search::AdaptiveTuning::apply_scaling() {
+    futility_margins_ = kFutilityMargins;
+    late_move_limits_ = kLateMovePruningLimits;
+    beta_margins_ = kEnhancedBetaMargins;
+    probcut_margin_ = kProbCutMargin;
+    singular_margin_scale_ = kSingularMarginScale;
+    singular_reduction_base_ = kSingularReductionBase;
+    null_move_base_reduction_ = kNullMoveBaseReduction;
+    null_move_max_reduction_ = kMaxNullMoveReduction;
+    null_move_depth_divisor_ = kNullMoveDepthDivisor;
+    reverse_futility_margin_ = kReverseFutilityMargin;
+    razoring_margin_ = kRazoringMargin;
+    lmr_scale_ = 1.0;
+
+    double hardware_scale = std::clamp(std::sqrt(static_cast<double>(threads_)), 1.0, 2.0);
+    double time_scale = 1.0;
+    if (target_time_ms_ > 0) {
+        time_scale = std::clamp(std::sqrt(static_cast<double>(target_time_ms_) / 1000.0), 0.6, 2.0);
+    }
+    double speed_scale = std::clamp(speed_ema_, 0.5, 1.8);
+    double effective = std::clamp(hardware_scale * time_scale * speed_scale, 0.6, 1.8);
+    double margin_scale = std::clamp(1.0 / std::sqrt(effective), 0.7, 1.3);
+    double pruning_scale = std::clamp(std::sqrt(effective), 0.8, 1.25);
+    double extension_scale = std::clamp(1.0 / pruning_scale, 0.75, 1.25);
+    lmr_scale_ = std::clamp(extension_scale, 0.75, 1.25);
+
+    for (size_t i = 0; i < futility_margins_.size(); ++i) {
+        futility_margins_[i] = std::max(0, static_cast<int>(std::round(kFutilityMargins[i] * margin_scale)));
+    }
+    for (size_t i = 0; i < late_move_limits_.size(); ++i) {
+        late_move_limits_[i] = std::max(0, static_cast<int>(std::round(kLateMovePruningLimits[i] * pruning_scale)));
+    }
+    for (size_t i = 0; i < beta_margins_.size(); ++i) {
+        beta_margins_[i] = std::max(50, static_cast<int>(std::round(kEnhancedBetaMargins[i] * margin_scale)));
+    }
+
+    probcut_margin_ = std::max(80, static_cast<int>(std::round(kProbCutMargin * margin_scale)));
+    singular_margin_scale_ = std::max(16, static_cast<int>(std::round(kSingularMarginScale * margin_scale)));
+    singular_reduction_base_ = std::clamp(static_cast<int>(std::round(kSingularReductionBase * extension_scale)), 1, 4);
+    null_move_base_reduction_ = std::clamp(static_cast<int>(std::round(kNullMoveBaseReduction * extension_scale)), 1, 4);
+    null_move_max_reduction_ = std::clamp(static_cast<int>(std::round(kMaxNullMoveReduction * extension_scale)), 2, 5);
+    null_move_depth_divisor_ = std::clamp(static_cast<int>(std::round(kNullMoveDepthDivisor / std::clamp(effective, 0.7, 1.6))), 3, 6);
+    reverse_futility_margin_ = std::max(80, static_cast<int>(std::round(kReverseFutilityMargin * margin_scale)));
+    razoring_margin_ = std::max(200, static_cast<int>(std::round(kRazoringMargin * margin_scale)));
+}
+
 Search::Search() : nodes_(0), stop_(false) {
     set_hash(16);
     target_time_ms_ = -1;
     nodes_limit_ = -1;
+    tuning_.reset();
 }
 
 void Search::set_info_callback(std::function<void(const Info&)> cb) {
@@ -172,6 +324,8 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
     }
     nodes_limit_ = lim.nodes >= 0 ? lim.nodes : -1;
 
+    tuning_.prepare(threads_, target_time_ms_);
+
     auto legal = board.generate_legal_moves();
     if (legal.empty()) {
         result.bestmove = MOVE_NONE;
@@ -201,6 +355,9 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
 
     for (int depth = 1; depth <= depth_limit; ++depth) {
         if (stop_.load(std::memory_order_relaxed)) break;
+
+        tuning_.begin_iteration(nodes_.load(std::memory_order_relaxed),
+                                std::chrono::steady_clock::now());
 
         int alpha_window = -kInfiniteScore;
         int beta_window = kInfiniteScore;
@@ -331,6 +488,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
         }
 
         auto now = std::chrono::steady_clock::now();
+        tuning_.end_iteration(nodes_.load(std::memory_order_relaxed), now);
         if (deadline_ && now >= *deadline_) {
             stop_.store(true, std::memory_order_relaxed);
             break;
@@ -396,11 +554,12 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
     static_eval = tt_eval;
 
     if (!pv_node && depth <= 3 && !in_check) {
-        int margin = static_eval - kReverseFutilityMargin * depth;
+        int margin = static_eval - tuning_.reverse_futility_margin() * depth;
         if (margin >= beta) return margin;
     }
 
-    if (!pv_node && depth <= 3 && !in_check && static_eval + kRazoringMargin <= alpha) {
+    if (!pv_node && depth <= 3 && !in_check &&
+        static_eval + tuning_.razoring_margin() <= alpha) {
         int razor = quiescence(board, alpha - 1, alpha, ply, thread_data);
         if (razor <= alpha) return razor;
     }
@@ -409,7 +568,9 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
         has_non_pawn_material(board, board.white_to_move())) {
         Board::State null_state;
         board.apply_null_move(null_state);
-        int reduction = kNullMoveBaseReduction + std::min(kMaxNullMoveReduction, depth / 4);
+        int reduction = tuning_.null_move_base_reduction();
+        int extra = depth / std::max(1, tuning_.null_move_depth_divisor());
+        reduction += std::min(tuning_.null_move_max_reduction(), extra);
         int score = -negamax(board, depth - 1 - reduction, -beta, -beta + 1, false, ply + 1,
                               thread_data, MOVE_NONE, false);
         board.undo_move(null_state);
@@ -419,9 +580,8 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
         }
     }
 
-    if (!pv_node && !in_check && depth <= static_cast<int>(kEnhancedBetaMargins.size() - 1)) {
-        int margin = kEnhancedBetaMargins[static_cast<size_t>(std::min(
-            depth, static_cast<int>(kEnhancedBetaMargins.size() - 1)))];
+    if (!pv_node && !in_check) {
+        int margin = tuning_.beta_margin(depth);
         if (static_eval - margin >= beta) {
             return static_eval - margin;
         }
@@ -447,7 +607,7 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
     }
 
     if (!pv_node && depth >= 5 && !in_check && std::abs(beta) < kMateThreshold) {
-        int probcut_beta = beta + kProbCutMargin;
+        int probcut_beta = beta + tuning_.probcut_margin();
         int probcut_alpha = probcut_beta - 1;
         int probcut_depth = depth - 3;
         for (Move move : moves) {
@@ -474,8 +634,10 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
     bool singular_ready = (!in_check && tt_move != MOVE_NONE && tt_flag == TT_LOWER &&
                            tt_depth >= depth - 1 && depth >= 4 &&
                            std::abs(tt_score) < kMateThreshold);
-    int singular_beta = tt_score - kSingularMarginScale * depth;
-    int singular_depth = depth - 1 - (kSingularReductionBase + depth / 4);
+    int singular_beta = tt_score - tuning_.singular_margin_scale() * depth;
+    int singular_reduction = tuning_.singular_reduction_base() +
+                             depth / std::max(1, tuning_.null_move_depth_divisor());
+    int singular_depth = depth - 1 - singular_reduction;
     bool allow_singular = singular_ready && singular_depth >= 1 && singular_beta > alpha;
 
     for (Move move : ordered) {
@@ -518,7 +680,7 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
         bool gives_check = board.side_to_move_in_check();
 
         if (!in_check && quiet && depth <= 3 && !gives_check) {
-            int margin = kFutilityMargins[static_cast<size_t>(std::min(depth, 3))];
+            int margin = tuning_.futility_margin(depth);
             if (static_eval + margin <= alpha) {
                 board.undo_move(state);
                 continue;
@@ -526,10 +688,7 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
         }
 
         if (!pv_node && quiet && !in_check && !gives_check) {
-            int depth_idx = std::min<int>(depth, kLateMovePruningLimits.size() - 1);
-            int lmp_limit = kLateMovePruningLimits[static_cast<size_t>(depth_idx)] +
-                            move_overhead_ms_ / 40;
-            if (history_score < 0) --lmp_limit;
+            int lmp_limit = tuning_.late_move_limit(depth, move_overhead_ms_, history_score, move_count);
             if (move_count > std::max(1, lmp_limit)) {
                 board.undo_move(state);
                 continue;
@@ -552,12 +711,13 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
             bool apply_lmr = new_depth > 0 && depth >= 3 && move_count > 3 && quiet &&
                              !gives_check && !pv_node;
             if (apply_lmr) {
-                int reduction = 1 + (depth > 4) + (move_count > 4) + (move_count > 8);
+                double reduction_value = 1.0 + (depth > 4) + (move_count > 4) + (move_count > 8);
                 if (history_score < 0) {
-                    reduction += 1;
+                    reduction_value += 1.0;
                 }
-                reduction += move_overhead_ms_ / 60;
-                reduction = std::min(reduction, new_depth);
+                reduction_value *= tuning_.lmr_scale();
+                reduction_value += (move_overhead_ms_ / 60.0) * tuning_.lmr_scale();
+                int reduction = std::min(new_depth, std::max(1, static_cast<int>(std::round(reduction_value))));
                 int reduced_depth = std::max(1, new_depth - reduction);
                 score = -negamax(board, reduced_depth, -alpha - 1, -alpha, false, ply + 1,
                                   thread_data, move, false);
