@@ -53,7 +53,8 @@ enable them only when the target CPUs actually support those instruction sets.
   by default.
 * Legal move generation with FEN and `startpos` + `moves` parsing.
 * Iterative deepening search with a transposition table, killer moves, history
-  heuristics, and tapered evaluation.
+  heuristics, and tapered evaluation backed by incremental make/unmake to avoid
+  copying full board states at every node.
 * Quiet-move pruning and search stability refinements inspired by Berserk and
   Stockfish to supply competitive default play.
 * Optional Syzygy 5-7-man tablebase probing via the `UseSyzygy` and
@@ -114,9 +115,25 @@ SirioC blends ideas from Berserk and Stockfish in the following ways:
 
 ## TODO (next steps)
 
-* Implement incremental make/unmake to avoid copying boards at every node.
 * Wire in NNUE accumulator updates and integer inference.
 * Add time management utilities, `perft`, and enhanced `bench` modes.
+
+### Search improvement tasks
+
+To keep pace with other competitive UCI engines, the search stack can be
+expanded with the following upgrades:
+
+* Add move-count based pruning (including improvements such as improved late
+  move pruning and move-overhead aware reductions) to trim obviously futile
+  branches earlier.
+* Introduce a singular-extension search to better recognise forcing
+  continuations in tactical positions.
+* Implement probabilistic cut (ProbCut) and enhanced beta pruning tuned for the
+  existing evaluation scale to shave additional nodes without missing tactics.
+* Add a robust internal iterative deepening framework for quiet nodes so that
+  principal variation moves remain strong even when TT entries are shallow.
+* Improve the multi-threaded search balance with adaptive aspiration windows
+  and smarter fail-high/fail-low recovery heuristics.
 
 ## Bench command
 
