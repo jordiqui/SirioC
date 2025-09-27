@@ -410,6 +410,7 @@ void Board::add_piece(char pc, int sq, bool update_acc) {
 void Board::apply_move(Move move, State& state) {
     state = State{};
     state.move = move;
+    state.was_null_move = false;
 
     int from = move_from(move);
     int to = move_to(move);
@@ -524,7 +525,37 @@ void Board::apply_move(Move move, State& state) {
     }
 }
 
+void Board::apply_null_move(State& state) {
+    state = State{};
+    state.was_null_move = true;
+    state.prev_castling_rights = castling_rights_;
+    state.prev_en_passant_square = en_passant_square_;
+    state.prev_halfmove_clock = halfmove_clock_;
+    state.prev_fullmove_number = fullmove_number_;
+    state.prev_stm_white = stm_white_;
+    state.prev_mg = accumulator_.mg();
+    state.prev_eg = accumulator_.eg();
+    state.prev_phase = accumulator_.phase();
+
+    en_passant_square_ = INVALID_SQUARE;
+    ++halfmove_clock_;
+    stm_white_ = !stm_white_;
+    if (stm_white_) {
+        ++fullmove_number_;
+    }
+}
+
 void Board::undo_move(const State& state) {
+    if (state.was_null_move) {
+        castling_rights_ = state.prev_castling_rights;
+        en_passant_square_ = state.prev_en_passant_square;
+        halfmove_clock_ = state.prev_halfmove_clock;
+        fullmove_number_ = state.prev_fullmove_number;
+        stm_white_ = state.prev_stm_white;
+        accumulator_.restore(state.prev_mg, state.prev_eg, state.prev_phase);
+        return;
+    }
+
     int from = move_from(state.move);
     int to = move_to(state.move);
     char moving_piece = state.moved_piece;

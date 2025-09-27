@@ -66,6 +66,7 @@ public:
         bool prev_stm_white = true;
         bool was_castling = false;
         bool was_enpassant = false;
+        bool was_null_move = false;
         int prev_mg = 0;
         int prev_eg = 0;
         int prev_phase = 0;
@@ -74,6 +75,7 @@ public:
     bool make_move(Move m);
     bool make_move_uci(const std::string& uci);
     void apply_move(Move move, State& state);
+    void apply_null_move(State& state);
     void undo_move(const State& state);
     void undo_move();
     std::vector<Move> generate_legal_moves();
