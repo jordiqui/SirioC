@@ -8,7 +8,7 @@
 #endif
 
 #ifndef ENGINE_VERSION
-#define ENGINE_VERSION "0.1.0"
+#define ENGINE_VERSION "0.1.0 270925"
 #endif
 
 namespace engine {

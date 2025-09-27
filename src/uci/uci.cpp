@@ -49,7 +49,7 @@ void Uci::handle_line(const std::string& line) {
 
 void Uci::cmd_uci() {
     std::cout << "id name " << engine::kEngineName << " " << engine::kEngineVersion << "\n";
-    std::cout << "id author Jorge Ruiz, Codex ChatGPT\n";
+    std::cout << "id author Jorge Ruiz créditos Codex OpenAi\n";
     std::cout << "option name Hash type spin default 64 min 1 max 4096\n";
     std::cout << "option name Threads type spin default 1 min 1 max 256\n";
     std::cout << "option name NUMA Offset type spin default 0 min -1 max 32\n";
