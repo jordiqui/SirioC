@@ -1,0 +1,10 @@
+/build/
+*.nnue
+*.exe
+*.pdb
+*.obj
+*.o
+*.log
+.vscode/
+.idea/
+.DS_Store
