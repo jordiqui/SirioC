@@ -41,7 +41,7 @@ def legal_moves(helper_path, fen):
     return moves
 
 
-def assert_bestmove_is_legal(engine_path, helper_path, fen, position_cmd):
+def assert_bestmove_is_legal(engine_path, helper_path, fen, position_cmd, expect_none=False):
     commands = [
         "uci",
         "isready",
@@ -51,9 +51,24 @@ def assert_bestmove_is_legal(engine_path, helper_path, fen, position_cmd):
         "quit",
     ]
     bestmove, output = run_engine(engine_path, commands)
-    if bestmove == "(none)":
-        raise AssertionError(f"Engine reported no move for position: {position_cmd}\n{output}")
     moves = legal_moves(helper_path, fen)
+    if expect_none:
+        if moves:
+            raise AssertionError(
+                f"Expected no legal moves but helper produced: {moves}\nPosition: {position_cmd}"
+            )
+        if bestmove != "(none)":
+            raise AssertionError(
+                f"Engine should report (none) but returned {bestmove}\nOutput:\n{output}"
+            )
+        return
+
+    if not moves:
+        raise AssertionError(f"Helper reported no legal moves for: {position_cmd}")
+    if bestmove == "(none)":
+        raise AssertionError(
+            f"Engine reported no move for position expecting a legal move: {position_cmd}\n{output}"
+        )
     assert bestmove in moves, textwrap.dedent(
         f"""
         Engine returned illegal move {bestmove}.
@@ -73,14 +88,26 @@ def main():
         (
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
             "position startpos",
+            False,
         ),
         (
             "7k/8/8/8/8/8/6r1/7K w - - 0 1",
             "position fen 7k/8/8/8/8/8/6r1/7K w - - 0 1",
+            False,
+        ),
+        (
+            "7k/8/8/3pP3/8/8/8/7K w - d6 0 1",
+            "position fen 7k/8/8/3pP3/8/8/8/7K w - d6 0 1",
+            False,
+        ),
+        (
+            "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1",
+            "position fen 7k/5Q2/6K1/8/8/8/8/8 b - - 0 1",
+            True,
         ),
     ]
-    for fen, cmd in tests:
-        assert_bestmove_is_legal(engine_path, helper_path, fen, cmd)
+    for fen, cmd, expect_none in tests:
+        assert_bestmove_is_legal(engine_path, helper_path, fen, cmd, expect_none)
     return 0
 
 

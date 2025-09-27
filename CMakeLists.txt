@@ -53,13 +53,18 @@ target_link_libraries(SirioC PRIVATE sirio_core)
 add_executable(legal_moves_cli tests/legal_moves_cli.cpp)
 target_link_libraries(legal_moves_cli PRIVATE sirio_core)
 
+add_executable(movegen_tests tests/movegen_tests.cpp)
+target_link_libraries(movegen_tests PRIVATE sirio_core)
+
 if (MINGW)
   target_link_libraries(SirioC PRIVATE stdc++ stdc++fs)
   target_link_libraries(legal_moves_cli PRIVATE stdc++ stdc++fs)
+  target_link_libraries(movegen_tests PRIVATE stdc++ stdc++fs)
 endif()
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 enable_testing()
+add_test(NAME movegen_unit_tests COMMAND movegen_tests)
 add_test(NAME go_command_responds_with_legal_move
          COMMAND Python3::Interpreter
                  ${CMAKE_SOURCE_DIR}/tests/test_go.py
