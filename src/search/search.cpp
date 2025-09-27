@@ -17,6 +17,7 @@
 #include <thread>
 #include <atomic>
 #include <vector>
+#include <optional>
 
 namespace engine {
 namespace {
@@ -374,7 +375,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
         while (!stop_.load(std::memory_order_relaxed)) {
             int search_alpha = alpha_window;
             int search_beta = beta_window;
-            std::vector<std::pair<Move, int>> scores(root_moves.size());
+            std::vector<std::optional<std::pair<Move, int>>> scores(root_moves.size());
             std::atomic<size_t> next_index{0};
             std::atomic<size_t> completed{0};
             size_t thread_count = std::max(1, threads_);
@@ -395,7 +396,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
                     local_board.apply_move(move, state);
                     int score = -negamax(local_board, depth - 1, -search_beta, -search_alpha, true, 1, td, move, false);
                     local_board.undo_move(state);
-                    scores[idx] = {move, score};
+                    scores[idx] = std::make_pair(move, score);
                     completed.fetch_add(1, std::memory_order_relaxed);
                 }
             };
@@ -411,20 +412,26 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
             if (stop_.load(std::memory_order_relaxed)) break;
 
             size_t finished = std::min(completed.load(std::memory_order_relaxed), scores.size());
-            scores.resize(finished);
+            std::vector<std::pair<Move, int>> filtered_scores;
+            filtered_scores.reserve(finished);
+            for (auto& entry : scores) {
+                if (entry && entry->first != MOVE_NONE) {
+                    filtered_scores.push_back(*entry);
+                }
+            }
 
-            if (finished == 0) {
+            if (filtered_scores.empty()) {
                 break;
             }
 
-            std::sort(scores.begin(), scores.end(), [](const auto& lhs, const auto& rhs) {
+            std::sort(filtered_scores.begin(), filtered_scores.end(), [](const auto& lhs, const auto& rhs) {
                 return lhs.second > rhs.second;
             });
 
-            if (!scores.empty()) {
-                best_scores = scores;
-                best_move = scores.front().first;
-                best_score = scores.front().second;
+            if (!filtered_scores.empty()) {
+                best_scores = filtered_scores;
+                best_move = filtered_scores.front().first;
+                best_score = filtered_scores.front().second;
                 bool failed_low = best_score <= search_alpha;
                 bool failed_high = best_score >= search_beta;
 
