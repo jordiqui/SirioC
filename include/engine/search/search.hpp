@@ -59,6 +59,7 @@ private:
     std::vector<Move> order_moves(const Board& board, std::vector<Move>& moves,
                                   Move tt_move, int ply, const ThreadData& thread_data) const;
     void update_killers(ThreadData& thread_data, int ply, Move move);
+    void update_history(ThreadData& thread_data, Move move, int delta);
     std::vector<Move> extract_pv(const Board& board, Move best) const;
     int evaluate(const Board& board) const;
     std::optional<int> probe_syzygy(const Board& board) const;

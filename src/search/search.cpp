@@ -33,10 +33,20 @@ int piece_value(char piece) {
     }
 }
 
+constexpr int kHistoryMax = 1'000'000;
+constexpr int kHistoryMin = -kHistoryMax;
+
+constexpr int history_index(Move move) {
+    return move_from(move) * 64 + move_to(move);
+}
+
+constexpr std::array<int, 4> kFutilityMargins{0, 120, 200, 320};
+
 } // namespace
 
 struct Search::ThreadData {
     std::vector<std::array<Move, 2>> killers;
+    std::array<int, 64 * 64> history{};
 };
 
 Search::Search() : nodes_(0), stop_(false) { set_hash(16); }
@@ -114,6 +124,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
         std::vector<ThreadData> thread_data(thread_count);
         for (auto& td : thread_data) {
             td.killers.assign(kMaxPly, {MOVE_NONE, MOVE_NONE});
+            td.history.fill(0);
         }
 
         auto worker = [&](ThreadData& td) {
@@ -218,15 +229,41 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
     Move best_move = MOVE_NONE;
     int alpha_orig = alpha;
     bool first = true;
+    int move_count = 0;
 
     for (Move move : ordered) {
+        ++move_count;
+        int prev_alpha = alpha;
         Board child = board.after_move(move);
+        bool is_capture = move_is_capture(move);
+        bool is_promo = move_promo(move) != 0;
+        bool quiet = !is_capture && !is_promo;
+        bool gives_check = child.side_to_move_in_check();
+
+        if (!in_check && quiet && depth <= 3 && !gives_check) {
+            int margin = kFutilityMargins[static_cast<size_t>(depth)];
+            if (static_eval + margin <= alpha) {
+                continue;
+            }
+        }
+
         int score;
         if (first) {
             score = -negamax(child, depth - 1, -beta, -alpha, pv_node, ply + 1, thread_data);
             first = false;
         } else {
-            score = -negamax(child, depth - 1, -alpha - 1, -alpha, false, ply + 1, thread_data);
+            int new_depth = depth - 1;
+            bool apply_lmr = new_depth > 0 && depth >= 3 && move_count > 3 && quiet && !gives_check && !pv_node;
+            if (apply_lmr) {
+                int reduction = 1 + (move_count > 6) + (depth > 5);
+                new_depth = std::max(1, new_depth - reduction);
+                score = -negamax(child, new_depth, -alpha - 1, -alpha, false, ply + 1, thread_data);
+                if (score > alpha) {
+                    score = -negamax(child, depth - 1, -alpha - 1, -alpha, false, ply + 1, thread_data);
+                }
+            } else {
+                score = -negamax(child, depth - 1, -alpha - 1, -alpha, false, ply + 1, thread_data);
+            }
             if (score > alpha && score < beta) {
                 score = -negamax(child, depth - 1, -beta, -alpha, true, ply + 1, thread_data);
             }
@@ -241,11 +278,16 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
         if (score > alpha) {
             alpha = score;
         }
+        bool improved = alpha > prev_alpha;
         if (alpha >= beta) {
-            if (!move_is_capture(move) && move_promo(move) == 0) {
+            if (quiet) {
                 update_killers(thread_data, ply, move);
+                update_history(thread_data, move, depth * depth);
             }
             break;
+        }
+        if (quiet && !improved) {
+            update_history(thread_data, move, -std::max(1, depth));
         }
     }
 
@@ -347,6 +389,9 @@ std::vector<Move> Search::order_moves(const Board& board, std::vector<Move>& mov
                 if (move == killers[0]) score = 300'000;
                 else if (move == killers[1]) score = 299'000;
             }
+            if (score == 0) {
+                score = 200'000 + thread_data.history[static_cast<size_t>(history_index(move))];
+            }
         }
         scored.emplace_back(score, move);
     }
@@ -368,6 +413,12 @@ void Search::update_killers(ThreadData& thread_data, int ply, Move move) {
         killers[1] = killers[0];
         killers[0] = move;
     }
+}
+
+void Search::update_history(ThreadData& thread_data, Move move, int delta) {
+    int idx = history_index(move);
+    auto& entry = thread_data.history[static_cast<size_t>(idx)];
+    entry = std::clamp(entry + delta, kHistoryMin, kHistoryMax);
 }
 
 std::vector<Move> Search::extract_pv(const Board& board, Move best) const {
