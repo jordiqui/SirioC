@@ -9,6 +9,28 @@ namespace engine { class Board; }
 
 namespace engine::nnue {
 
+struct FeatureTransformer {
+    uint32_t input_dim = 0;
+    uint32_t output_dim = 0;
+    std::vector<int16_t> weights;  // layout: output-major
+    std::vector<int32_t> bias;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return output_dim == bias.size() &&
+               weights.size() == static_cast<std::size_t>(input_dim) * static_cast<std::size_t>(output_dim);
+    }
+};
+
+struct OutputLayer {
+    std::vector<int16_t> weights;
+    int32_t bias = 0;
+    int32_t scale = 1;
+
+    [[nodiscard]] bool valid(std::size_t expected_size) const noexcept {
+        return scale != 0 && weights.size() == expected_size;
+    }
+};
+
 class Evaluator {
 public:
     bool load_network(const std::string& path);
@@ -21,13 +43,8 @@ private:
     struct Network {
         uint32_t version = 0;
         std::string architecture;
-        uint32_t input_dim = 0;
-        uint32_t hidden_dim = 0;
-        int32_t output_scale = 1;
-        std::vector<int16_t> feature_weights;
-        std::vector<int32_t> feature_bias;
-        std::vector<int16_t> output_weights;
-        int32_t output_bias = 0;
+        FeatureTransformer transformer;
+        OutputLayer output;
     } network_;
 
     mutable Accumulator accumulator_;

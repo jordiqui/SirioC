@@ -1,6 +1,7 @@
 #include "engine/eval/nnue/accumulator.hpp"
 
 #include "engine/core/board.hpp"
+#include "engine/eval/nnue/evaluator.hpp"
 
 #include <algorithm>
 #include <array>
@@ -32,10 +33,7 @@ std::vector<int32_t> build_features(const engine::Board& board, uint32_t input_d
 
     std::array<int32_t, 12> counts{};
     for (char c : board_part) {
-        if (c == '/') {
-            continue;
-        }
-        if (std::isdigit(static_cast<unsigned char>(c))) {
+        if (c == '/' || std::isdigit(static_cast<unsigned char>(c))) {
             continue;
         }
         constexpr std::array<char, 12> piece_order{
@@ -63,54 +61,82 @@ std::vector<int32_t> build_features(const engine::Board& board, uint32_t input_d
     return features;
 }
 
+int32_t clamp_to_i32(int64_t value) {
+    return static_cast<int32_t>(std::clamp<int64_t>(value,
+                                                    std::numeric_limits<int32_t>::min(),
+                                                    std::numeric_limits<int32_t>::max()));
+}
+
 } // namespace
 
 void Accumulator::reset() noexcept {
     hidden_.clear();
     hidden_.shrink_to_fit();
+    features_.clear();
+    features_.shrink_to_fit();
     cached_fen_.clear();
     cached_input_dim_ = 0;
     cached_hidden_dim_ = 0;
+    initialized_ = false;
 }
 
-void Accumulator::update(const engine::Board& board,
-                         uint32_t input_dim,
-                         uint32_t hidden_dim,
-                         const std::vector<int16_t>& feature_weights,
-                         const std::vector<int32_t>& feature_bias) {
+void Accumulator::update(const engine::Board& board, const FeatureTransformer& transformer) {
+    const uint32_t input_dim = transformer.input_dim;
+    const uint32_t hidden_dim = transformer.output_dim;
     const std::string& fen = board.last_fen();
-    const bool needs_resize = hidden_.size() != hidden_dim;
+
     const bool dims_changed = cached_input_dim_ != input_dim || cached_hidden_dim_ != hidden_dim;
-    if (!needs_resize && !dims_changed && fen == cached_fen_) {
+    if (!dims_changed && initialized_ && fen == cached_fen_) {
         return;
     }
 
-    hidden_.assign(hidden_dim, 0);
     cached_input_dim_ = input_dim;
     cached_hidden_dim_ = hidden_dim;
     cached_fen_ = fen;
 
-    if (hidden_dim == 0 || input_dim == 0) {
-        return;
-    }
-
-    const std::vector<int32_t> features = build_features(board, input_dim);
-    const size_t expected_weights = static_cast<size_t>(input_dim) * static_cast<size_t>(hidden_dim);
-    if (feature_weights.size() != expected_weights || feature_bias.size() != hidden_dim) {
+    if (hidden_dim == 0 || input_dim == 0 || !transformer.valid()) {
         hidden_.assign(hidden_dim, 0);
+        features_.assign(input_dim, 0);
+        initialized_ = hidden_dim == 0 || input_dim == 0;
         return;
     }
 
-    for (uint32_t h = 0; h < hidden_dim; ++h) {
-        int64_t sum = feature_bias[h];
-        for (uint32_t i = 0; i < input_dim; ++i) {
-            const size_t index = static_cast<size_t>(h) * static_cast<size_t>(input_dim) + static_cast<size_t>(i);
-            sum += static_cast<int64_t>(feature_weights[index]) * static_cast<int64_t>(features[i]);
-        }
-        hidden_[h] = static_cast<int32_t>(std::clamp<int64_t>(sum,
-                                                              std::numeric_limits<int32_t>::min(),
-                                                              std::numeric_limits<int32_t>::max()));
+    std::vector<int32_t> new_features = build_features(board, input_dim);
+
+    if (features_.size() != input_dim) {
+        features_.assign(input_dim, 0);
+        initialized_ = false;
     }
+    if (hidden_.size() != hidden_dim) {
+        hidden_.assign(hidden_dim, 0);
+        initialized_ = false;
+    }
+
+    if (!initialized_) {
+        for (uint32_t h = 0; h < hidden_dim; ++h) {
+            int64_t sum = transformer.bias[h];
+            const std::size_t base = static_cast<std::size_t>(h) * static_cast<std::size_t>(input_dim);
+            for (uint32_t i = 0; i < input_dim; ++i) {
+                sum += static_cast<int64_t>(transformer.weights[base + i]) * static_cast<int64_t>(new_features[i]);
+            }
+            hidden_[h] = clamp_to_i32(sum);
+        }
+        initialized_ = true;
+    } else {
+        for (uint32_t h = 0; h < hidden_dim; ++h) {
+            int64_t sum = hidden_[h];
+            const std::size_t base = static_cast<std::size_t>(h) * static_cast<std::size_t>(input_dim);
+            for (uint32_t i = 0; i < input_dim; ++i) {
+                const int64_t delta = static_cast<int64_t>(new_features[i]) - static_cast<int64_t>(features_[i]);
+                if (delta != 0) {
+                    sum += static_cast<int64_t>(transformer.weights[base + i]) * delta;
+                }
+            }
+            hidden_[h] = clamp_to_i32(sum);
+        }
+    }
+
+    features_ = std::move(new_features);
 }
 
 } // namespace engine::nnue

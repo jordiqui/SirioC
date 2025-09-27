@@ -3,9 +3,9 @@
 #include "engine/core/board.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <cstddef>
 #include <fstream>
 #include <string>
 #include <string_view>
@@ -55,50 +55,55 @@ uint32_t read_u32(const std::uint8_t* data) {
     return value;
 }
 
+int divide_with_rounding(int64_t sum, int32_t scale) {
+    if (scale == 0) {
+        return 0;
+    }
+    int64_t denom = scale;
+    if (denom < 0) {
+        denom = -denom;
+        sum = -sum;
+    }
+    if (sum >= 0) {
+        return static_cast<int>((sum + denom / 2) / denom);
+    }
+    return static_cast<int>((sum - denom / 2) / denom);
+}
+
 } // namespace
 
 bool Evaluator::load_network(const std::string& path) {
     last_error_.clear();
+
     std::ifstream in(path, std::ios::binary);
     if (!in) {
         last_error_ = "unable to open file";
-        loaded_ = false;
-        accumulator_.reset();
         return false;
     }
 
     char magic[4];
     if (!read_bytes(in, magic, sizeof(magic))) {
         last_error_ = "failed to read header";
-        loaded_ = false;
-        accumulator_.reset();
         return false;
     }
     if (std::string_view(magic, sizeof(magic)) != kMagic) {
         last_error_ = "invalid magic";
-        loaded_ = false;
-        accumulator_.reset();
         return false;
     }
 
     uint32_t version = 0;
     if (!read_bytes(in, &version, sizeof(version))) {
         last_error_ = "missing version";
-        loaded_ = false;
-        accumulator_.reset();
         return false;
     }
 
     char arch_raw[16];
     if (!read_bytes(in, arch_raw, sizeof(arch_raw))) {
         last_error_ = "missing architecture";
-        loaded_ = false;
-        accumulator_.reset();
         return false;
     }
     std::string arch(arch_raw, arch_raw + sizeof(arch_raw));
-    const auto null_pos = arch.find('\0');
-    if (null_pos != std::string::npos) {
+    if (const auto null_pos = arch.find('\0'); null_pos != std::string::npos) {
         arch.resize(null_pos);
     }
 
@@ -116,94 +121,73 @@ bool Evaluator::load_network(const std::string& path) {
         Section section;
         if (!read_section(in, section)) {
             last_error_ = "truncated section";
-            loaded_ = false;
-            accumulator_.reset();
             return false;
         }
 
         if (section.id == "DESC") {
             if (section.payload.size() != sizeof(uint32_t) * 2 + sizeof(int32_t)) {
                 last_error_ = "invalid DESC size";
-                loaded_ = false;
-                accumulator_.reset();
                 return false;
             }
-            candidate.input_dim = read_u32(section.payload.data());
-            candidate.hidden_dim = read_u32(section.payload.data() + sizeof(uint32_t));
-            candidate.output_scale = read_i32(section.payload.data() + sizeof(uint32_t) * 2);
+            candidate.transformer.input_dim = read_u32(section.payload.data());
+            candidate.transformer.output_dim = read_u32(section.payload.data() + sizeof(uint32_t));
+            candidate.output.scale = read_i32(section.payload.data() + sizeof(uint32_t) * 2);
             have_desc = true;
         } else if (section.id == "FTWT") {
             if (!have_desc) {
                 last_error_ = "FTWT before DESC";
-                loaded_ = false;
-                accumulator_.reset();
                 return false;
             }
-            const size_t expected = static_cast<size_t>(candidate.input_dim) * static_cast<size_t>(candidate.hidden_dim);
+            const std::size_t expected = static_cast<std::size_t>(candidate.transformer.input_dim) *
+                                         static_cast<std::size_t>(candidate.transformer.output_dim);
             if (section.payload.size() != expected * sizeof(int16_t)) {
                 last_error_ = "invalid FTWT size";
-                loaded_ = false;
-                accumulator_.reset();
                 return false;
             }
-            candidate.feature_weights.resize(expected);
-            std::memcpy(candidate.feature_weights.data(), section.payload.data(), section.payload.size());
+            candidate.transformer.weights.resize(expected);
+            std::memcpy(candidate.transformer.weights.data(), section.payload.data(), section.payload.size());
             have_weights = true;
         } else if (section.id == "FTBS") {
             if (!have_desc) {
                 last_error_ = "FTBS before DESC";
-                loaded_ = false;
-                accumulator_.reset();
                 return false;
             }
-            if (section.payload.size() != static_cast<size_t>(candidate.hidden_dim) * sizeof(int32_t)) {
+            if (section.payload.size() != static_cast<std::size_t>(candidate.transformer.output_dim) * sizeof(int32_t)) {
                 last_error_ = "invalid FTBS size";
-                loaded_ = false;
-                accumulator_.reset();
                 return false;
             }
-            candidate.feature_bias.resize(candidate.hidden_dim);
-            std::memcpy(candidate.feature_bias.data(), section.payload.data(), section.payload.size());
+            candidate.transformer.bias.resize(candidate.transformer.output_dim);
+            std::memcpy(candidate.transformer.bias.data(), section.payload.data(), section.payload.size());
             have_bias = true;
         } else if (section.id == "OUTW") {
             if (!have_desc) {
                 last_error_ = "OUTW before DESC";
-                loaded_ = false;
-                accumulator_.reset();
                 return false;
             }
-            if (section.payload.size() != static_cast<size_t>(candidate.hidden_dim) * sizeof(int16_t)) {
+            if (section.payload.size() != static_cast<std::size_t>(candidate.transformer.output_dim) * sizeof(int16_t)) {
                 last_error_ = "invalid OUTW size";
-                loaded_ = false;
-                accumulator_.reset();
                 return false;
             }
-            candidate.output_weights.resize(candidate.hidden_dim);
-            std::memcpy(candidate.output_weights.data(), section.payload.data(), section.payload.size());
+            candidate.output.weights.resize(candidate.transformer.output_dim);
+            std::memcpy(candidate.output.weights.data(), section.payload.data(), section.payload.size());
             have_out_weights = true;
         } else if (section.id == "OUTB") {
             if (section.payload.size() != sizeof(int32_t)) {
                 last_error_ = "invalid OUTB size";
-                loaded_ = false;
-                accumulator_.reset();
                 return false;
             }
-            candidate.output_bias = read_i32(section.payload.data());
+            candidate.output.bias = read_i32(section.payload.data());
             have_out_bias = true;
         }
     }
 
     if (!have_desc || !have_weights || !have_bias || !have_out_weights || !have_out_bias) {
         last_error_ = "missing sections";
-        loaded_ = false;
-        accumulator_.reset();
         return false;
     }
 
-    if (candidate.output_scale == 0) {
-        last_error_ = "invalid output scale";
-        loaded_ = false;
-        accumulator_.reset();
+    if (!candidate.transformer.valid() || !candidate.output.valid(candidate.transformer.output_dim)) {
+        last_error_ = "inconsistent network dimensions";
         return false;
     }
 
@@ -218,23 +202,20 @@ int Evaluator::eval_cp(const engine::Board& board) const {
         return 0;
     }
 
-    accumulator_.update(board,
-                        network_.input_dim,
-                        network_.hidden_dim,
-                        network_.feature_weights,
-                        network_.feature_bias);
+    accumulator_.update(board, network_.transformer);
 
     const auto& hidden = accumulator_.hidden();
-    if (hidden.size() != network_.hidden_dim) {
+    if (hidden.size() != network_.transformer.output_dim) {
         return 0;
     }
 
-    int64_t sum = network_.output_bias;
-    for (uint32_t i = 0; i < network_.hidden_dim; ++i) {
+    int64_t sum = network_.output.bias;
+    for (std::size_t i = 0; i < hidden.size(); ++i) {
         const int32_t activation = std::max<int32_t>(0, hidden[i]);
-        sum += static_cast<int64_t>(network_.output_weights[i]) * static_cast<int64_t>(activation);
+        sum += static_cast<int64_t>(network_.output.weights[i]) * static_cast<int64_t>(activation);
     }
-    return static_cast<int>(sum / network_.output_scale);
+
+    return divide_with_rounding(sum, network_.output.scale);
 }
 
 } // namespace engine::nnue

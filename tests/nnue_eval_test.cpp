@@ -96,6 +96,32 @@ ScopedNetworkFile create_test_network() {
     return file;
 }
 
+ScopedNetworkFile create_invalid_network() {
+    namespace fs = std::filesystem;
+    ScopedNetworkFile file;
+
+    std::error_code ec;
+    fs::path temp_dir = fs::temp_directory_path(ec);
+    if (ec) {
+        return file;
+    }
+
+    const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+    fs::path path = temp_dir / ("sirio_nnue_invalid-" + std::to_string(now) + ".nnue");
+
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out) {
+        return file;
+    }
+
+    const std::array<char, 4> bad_magic{'B', 'A', 'D', '!'};
+    out.write(bad_magic.data(), static_cast<std::streamsize>(bad_magic.size()));
+    out.close();
+
+    file.path = std::move(path);
+    return file;
+}
+
 } // namespace
 
 int main() {
@@ -130,6 +156,32 @@ int main() {
     if (cp != -100) {
         std::cerr << "Expected -100 cp, got " << cp << "\n";
         return 6;
+    }
+
+    ScopedNetworkFile invalid = create_invalid_network();
+    if (!invalid.valid()) {
+        std::cerr << "Failed to create invalid NNUE network file\n";
+        return 7;
+    }
+
+    if (eval.load_network(invalid.path.string())) {
+        std::cerr << "Invalid network was unexpectedly accepted\n";
+        return 8;
+    }
+
+    if (!eval.is_loaded()) {
+        std::cerr << "Evaluator lost previously loaded network after failure\n";
+        return 9;
+    }
+
+    if (!board.set_fen("8/8/8/8/8/8/8/P6k w - - 0 1")) {
+        std::cerr << "Failed to reset FEN\n";
+        return 10;
+    }
+    cp = eval.eval_cp(board);
+    if (cp != 100) {
+        std::cerr << "Expected cached network to remain usable, got " << cp << "\n";
+        return 11;
     }
 
     return 0;

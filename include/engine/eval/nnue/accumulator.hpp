@@ -7,23 +7,23 @@ namespace engine { class Board; }
 
 namespace engine::nnue {
 
+struct FeatureTransformer;
+
 class Accumulator {
 public:
     void reset() noexcept;
 
-    void update(const engine::Board& board,
-                uint32_t input_dim,
-                uint32_t hidden_dim,
-                const std::vector<int16_t>& feature_weights,
-                const std::vector<int32_t>& feature_bias);
+    void update(const engine::Board& board, const FeatureTransformer& transformer);
 
     const std::vector<int32_t>& hidden() const noexcept { return hidden_; }
 
 private:
     std::vector<int32_t> hidden_;
+    std::vector<int32_t> features_;
     std::string cached_fen_;
     uint32_t cached_input_dim_ = 0;
     uint32_t cached_hidden_dim_ = 0;
+    bool initialized_ = false;
 };
 
 } // namespace engine::nnue

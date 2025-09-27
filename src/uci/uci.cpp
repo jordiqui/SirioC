@@ -22,7 +22,7 @@ static int g_hash_mb = 64;
 static int g_threads = 1;
 static bool g_stop = false;
 
-static void try_load_network();
+static bool try_load_network(bool announce_success = true);
 
 void Uci::loop() {
     std::string line;
@@ -61,20 +61,26 @@ void Uci::cmd_isready() {
 void Uci::cmd_ucinewgame() {
     g_stop = false;
     g_board.set_startpos();
-    // (Re)load network optionally
-    try_load_network();
+    if (g_use_nnue) {
+        try_load_network(false);
+    }
 }
 
-static void try_load_network() {
-    if (!g_use_nnue) {
-        return;
-    }
+static bool try_load_network(bool announce_success) {
     if (g_eval.load_network(g_eval_file)) {
-        std::cout << "info string Loaded NNUE network from " << g_eval_file << "\n";
-    } else {
-        std::cout << "info string Failed to load NNUE network '" << g_eval_file
-                  << "': " << g_eval.last_error() << "\n";
+        if (announce_success) {
+            std::cout << "info string Loaded NNUE network from " << g_eval_file;
+            if (!g_use_nnue) {
+                std::cout << " (UseNNUE=false)";
+            }
+            std::cout << "\n";
+        }
+        return true;
     }
+
+    std::cout << "info string Failed to load NNUE network '" << g_eval_file
+              << "': " << g_eval.last_error() << "\n";
+    return false;
 }
 
 static std::vector<std::string> split(const std::string& s) {
@@ -137,19 +143,52 @@ void Uci::cmd_setoption(const std::string& s) {
                 std::cout << "info string Invalid Threads value '" << value << "'\n";
             }
         } else if (option_name == "UseNNUE") {
+            if (value.empty()) {
+                std::cout << "info string UseNNUE requires a value\n";
+                break;
+            }
             std::string lower = value;
-            std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-            const bool enable = (lower == "true" || lower == "1" || lower == "on");
-            g_use_nnue = enable;
-            if (enable) {
-                try_load_network();
+            std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
+            bool enable = false;
+            if (lower == "true" || lower == "1" || lower == "on") {
+                enable = true;
+            } else if (lower == "false" || lower == "0" || lower == "off") {
+                enable = false;
             } else {
+                std::cout << "info string Invalid UseNNUE value '" << value << "'\n";
+                break;
+            }
+
+            if (enable) {
+                g_use_nnue = true;
+                if (!try_load_network()) {
+                    g_use_nnue = false;
+                    std::cout << "info string NNUE disabled due to load failure\n";
+                }
+            } else {
+                g_use_nnue = false;
                 std::cout << "info string NNUE disabled\n";
             }
         } else if (option_name == "EvalFile") {
-            if (!value.empty()) {
-                g_eval_file = value;
-                try_load_network();
+            if (value.empty()) {
+                std::cout << "info string EvalFile requires a value\n";
+                break;
+            }
+
+            const std::string previous = g_eval_file;
+            g_eval_file = value;
+            const bool announce = g_use_nnue;
+            if (try_load_network(announce)) {
+                if (!announce) {
+                    std::cout << "info string Cached NNUE network from " << g_eval_file << " (UseNNUE=false)\n";
+                }
+            } else {
+                g_eval_file = previous;
+                if (!previous.empty() && previous != value) {
+                    std::cout << "info string Keeping previous EvalFile '" << previous << "'\n";
+                }
             }
         }
         break;
