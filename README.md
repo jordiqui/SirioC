@@ -14,7 +14,12 @@ cmake --build . -j
 ```
 
 If you know the target machines support AVX2 and BMI2, you can enable the
-optimized build with `-DENABLE_AVX2=ON` when configuring CMake.
+optimized build with `-DENABLE_AVX2=ON` when configuring CMake. Additional
+flags are available to squeeze more performance out of modern CPUs:
+
+* `-DENABLE_NATIVE=ON` adds `-march=native` when supported, letting the compiler
+  use every instruction available on the build host.
+* `-DENABLE_VNNI=ON` enables AVX-512 VNNI (on compilers/CPUs that support it).
 
 ### Linux
 
@@ -27,7 +32,8 @@ cmake --build . -j
 Pass `-DENABLE_AVX2=ON` to CMake only when building for hardware that supports
 the AVX2 and BMI2 instruction sets. The default build avoids these flags so
 that the resulting binary runs on older processors that only provide SSE4.1
-and POPCNT.
+and POPCNT. `-DENABLE_NATIVE=ON` and `-DENABLE_VNNI=ON` follow the same rule:
+enable them only when the target CPUs actually support those instruction sets.
 
 ## Run (UCI)
 
@@ -42,7 +48,9 @@ and POPCNT.
 
 ## What works
 
-* Full UCI loop with options (`Hash`, `Threads`, `UseNNUE`, `EvalFile`).
+* Full UCI loop with options (`Hash`, `Threads`, `UseNNUE`, `EvalFile`). Threads
+  default to the available hardware concurrency so the engine uses every core
+  by default.
 * Legal move generation with FEN and `startpos` + `moves` parsing.
 * Iterative deepening search with a transposition table, killer moves, history
   heuristics, and tapered evaluation.
@@ -68,4 +76,20 @@ SirioC blends ideas from Berserk and Stockfish in the following ways:
 
 * Implement incremental make/unmake to avoid copying boards at every node.
 * Wire in NNUE accumulator updates and integer inference.
-* Add time management utilities, `perft`, and `bench` modes.
+* Add time management utilities, `perft`, and enhanced `bench` modes.
+
+## Bench command
+
+SirioC exposes a `bench` command that solves a small suite of tactical
+positions at a fixed depth. The output now appears immediately so it can be
+captured by GUIs and scripts without issuing an extra command. Example usage:
+
+```bash
+bench depth 8
+bench depth 6 threads 32
+```
+
+If no explicit thread count is supplied, the command uses the current `Threads`
+UCI setting. When the option is still at its default value of 1, the engine
+automatically expands to the detected hardware concurrency so that bench runs
+exercise every core and hyper-thread.

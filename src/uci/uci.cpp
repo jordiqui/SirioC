@@ -5,11 +5,13 @@
 #include "engine/core/perft.hpp"
 #include "engine/search/search.hpp"
 #include "engine/eval/nnue/evaluator.hpp"
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <chrono>
 #include <iostream>
 #include <sstream>
+#include <thread>
 #include <vector>
 
 namespace engine {
@@ -21,7 +23,19 @@ static bool g_use_nnue = true;
 static std::string g_eval_file = "nn-1c0000000000.nnue";
 static std::string g_eval_file_small = "nn-37f18f62d772.nnue";
 static int g_hash_mb = 64;
-static int g_threads = 1;
+namespace {
+constexpr int kThreadsMax = 256;
+
+int detect_default_thread_count() {
+    unsigned hw = std::thread::hardware_concurrency();
+    if (hw == 0) return 1;
+    if (hw > static_cast<unsigned>(kThreadsMax)) return kThreadsMax;
+    return static_cast<int>(hw);
+}
+} // namespace
+
+static const int g_default_threads = detect_default_thread_count();
+static int g_threads = g_default_threads;
 static int g_numa_offset = 0;
 static bool g_ponder = true;
 static int g_multi_pv = 1;
@@ -71,7 +85,8 @@ void Uci::cmd_uci() {
     std::cout << "id name " << engine::kEngineName << " " << engine::kEngineVersion << "\n";
     std::cout << "id author Jorge Ruiz creditos Codex OpenAi\n";
     std::cout << "option name Hash type spin default 64 min 1 max 4096\n";
-    std::cout << "option name Threads type spin default 1 min 1 max 256\n";
+    std::cout << "option name Threads type spin default " << g_default_threads
+              << " min 1 max " << kThreadsMax << "\n";
     std::cout << "option name NUMA Offset type spin default 0 min -1 max 32\n";
     std::cout << "option name Ponder type check default true\n";
     std::cout << "option name MultiPV type spin default 1 min 1 max 218\n";
@@ -135,7 +150,10 @@ void Uci::cmd_setoption(const std::string& s) {
             };
 
             if (name == "Hash" && !value.empty()) g_hash_mb = std::stoi(value);
-            else if (name == "Threads" && !value.empty()) g_threads = std::stoi(value);
+            else if (name == "Threads" && !value.empty()) {
+                int parsed = std::stoi(value);
+                g_threads = std::clamp(parsed, 1, kThreadsMax);
+            }
             else if (name == "NUMA Offset" && !value.empty()) g_numa_offset = std::stoi(value);
             else if (name == "Ponder") g_ponder = parse_bool(value);
             else if (name == "MultiPV" && !value.empty()) g_multi_pv = std::stoi(value);
@@ -293,14 +311,27 @@ void Uci::cmd_perft(const std::string& s) {
 void Uci::cmd_bench(const std::string& s) {
     auto tokens = split(s);
     int depth = 6;
-    for (size_t i = 1; i + 1 < tokens.size(); ++i) {
-        if (tokens[i] == "depth") {
+    int requested_threads = -1;
+    for (size_t i = 1; i < tokens.size(); ++i) {
+        if (tokens[i] == "depth" && i + 1 < tokens.size()) {
             char* end = nullptr;
             long val = std::strtol(tokens[i + 1].c_str(), &end, 10);
             if (end != tokens[i + 1].c_str()) depth = static_cast<int>(val);
+            ++i;
+        } else if (tokens[i] == "threads" && i + 1 < tokens.size()) {
+            char* end = nullptr;
+            long val = std::strtol(tokens[i + 1].c_str(), &end, 10);
+            if (end != tokens[i + 1].c_str()) requested_threads = static_cast<int>(val);
+            ++i;
         }
     }
     if (depth < 1) depth = 1;
+
+    int bench_threads = requested_threads > 0 ? requested_threads : g_threads;
+    if (bench_threads <= 1 && requested_threads <= 0) {
+        bench_threads = g_default_threads;
+    }
+    bench_threads = std::clamp(bench_threads, 1, kThreadsMax);
 
     static const std::vector<std::string> bench_fens = {
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
@@ -312,6 +343,9 @@ void Uci::cmd_bench(const std::string& s) {
     };
 
     sync_search_options();
+    if (bench_threads != g_threads) {
+        g_search.set_threads(bench_threads);
+    }
 
     Limits lim;
     lim.depth = depth;
@@ -331,7 +365,12 @@ void Uci::cmd_bench(const std::string& s) {
                            .count();
     uint64_t nps = elapsed_ms > 0 ? total_nodes * 1000ULL / static_cast<uint64_t>(elapsed_ms) : 0;
     std::cout << "bench positions " << bench_fens.size() << " depth " << depth
-              << " nodes " << total_nodes << " time " << elapsed_ms << " nps " << nps << "\n";
+              << " threads " << bench_threads << " nodes " << total_nodes << " time " << elapsed_ms
+              << " nps " << nps << "\n" << std::flush;
+
+    if (bench_threads != g_threads) {
+        g_search.set_threads(g_threads);
+    }
 }
 
 void Uci::cmd_stop() {
