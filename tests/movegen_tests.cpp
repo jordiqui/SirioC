@@ -35,6 +35,18 @@ int main() {
     assert(castle_set.contains("e1g1"));
     assert(castle_set.contains("e1c1"));
 
+    board.set_fen("4k3/8/8/8/8/8/8/4K3 w KQkq - 0 1");
+    auto missing_rook_moves = board.generate_legal_moves();
+    auto missing_rook_set = moves_to_set(board, missing_rook_moves);
+    assert(!missing_rook_set.contains("e1g1"));
+    assert(!missing_rook_set.contains("e1c1"));
+
+    board.set_fen("4k3/8/8/8/8/8/8/4K3 b KQkq - 0 1");
+    auto missing_black_rook_moves = board.generate_legal_moves();
+    auto missing_black_rook_set = moves_to_set(board, missing_black_rook_moves);
+    assert(!missing_black_rook_set.contains("e8g8"));
+    assert(!missing_black_rook_set.contains("e8c8"));
+
     board.set_fen("r3k2r/8/8/8/8/8/5r2/R3K2R w KQ - 0 1");
     auto blocked_moves = board.generate_legal_moves();
     auto blocked_set = moves_to_set(board, blocked_moves);
