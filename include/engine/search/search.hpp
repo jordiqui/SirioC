@@ -1,5 +1,6 @@
 #pragma once
 #include "engine/types.hpp"
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <chrono>
@@ -62,6 +63,52 @@ private:
         uint8_t flag = 0;
     };
     struct ThreadData;
+    struct AdaptiveTuning {
+        void reset();
+        void prepare(int threads, int64_t target_time_ms);
+        void begin_iteration(uint64_t nodes,
+                             std::chrono::steady_clock::time_point start_time);
+        void end_iteration(uint64_t nodes,
+                           std::chrono::steady_clock::time_point end_time);
+
+        int futility_margin(int depth) const;
+        int reverse_futility_margin() const;
+        int razoring_margin() const;
+        int late_move_limit(int depth, int move_overhead_ms, int history_score,
+                            int move_count) const;
+        int beta_margin(int depth) const;
+        int probcut_margin() const;
+        int singular_margin_scale() const;
+        int singular_reduction_base() const;
+        int null_move_base_reduction() const;
+        int null_move_max_reduction() const;
+        int null_move_depth_divisor() const;
+        double lmr_scale() const;
+
+    private:
+        void apply_scaling();
+
+        std::array<int, 4> futility_margins_{};
+        std::array<int, 7> late_move_limits_{};
+        std::array<int, 7> beta_margins_{};
+        int probcut_margin_ = 0;
+        int singular_margin_scale_ = 0;
+        int singular_reduction_base_ = 0;
+        int null_move_base_reduction_ = 0;
+        int null_move_max_reduction_ = 0;
+        int null_move_depth_divisor_ = 4;
+        int reverse_futility_margin_ = 0;
+        int razoring_margin_ = 0;
+        double lmr_scale_ = 1.0;
+
+        int threads_ = 1;
+        int64_t target_time_ms_ = -1;
+        bool has_baseline_speed_ = false;
+        double baseline_nodes_per_ms_ = 1.0;
+        double speed_ema_ = 1.0;
+        uint64_t iteration_nodes_start_ = 0;
+        std::chrono::steady_clock::time_point iteration_start_{};
+    };
 
     Result search_position(Board& board, const Limits& lim);
     int negamax(Board& board, int depth, int alpha, int beta, bool pv_node, int ply,
@@ -101,6 +148,7 @@ private:
     int64_t nodes_limit_ = -1;
     std::chrono::steady_clock::time_point search_start_;
     std::function<void(const Info&)> info_callback_;
+    AdaptiveTuning tuning_;
 };
 
 } // namespace engine
