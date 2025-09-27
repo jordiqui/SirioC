@@ -1,8 +1,19 @@
 # SirioC
 
-SirioC is a buildable UCI chess engine skeleton with NNUE scaffolding. Its
-search integrates heuristics inspired by the open-source Stockfish and Berserk
-projects to provide a stronger baseline playing strength out of the box.
+SirioC is a modular, buildable UCI chess engine skeleton with NNUE scaffolding
+and a focus on competitive default play. The current search integrates
+heuristics inspired by the open-source Stockfish and Berserk projects, giving
+the engine a strong baseline while leaving room for experimentation with new
+ideas.
+
+## Highlights
+
+* Multi-threaded iterative deepening with late move reductions, killer/history
+  heuristics, tapered evaluation, and Syzygy tablebase probing support.
+* Optional NNUE evaluation infrastructure wired into the board representation
+  so neural networks can be attached without reworking the move generator.
+* Bench command and instrumentation hooks that make it easy to validate search
+  changes or gather tuning data.
 
 ## Build
 
@@ -46,14 +57,14 @@ enable them only when the target CPUs actually support those instruction sets.
 # go movetime 100
 ```
 
-## What works
+## Features
 
 * Full UCI loop with options (`Hash`, `Threads`, `UseNNUE`, `EvalFile`). Threads
   default to the available hardware concurrency so the engine uses every core
   by default.
 * Legal move generation with FEN and `startpos` + `moves` parsing.
-* Iterative deepening search with a transposition table, killer moves, history
-  heuristics, and tapered evaluation backed by incremental make/unmake to avoid
+* Iterative deepening search backed by a transposition table, killer moves,
+  history heuristics, tapered evaluation, and incremental make/unmake to avoid
   copying full board states at every node.
 * Quiet-move pruning and search stability refinements inspired by Berserk and
   Stockfish to supply competitive default play.
@@ -126,6 +137,14 @@ refine the selectivity that now powers SirioC's search:
 * Instrument automated tuning for the new pruning margins and reduction tables
   so the enhanced move-count pruning, singular extensions, and beta/ProbCut
   thresholds stay balanced across hardware and time controls.
+* Add aspiration windows and a verification re-search path to stabilize root
+  move ordering while keeping fail-high/fail-low overhead low.
+* Implement improved time management with soft/hard move time budgets and
+  search extension throttling to convert search strength into practical play.
+* Introduce multi-cut and enhanced futility pruning experiments gated behind
+  testing flags so risky selectivity can be evaluated safely.
+* Expand the regression/bench suite with mixed tactical and quiet positions so
+  new heuristics can be sanity-checked automatically.
 
 ## Bench command
 
