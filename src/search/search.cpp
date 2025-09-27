@@ -59,6 +59,10 @@ Search::Search() : nodes_(0), stop_(false) {
     nodes_limit_ = -1;
 }
 
+void Search::set_info_callback(std::function<void(const Info&)> cb) {
+    info_callback_ = std::move(cb);
+}
+
 void Search::set_threads(int threads) { threads_ = std::max(1, threads); }
 
 void Search::set_hash(int megabytes) {
@@ -208,6 +212,19 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
             result.depth = depth;
             result.score = best_score;
             result.is_mate = std::abs(best_score) >= kMateThreshold;
+
+            if (info_callback_) {
+                Info info;
+                info.depth = depth;
+                info.score = best_score;
+                info.nodes = nodes_.load(std::memory_order_relaxed);
+                info.time_ms = static_cast<int>(
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - start)
+                        .count());
+                info.pv = extract_pv(board, best_move);
+                info_callback_(info);
+            }
 
             root_moves.clear();
             for (const auto& [move, score] : scores) {

@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstdint>
 #include <chrono>
+#include <functional>
 #include <optional>
 #include <shared_mutex>
 #include <string>
@@ -26,8 +27,17 @@ public:
         std::vector<Move> pv;
     };
 
+    struct Info {
+        int depth = 0;
+        int score = 0;
+        uint64_t nodes = 0;
+        int time_ms = 0;
+        std::vector<Move> pv;
+    };
+
     Search();
     Result find_bestmove(Board& b, const Limits& lim);
+    void set_info_callback(std::function<void(const Info&)> cb);
     void set_threads(int threads);
     void set_hash(int megabytes);
     void stop();
@@ -89,6 +99,7 @@ private:
     int64_t target_time_ms_ = -1;
     int64_t nodes_limit_ = -1;
     std::chrono::steady_clock::time_point search_start_;
+    std::function<void(const Info&)> info_callback_;
 };
 
 } // namespace engine
