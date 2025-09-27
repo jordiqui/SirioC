@@ -11,6 +11,9 @@ cmake -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release ..
 cmake --build . -j
 ```
 
+If you know the target machines support AVX2 and BMI2, you can enable the
+optimized build with `-DENABLE_AVX2=ON` when configuring CMake.
+
 ### Linux
 
 ```bash
@@ -18,6 +21,11 @@ mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release ..
 cmake --build . -j
 ```
+
+Pass `-DENABLE_AVX2=ON` to CMake only when building for hardware that supports
+the AVX2 and BMI2 instruction sets. The default build avoids these flags so
+that the resulting binary runs on older processors that only provide SSE4.1
+and POPCNT.
 
 ## Run (UCI)
 
