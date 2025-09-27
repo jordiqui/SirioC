@@ -730,7 +730,7 @@ static void add_to_hash(struct BaseEntry *ptr, uint64_t key)
 
   tbHash[idx].key = key;
   tbHash[idx].ptr = ptr;
-  atomic_init(&tbHash[idx].error, false);
+  atomic_store_explicit(&tbHash[idx].error, false, memory_order_relaxed);
 }
 
 #define pchr(i) piece_to_char[QUEEN - (i)]
