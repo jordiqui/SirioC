@@ -4,6 +4,8 @@ project(SirioC LANGUAGES CXX)
 option(ENABLE_LTO "Enable link-time optimization" ON)
 option(ENABLE_AVX2 "Enable AVX2 where available" ON)
 
+enable_testing()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -62,6 +64,7 @@ if (MINGW)
   target_link_libraries(movegen_tests PRIVATE stdc++ stdc++fs)
 endif()
 
+ codex/implement-legal-move-generation-and-testing
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 enable_testing()
 add_test(NAME movegen_unit_tests COMMAND movegen_tests)
@@ -69,4 +72,17 @@ add_test(NAME go_command_responds_with_legal_move
          COMMAND Python3::Interpreter
                  ${CMAKE_SOURCE_DIR}/tests/test_go.py
                  $<TARGET_FILE:SirioC>
-                 $<TARGET_FILE:legal_moves_cli>)
+                 $<TARGET_FILE
+target_compile_definitions(SirioC PRIVATE
+  ENGINE_NAME=\"SirioC\"
+  ENGINE_VERSION=\"0.1.0\"
+)
+
+add_executable(SirioCTests
+  tests/board_fen_tests.cpp
+  src/core/board.cpp
+  src/core/fen.cpp
+)
+
+add_test(NAME board_fen_tests COMMAND SirioCTests)
+main
