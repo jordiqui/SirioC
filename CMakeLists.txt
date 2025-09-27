@@ -4,6 +4,8 @@ project(SirioC LANGUAGES CXX)
 option(ENABLE_LTO "Enable link-time optimization" ON)
 option(ENABLE_AVX2 "Enable AVX2 where available" ON)
 
+enable_testing()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -48,3 +50,11 @@ target_compile_definitions(SirioC PRIVATE
   ENGINE_NAME=\"SirioC\"
   ENGINE_VERSION=\"0.1.0\"
 )
+
+add_executable(SirioCTests
+  tests/board_fen_tests.cpp
+  src/core/board.cpp
+  src/core/fen.cpp
+)
+
+add_test(NAME board_fen_tests COMMAND SirioCTests)
