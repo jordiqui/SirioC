@@ -5,6 +5,7 @@
 #include <array>
 #include <cctype>
 #include <charconv>
+#include <random>
 #include <sstream>
 #include <string>
 #include <system_error>
@@ -15,6 +16,50 @@ namespace engine {
 namespace {
 
 constexpr uint64_t kSquareMask(int square) { return 1ULL << square; }
+
+const std::array<uint64_t, 12 * 64>& piece_keys() {
+    static std::array<uint64_t, 12 * 64> keys{};
+    static bool initialized = false;
+    if (!initialized) {
+        std::mt19937_64 rng(0xC0FFEE123456789ULL);
+        for (auto& k : keys) k = rng();
+        initialized = true;
+    }
+    return keys;
+}
+
+const std::array<uint64_t, 16>& castling_keys() {
+    static std::array<uint64_t, 16> keys{};
+    static bool initialized = false;
+    if (!initialized) {
+        std::mt19937_64 rng(0xABCDEF9876543210ULL);
+        for (auto& k : keys) k = rng();
+        initialized = true;
+    }
+    return keys;
+}
+
+const std::array<uint64_t, 8>& enpassant_keys() {
+    static std::array<uint64_t, 8> keys{};
+    static bool initialized = false;
+    if (!initialized) {
+        std::mt19937_64 rng(0x13579BDF2468ACE0ULL);
+        for (auto& k : keys) k = rng();
+        initialized = true;
+    }
+    return keys;
+}
+
+uint64_t side_key() {
+    static uint64_t key = 0;
+    static bool initialized = false;
+    if (!initialized) {
+        std::mt19937_64 rng(0x1122334455667788ULL);
+        key = rng();
+        initialized = true;
+    }
+    return key;
+}
 
 int piece_index_from_char(char c) {
     switch (c) {
@@ -231,6 +276,12 @@ std::string Board::move_to_uci(Move move) const {
     return out;
 }
 
+Board Board::after_move(Move move) const {
+    Board copy(*this);
+    copy.do_move(move);
+    return copy;
+}
+
 bool Board::is_white_piece(char piece) { return piece >= 'A' && piece <= 'Z'; }
 
 bool Board::is_black_piece(char piece) { return piece >= 'a' && piece <= 'z'; }
@@ -258,6 +309,23 @@ char Board::promotion_from_code(int code, bool white) const {
     case 4: return white ? 'Q' : 'q';
     default: return white ? 'P' : 'p';
     }
+}
+
+uint64_t Board::zobrist_key() const {
+    uint64_t key = 0;
+    const auto& pk = piece_keys();
+    for (int sq = 0; sq < 64; ++sq) {
+        char piece = squares_[sq];
+        int idx = piece_index_from_char(piece);
+        if (idx == -1) continue;
+        key ^= pk[static_cast<size_t>(idx) * 64 + static_cast<size_t>(sq)];
+    }
+    if (stm_white_) key ^= side_key();
+    key ^= castling_keys()[castling_rights_ & 0xF];
+    if (en_passant_square_ != INVALID_SQUARE) {
+        key ^= enpassant_keys()[file_of(en_passant_square_)];
+    }
+    return key;
 }
 
 } // namespace engine

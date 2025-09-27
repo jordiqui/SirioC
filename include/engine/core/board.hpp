@@ -53,6 +53,7 @@ public:
     bool make_move_uci(const std::string& uci);
     std::vector<Move> generate_legal_moves() const;
     std::string move_to_uci(Move move) const;
+    Board after_move(Move move) const;
 
     // Accessors
     bool white_to_move() const { return stm_white_; }
@@ -64,6 +65,10 @@ public:
     int en_passant_square() const { return en_passant_square_; }
     int halfmove_clock() const { return halfmove_clock_; }
     int fullmove_number() const { return fullmove_number_; }
+    const std::array<char, 64>& squares() const { return squares_; }
+    bool in_check(bool white) const;
+    bool side_to_move_in_check() const { return in_check(stm_white_); }
+    uint64_t zobrist_key() const;
 
 private:
     enum Castling : uint8_t {
@@ -80,7 +85,6 @@ private:
     void generate_rook_moves(int sq, std::vector<Move>& moves) const;
     void generate_queen_moves(int sq, std::vector<Move>& moves) const;
     void generate_king_moves(int sq, std::vector<Move>& moves) const;
-    bool in_check(bool white) const;
     bool is_square_attacked(int sq, bool by_white) const;
     int find_king_square(bool white) const;
     void do_move(Move move);
