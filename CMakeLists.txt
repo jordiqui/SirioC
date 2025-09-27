@@ -38,6 +38,9 @@ file(GLOB_RECURSE SRC_FILES
   src/*.cpp
 )
 
+set(SRC_FILES_NO_MAIN ${SRC_FILES})
+list(REMOVE_ITEM SRC_FILES_NO_MAIN ${CMAKE_SOURCE_DIR}/src/main.cpp)
+
 add_executable(SirioC ${SRC_FILES})
 
 if (MINGW)
@@ -48,3 +51,8 @@ target_compile_definitions(SirioC PRIVATE
   ENGINE_NAME=\"SirioC\"
   ENGINE_VERSION=\"0.1.0\"
 )
+
+add_executable(nnue_eval_test tests/nnue_eval_test.cpp ${SRC_FILES_NO_MAIN})
+
+enable_testing()
+add_test(NAME nnue_eval COMMAND nnue_eval_test)

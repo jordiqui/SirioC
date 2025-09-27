@@ -4,6 +4,9 @@
 #include "engine/core/fen.hpp"
 #include "engine/search/search.hpp"
 #include "engine/eval/nnue/evaluator.hpp"
+#include <algorithm>
+#include <charconv>
+#include <cctype>
 #include <iostream>
 #include <sstream>
 #include <vector>
@@ -18,6 +21,8 @@ static std::string g_eval_file = "nn-000000.nnue";
 static int g_hash_mb = 64;
 static int g_threads = 1;
 static bool g_stop = false;
+
+static void try_load_network();
 
 void Uci::loop() {
     std::string line;
@@ -57,7 +62,19 @@ void Uci::cmd_ucinewgame() {
     g_stop = false;
     g_board.set_startpos();
     // (Re)load network optionally
-    if (g_use_nnue) g_eval.load_network(g_eval_file);
+    try_load_network();
+}
+
+static void try_load_network() {
+    if (!g_use_nnue) {
+        return;
+    }
+    if (g_eval.load_network(g_eval_file)) {
+        std::cout << "info string Loaded NNUE network from " << g_eval_file << "\n";
+    } else {
+        std::cout << "info string Failed to load NNUE network '" << g_eval_file
+                  << "': " << g_eval.last_error() << "\n";
+    }
 }
 
 static std::vector<std::string> split(const std::string& s) {
@@ -68,25 +85,74 @@ static std::vector<std::string> split(const std::string& s) {
     return out;
 }
 
+template <typename T>
+static bool parse_integer(const std::string& value, T& out) {
+    T tmp{};
+    auto* begin = value.data();
+    auto* end = value.data() + value.size();
+    auto result = std::from_chars(begin, end, tmp);
+    if (result.ec != std::errc() || result.ptr != end) {
+        return false;
+    }
+    out = tmp;
+    return true;
+}
+
 void Uci::cmd_setoption(const std::string& s) {
     // setoption name X value Y
     auto t = split(s);
-    // naive parse
-    for (size_t i=0;i<t.size();++i) {
-        if (t[i]=="name" && i+1<t.size()) {
-            std::string name = t[i+1];
-            // find "value"
-            size_t j = i+2;
-            while (j<t.size() && t[j]!="value") ++j;
-            std::string value;
-            if (j+1<t.size()) value = t[j+1];
-
-            if (name=="Hash") g_hash_mb = std::stoi(value);
-            else if (name=="Threads") g_threads = std::stoi(value);
-            else if (name=="UseNNUE") g_use_nnue = (value=="true"||value=="1");
-            else if (name=="EvalFile") g_eval_file = value;
-            break;
+    for (size_t i = 0; i < t.size(); ++i) {
+        if (t[i] != "name" || i + 1 >= t.size()) {
+            continue;
         }
+        const std::string option_name = t[i + 1];
+        size_t value_idx = i + 2;
+        while (value_idx < t.size() && t[value_idx] != "value") {
+            ++value_idx;
+        }
+
+        std::string value;
+        if (value_idx < t.size()) {
+            value_idx += 1; // skip "value"
+            for (size_t k = value_idx; k < t.size(); ++k) {
+                if (!value.empty()) {
+                    value.push_back(' ');
+                }
+                value += t[k];
+            }
+        }
+
+        if (option_name == "Hash") {
+            int parsed = g_hash_mb;
+            if (!value.empty() && parse_integer(value, parsed) && parsed >= 1 && parsed <= 4096) {
+                g_hash_mb = parsed;
+            } else {
+                std::cout << "info string Invalid Hash value '" << value << "'\n";
+            }
+        } else if (option_name == "Threads") {
+            int parsed = g_threads;
+            if (!value.empty() && parse_integer(value, parsed) && parsed >= 1 && parsed <= 256) {
+                g_threads = parsed;
+            } else {
+                std::cout << "info string Invalid Threads value '" << value << "'\n";
+            }
+        } else if (option_name == "UseNNUE") {
+            std::string lower = value;
+            std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            const bool enable = (lower == "true" || lower == "1" || lower == "on");
+            g_use_nnue = enable;
+            if (enable) {
+                try_load_network();
+            } else {
+                std::cout << "info string NNUE disabled\n";
+            }
+        } else if (option_name == "EvalFile") {
+            if (!value.empty()) {
+                g_eval_file = value;
+                try_load_network();
+            }
+        }
+        break;
     }
 }
 
