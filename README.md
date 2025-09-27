@@ -120,20 +120,12 @@ SirioC blends ideas from Berserk and Stockfish in the following ways:
 
 ### Search improvement tasks
 
-To keep pace with other competitive UCI engines, the search stack can be
-expanded with the following upgrades:
+To keep pace with other competitive UCI engines, future work should continue to
+refine the selectivity that now powers SirioC's search:
 
-* Add move-count based pruning (including improvements such as improved late
-  move pruning and move-overhead aware reductions) to trim obviously futile
-  branches earlier.
-* Introduce a singular-extension search to better recognise forcing
-  continuations in tactical positions.
-* Implement probabilistic cut (ProbCut) and enhanced beta pruning tuned for the
-  existing evaluation scale to shave additional nodes without missing tactics.
-* Add a robust internal iterative deepening framework for quiet nodes so that
-  principal variation moves remain strong even when TT entries are shallow.
-* Improve the multi-threaded search balance with adaptive aspiration windows
-  and smarter fail-high/fail-low recovery heuristics.
+* Instrument automated tuning for the new pruning margins and reduction tables
+  so the enhanced move-count pruning, singular extensions, and beta/ProbCut
+  thresholds stay balanced across hardware and time controls.
 
 ## Bench command
 
