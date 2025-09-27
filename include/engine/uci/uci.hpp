@@ -20,6 +20,8 @@ private:
     void cmd_position(const std::string& s);
     void cmd_go(const std::string& s);
     void cmd_stop();
+    void cmd_perft(const std::string& s);
+    void cmd_bench(const std::string& s);
 };
 
 } // namespace engine

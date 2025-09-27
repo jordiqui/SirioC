@@ -1,5 +1,6 @@
 #include "engine/core/board.hpp"
 #include "engine/core/fen.hpp"
+#include "engine/eval/nnue/accumulator.hpp"
 
 #include <algorithm>
 #include <array>
@@ -228,6 +229,8 @@ bool Board::set_fen(const std::string& fen) {
     fullmove_number_ = fullmove;
     stm_white_ = stm_white;
     last_fen_ = fen;
+    history_.clear();
+    accumulator_.reset(*this);
     return true;
 }
 
@@ -242,7 +245,9 @@ bool Board::make_move(Move m) {
     auto legal = generate_legal_moves();
     for (Move move : legal) {
         if (move == m) {
-            do_move(move);
+            State state;
+            apply_move(move, state);
+            history_.push_back(state);
             return true;
         }
     }
@@ -253,7 +258,9 @@ bool Board::make_move_uci(const std::string& uci) {
     auto legal = generate_legal_moves();
     for (Move move : legal) {
         if (move_to_uci(move) == uci) {
-            do_move(move);
+            State state;
+            apply_move(move, state);
+            history_.push_back(state);
             return true;
         }
     }
@@ -278,7 +285,10 @@ std::string Board::move_to_uci(Move move) const {
 
 Board Board::after_move(Move move) const {
     Board copy(*this);
-    copy.do_move(move);
+    copy.history_.clear();
+    State state;
+    copy.apply_move(move, state);
+    copy.history_.push_back(state);
     return copy;
 }
 

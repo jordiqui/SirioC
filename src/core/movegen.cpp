@@ -30,18 +30,19 @@ inline bool on_board(int file, int rank) {
 
 } // namespace
 
-std::vector<Move> Board::generate_legal_moves() const {
+std::vector<Move> Board::generate_legal_moves() {
     std::vector<Move> pseudo;
     generate_pseudo_legal_moves(pseudo);
     std::vector<Move> legal;
     legal.reserve(pseudo.size());
     bool moving_white = stm_white_;
     for (Move m : pseudo) {
-        Board copy(*this);
-        copy.do_move(m);
-        if (!copy.in_check(moving_white)) {
+        State state;
+        apply_move(m, state);
+        if (!in_check(moving_white)) {
             legal.push_back(m);
         }
+        undo_move(state);
     }
     return legal;
 }
@@ -352,114 +353,134 @@ bool Board::is_square_attacked(int sq, bool by_white) const {
     return false;
 }
 
-void Board::do_move(Move move) {
+int Board::piece_index(char pc) {
+    switch (pc) {
+    case 'P': return static_cast<int>(WHITE_PAWN);
+    case 'N': return static_cast<int>(WHITE_KNIGHT);
+    case 'B': return static_cast<int>(WHITE_BISHOP);
+    case 'R': return static_cast<int>(WHITE_ROOK);
+    case 'Q': return static_cast<int>(WHITE_QUEEN);
+    case 'K': return static_cast<int>(WHITE_KING);
+    case 'p': return static_cast<int>(BLACK_PAWN);
+    case 'n': return static_cast<int>(BLACK_KNIGHT);
+    case 'b': return static_cast<int>(BLACK_BISHOP);
+    case 'r': return static_cast<int>(BLACK_ROOK);
+    case 'q': return static_cast<int>(BLACK_QUEEN);
+    case 'k': return static_cast<int>(BLACK_KING);
+    default: return -1;
+    }
+}
+
+void Board::remove_piece(char pc, int sq, bool update_acc) {
+    int idx = piece_index(pc);
+    if (idx == -1) return;
+    uint64_t mask = 1ULL << sq;
+    piece_bitboards_[static_cast<size_t>(idx)] &= ~mask;
+    if (idx <= WHITE_KING) {
+        occupancy_[OCC_WHITE] &= ~mask;
+    } else {
+        occupancy_[OCC_BLACK] &= ~mask;
+    }
+    occupancy_[OCC_BOTH] &= ~mask;
+    if (update_acc) accumulator_.remove_piece(pc, sq);
+}
+
+void Board::add_piece(char pc, int sq, bool update_acc) {
+    int idx = piece_index(pc);
+    if (idx == -1) return;
+    uint64_t mask = 1ULL << sq;
+    piece_bitboards_[static_cast<size_t>(idx)] |= mask;
+    if (idx <= WHITE_KING) {
+        occupancy_[OCC_WHITE] |= mask;
+    } else {
+        occupancy_[OCC_BLACK] |= mask;
+    }
+    occupancy_[OCC_BOTH] |= mask;
+    if (update_acc) accumulator_.add_piece(pc, sq);
+}
+
+void Board::apply_move(Move move, State& state) {
+    state = State{};
+    state.move = move;
+
     int from = move_from(move);
     int to = move_to(move);
-    char piece = squares_[from];
-    bool white = is_white_piece(piece);
-    char captured = squares_[to];
-    int capture_sq = to;
+    char moving_piece = squares_[from];
+    state.moved_piece = moving_piece;
+    bool white = is_white_piece(moving_piece);
 
-    if (move_is_enpassant(move)) {
+    state.prev_castling_rights = castling_rights_;
+    state.prev_en_passant_square = en_passant_square_;
+    state.prev_halfmove_clock = halfmove_clock_;
+    state.prev_fullmove_number = fullmove_number_;
+    state.prev_stm_white = stm_white_;
+    state.prev_mg = accumulator_.mg();
+    state.prev_eg = accumulator_.eg();
+    state.prev_phase = accumulator_.phase();
+
+    int capture_sq = to;
+    char captured = squares_[to];
+    state.was_enpassant = move_is_enpassant(move);
+    if (state.was_enpassant) {
         capture_sq = white ? to - 8 : to + 8;
         captured = squares_[capture_sq];
     }
+    state.capture_square = capture_sq;
+    state.captured_piece = captured;
 
-    auto piece_index = [](char pc) {
-        switch (pc) {
-        case 'P': return static_cast<int>(WHITE_PAWN);
-        case 'N': return static_cast<int>(WHITE_KNIGHT);
-        case 'B': return static_cast<int>(WHITE_BISHOP);
-        case 'R': return static_cast<int>(WHITE_ROOK);
-        case 'Q': return static_cast<int>(WHITE_QUEEN);
-        case 'K': return static_cast<int>(WHITE_KING);
-        case 'p': return static_cast<int>(BLACK_PAWN);
-        case 'n': return static_cast<int>(BLACK_KNIGHT);
-        case 'b': return static_cast<int>(BLACK_BISHOP);
-        case 'r': return static_cast<int>(BLACK_ROOK);
-        case 'q': return static_cast<int>(BLACK_QUEEN);
-        case 'k': return static_cast<int>(BLACK_KING);
-        default: return -1;
-        }
-    };
-
-    auto remove_piece = [&](char pc, int sq) {
-        int idx = piece_index(pc);
-        if (idx == -1) return;
-        uint64_t mask = 1ULL << sq;
-        piece_bitboards_[static_cast<size_t>(idx)] &= ~mask;
-        if (idx <= WHITE_KING) {
-            occupancy_[OCC_WHITE] &= ~mask;
-        } else {
-            occupancy_[OCC_BLACK] &= ~mask;
-        }
-        occupancy_[OCC_BOTH] &= ~mask;
-    };
-
-    auto add_piece = [&](char pc, int sq) {
-        int idx = piece_index(pc);
-        if (idx == -1) return;
-        uint64_t mask = 1ULL << sq;
-        piece_bitboards_[static_cast<size_t>(idx)] |= mask;
-        if (idx <= WHITE_KING) {
-            occupancy_[OCC_WHITE] |= mask;
-        } else {
-            occupancy_[OCC_BLACK] |= mask;
-        }
-        occupancy_[OCC_BOTH] |= mask;
-    };
-
-    remove_piece(piece, from);
-    if (captured != '.') {
-        remove_piece(captured, capture_sq);
-    }
-
+    remove_piece(moving_piece, from);
     squares_[from] = '.';
 
-    if (move_is_enpassant(move)) {
-        squares_[capture_sq] = '.';
+    if (captured != '.') {
+        remove_piece(captured, capture_sq);
+        if (state.was_enpassant) {
+            squares_[capture_sq] = '.';
+        }
     }
 
-    if (move_is_castling(move)) {
-        if (piece == 'K' && to == to_index(6, 0)) {
-            char rook = squares_[to_index(7, 0)];
-            squares_[to_index(5, 0)] = rook;
-            squares_[to_index(7, 0)] = '.';
-            remove_piece(rook, to_index(7, 0));
-            add_piece(rook, to_index(5, 0));
-        } else if (piece == 'K' && to == to_index(2, 0)) {
-            char rook = squares_[to_index(0, 0)];
-            squares_[to_index(3, 0)] = rook;
-            squares_[to_index(0, 0)] = '.';
-            remove_piece(rook, to_index(0, 0));
-            add_piece(rook, to_index(3, 0));
-        } else if (piece == 'k' && to == to_index(6, 7)) {
-            char rook = squares_[to_index(7, 7)];
-            squares_[to_index(5, 7)] = rook;
-            squares_[to_index(7, 7)] = '.';
-            remove_piece(rook, to_index(7, 7));
-            add_piece(rook, to_index(5, 7));
-        } else if (piece == 'k' && to == to_index(2, 7)) {
-            char rook = squares_[to_index(0, 7)];
-            squares_[to_index(3, 7)] = rook;
-            squares_[to_index(0, 7)] = '.';
-            remove_piece(rook, to_index(0, 7));
-            add_piece(rook, to_index(3, 7));
+    state.was_castling = move_is_castling(move);
+    state.rook_piece = '.';
+    if (state.was_castling) {
+        int rook_from = INVALID_SQUARE;
+        int rook_to = INVALID_SQUARE;
+        if (moving_piece == 'K' && to == to_index(6, 0)) {
+            rook_from = to_index(7, 0);
+            rook_to = to_index(5, 0);
+        } else if (moving_piece == 'K' && to == to_index(2, 0)) {
+            rook_from = to_index(0, 0);
+            rook_to = to_index(3, 0);
+        } else if (moving_piece == 'k' && to == to_index(6, 7)) {
+            rook_from = to_index(7, 7);
+            rook_to = to_index(5, 7);
+        } else if (moving_piece == 'k' && to == to_index(2, 7)) {
+            rook_from = to_index(0, 7);
+            rook_to = to_index(3, 7);
+        }
+        if (rook_from != INVALID_SQUARE && rook_to != INVALID_SQUARE) {
+            char rook = squares_[rook_from];
+            state.rook_piece = rook;
+            state.rook_from = rook_from;
+            state.rook_to = rook_to;
+            remove_piece(rook, rook_from);
+            squares_[rook_from] = '.';
+            squares_[rook_to] = rook;
+            add_piece(rook, rook_to);
         }
     }
 
     int promo = move_promo(move);
+    char placed_piece = moving_piece;
     if (promo) {
-        piece = promotion_from_code(promo, white);
+        placed_piece = promotion_from_code(promo, white);
+        state.promoted_piece = placed_piece;
     }
 
-    squares_[to] = piece;
-    add_piece(piece, to);
+    squares_[to] = placed_piece;
+    add_piece(placed_piece, to);
 
-    // Update castling rights
-    if (piece == 'K') {
+    if (moving_piece == 'K') {
         castling_rights_ &= ~(CASTLE_WHITE_K | CASTLE_WHITE_Q);
-    } else if (piece == 'k') {
+    } else if (moving_piece == 'k') {
         castling_rights_ &= ~(CASTLE_BLACK_K | CASTLE_BLACK_Q);
     }
 
@@ -476,13 +497,13 @@ void Board::do_move(Move move) {
         castling_rights_ &= ~CASTLE_BLACK_K;
     }
 
-    en_passant_square_ = -1;
-    if (std::tolower(static_cast<unsigned char>(piece)) == 'p' && move_is_double_pawn(move)) {
+    en_passant_square_ = INVALID_SQUARE;
+    if (std::tolower(static_cast<unsigned char>(moving_piece)) == 'p' && move_is_double_pawn(move)) {
         en_passant_square_ = white ? to - 8 : to + 8;
     }
 
-    bool capture_happened = move_is_capture(move) || move_is_enpassant(move) || captured != '.';
-    bool pawn_move = std::tolower(static_cast<unsigned char>(piece)) == 'p';
+    bool capture_happened = captured != '.';
+    bool pawn_move = std::tolower(static_cast<unsigned char>(moving_piece)) == 'p';
     if (capture_happened || pawn_move) {
         halfmove_clock_ = 0;
     } else {
@@ -493,6 +514,49 @@ void Board::do_move(Move move) {
     if (stm_white_) {
         ++fullmove_number_;
     }
+}
+
+void Board::undo_move(const State& state) {
+    int from = move_from(state.move);
+    int to = move_to(state.move);
+    char moving_piece = state.moved_piece;
+    char placed_piece = state.promoted_piece != '.' ? state.promoted_piece : moving_piece;
+
+    castling_rights_ = state.prev_castling_rights;
+    en_passant_square_ = state.prev_en_passant_square;
+    halfmove_clock_ = state.prev_halfmove_clock;
+    fullmove_number_ = state.prev_fullmove_number;
+    stm_white_ = state.prev_stm_white;
+
+    remove_piece(placed_piece, to, false);
+    squares_[to] = '.';
+
+    if (state.was_castling && state.rook_piece != '.') {
+        remove_piece(state.rook_piece, state.rook_to, false);
+        squares_[state.rook_to] = '.';
+        squares_[state.rook_from] = state.rook_piece;
+        add_piece(state.rook_piece, state.rook_from, false);
+    }
+
+    if (state.was_enpassant) {
+        squares_[state.capture_square] = state.captured_piece;
+        add_piece(state.captured_piece, state.capture_square, false);
+    } else if (state.captured_piece != '.') {
+        squares_[state.capture_square] = state.captured_piece;
+        add_piece(state.captured_piece, state.capture_square, false);
+    }
+
+    squares_[from] = moving_piece;
+    add_piece(moving_piece, from, false);
+
+    accumulator_.restore(state.prev_mg, state.prev_eg, state.prev_phase);
+}
+
+void Board::undo_move() {
+    if (history_.empty()) return;
+    State state = history_.back();
+    history_.pop_back();
+    undo_move(state);
 }
 
 } // namespace engine
