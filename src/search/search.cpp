@@ -86,11 +86,13 @@ int static_exchange_eval(const Board& board, Move move) {
 
 } // namespace
 
-struct Search::ThreadData {
-    std::vector<std::array<Move, 2>> killers;
-    std::array<int, 64 * 64> history{};
-    std::array<Move, 64 * 64> countermoves{};
-};
+Search::ThreadData::ThreadData() { reset(); }
+
+void Search::ThreadData::reset() {
+    killers.assign(kMaxPly, {MOVE_NONE, MOVE_NONE});
+    history.fill(0);
+    countermoves.fill(MOVE_NONE);
+}
 
 void Search::AdaptiveTuning::reset() {
     futility_margins_ = kFutilityMargins;
@@ -315,6 +317,20 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
     nodes_.store(0, std::memory_order_relaxed);
     search_start_ = start;
 
+    size_t thread_count = static_cast<size_t>(std::max(1, threads_));
+    bool thread_count_changed = thread_data_thread_count_ != thread_count;
+    uint64_t position_key = board.zobrist_key();
+    bool new_position = !thread_data_initialized_ || thread_data_position_key_ != position_key;
+    thread_data_pool_.resize(thread_count);
+    if (thread_count_changed || new_position) {
+        for (auto& td : thread_data_pool_) {
+            td.reset();
+        }
+    }
+    thread_data_thread_count_ = thread_count;
+    thread_data_position_key_ = position_key;
+    thread_data_initialized_ = true;
+
     auto alloc = time::compute_allocation(lim, board.white_to_move(), move_overhead_ms_);
     target_time_ms_ = alloc.optimal_ms;
     if (alloc.maximum_ms > 0) {
@@ -377,13 +393,6 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
             std::vector<std::pair<Move, int>> scores(root_moves.size());
             std::atomic<size_t> next_index{0};
             std::atomic<size_t> completed{0};
-            size_t thread_count = std::max(1, threads_);
-            std::vector<ThreadData> thread_data(thread_count);
-            for (auto& td : thread_data) {
-                td.killers.assign(kMaxPly, {MOVE_NONE, MOVE_NONE});
-                td.history.fill(0);
-                td.countermoves.fill(MOVE_NONE);
-            }
 
             auto worker = [&](ThreadData& td) {
                 Board local_board = board;
@@ -403,9 +412,9 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
             std::vector<std::thread> workers;
             workers.reserve(thread_count > 0 ? thread_count - 1 : 0);
             for (size_t t = 1; t < thread_count; ++t) {
-                workers.emplace_back(worker, std::ref(thread_data[t]));
+                workers.emplace_back(worker, std::ref(thread_data_pool_[t]));
             }
-            worker(thread_data[0]);
+            worker(thread_data_pool_[0]);
             for (auto& th : workers) th.join();
 
             if (stop_.load(std::memory_order_relaxed)) break;

@@ -62,7 +62,16 @@ private:
         int8_t depth = -1;
         uint8_t flag = 0;
     };
-    struct ThreadData;
+    struct ThreadData {
+        ThreadData();
+        void reset();
+
+        static constexpr int kMaxPly = 128;
+
+        std::vector<std::array<Move, 2>> killers;
+        std::array<int, 64 * 64> history{};
+        std::array<Move, 64 * 64> countermoves{};
+    };
     struct AdaptiveTuning {
         void reset();
         void prepare(int threads, int64_t target_time_ms);
@@ -132,6 +141,10 @@ private:
     mutable std::shared_mutex tt_mutex_;
     std::atomic<uint64_t> nodes_;
     std::atomic<bool> stop_;
+    std::vector<ThreadData> thread_data_pool_;
+    uint64_t thread_data_position_key_ = 0;
+    size_t thread_data_thread_count_ = 0;
+    bool thread_data_initialized_ = false;
     int threads_ = 1;
     bool use_syzygy_ = false;
     std::string syzygy_path_;
