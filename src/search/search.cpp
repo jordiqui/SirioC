@@ -15,6 +15,7 @@
 #include <mutex>
 #include <thread>
 #include <atomic>
+#include <vector>
 
 namespace engine {
 namespace {
@@ -217,12 +218,15 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
             }
 
             auto worker = [&](ThreadData& td) {
+                Board local_board = board;
                 while (!stop_.load(std::memory_order_relaxed)) {
                     size_t idx = next_index.fetch_add(1, std::memory_order_relaxed);
                     if (idx >= root_moves.size()) break;
                     Move move = root_moves[idx];
-                    Board child = board.after_move(move);
-                    int score = -negamax(child, depth - 1, -search_beta, -search_alpha, true, 1, td, move);
+                    Board::State state;
+                    local_board.apply_move(move, state);
+                    int score = -negamax(local_board, depth - 1, -search_beta, -search_alpha, true, 1, td, move);
+                    local_board.undo_move(state);
                     scores[idx] = {move, score};
                     completed.fetch_add(1, std::memory_order_relaxed);
                 }
@@ -646,7 +650,12 @@ std::vector<Move> Search::extract_pv(const Board& board, Move best) const {
     std::vector<Move> pv;
     if (best == MOVE_NONE) return pv;
     pv.push_back(best);
-    Board current = board.after_move(best);
+    Board current = board;
+    std::vector<Board::State> states;
+    states.reserve(kMaxPly);
+    Board::State state;
+    current.apply_move(best, state);
+    states.push_back(state);
     for (int depth = 1; depth < kMaxPly; ++depth) {
         uint64_t key = current.zobrist_key();
         TTEntry entry;
@@ -663,7 +672,12 @@ std::vector<Move> Search::extract_pv(const Board& board, Move best) const {
         Move next = entry.move;
         if (std::find(pv.begin(), pv.end(), next) != pv.end()) break;
         pv.push_back(next);
-        current = current.after_move(next);
+        Board::State next_state;
+        current.apply_move(next, next_state);
+        states.push_back(next_state);
+    }
+    for (auto it = states.rbegin(); it != states.rend(); ++it) {
+        current.undo_move(*it);
     }
     return pv;
 }

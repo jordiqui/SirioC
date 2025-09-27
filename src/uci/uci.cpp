@@ -233,11 +233,18 @@ void Uci::cmd_go(const std::string& s) {
         std::cout << "info depth " << info.depth << " score " << format_score(info.score)
                   << " nodes " << info.nodes << " time " << info.time_ms << " pv";
         Board pv_board = g_board;
+        std::vector<Board::State> pv_states;
+        pv_states.reserve(info.pv.size());
         for (Move mv : info.pv) {
             std::string uci = pv_board.move_to_uci(mv);
             if (uci == "0000") break;
             std::cout << ' ' << uci;
-            pv_board = pv_board.after_move(mv);
+            Board::State pv_state;
+            pv_board.apply_move(mv, pv_state);
+            pv_states.push_back(pv_state);
+        }
+        for (auto it = pv_states.rbegin(); it != pv_states.rend(); ++it) {
+            pv_board.undo_move(*it);
         }
         std::cout << "\n" << std::flush;
     });
