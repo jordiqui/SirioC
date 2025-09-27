@@ -1,5 +1,8 @@
 #pragma once
+
+#include <cstdint>
 #include <string>
+#include <vector>
 
 namespace engine { class Board; }
 
@@ -7,15 +10,14 @@ namespace engine::nnue {
 
 class Evaluator {
 public:
-    bool load_network(const std::string& path) {
-        // TODO: parse .nnue header and weights
-        (void)path; return true;
-    }
+    bool load_network(const std::string& path);
+    int eval_cp(const engine::Board& board) const;
+    bool loaded() const noexcept { return loaded_; }
 
-    int eval_cp(const engine::Board&) const {
-        // TODO: integer-domain inference
-        return 0;
-    }
+private:
+    bool loaded_ = false;
+    std::vector<std::uint8_t> raw_network_;
 };
 
 } // namespace engine::nnue
+

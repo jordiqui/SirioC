@@ -2,6 +2,8 @@
 
 #include "engine/core/board.hpp"
 #include "engine/eval/eval.hpp"
+#include "engine/eval/nnue/evaluator.hpp"
+#include "engine/util/time.hpp"
 
 #include <algorithm>
 #include <array>
@@ -49,7 +51,11 @@ struct Search::ThreadData {
     std::array<int, 64 * 64> history{};
 };
 
-Search::Search() : nodes_(0), stop_(false) { set_hash(16); }
+Search::Search() : nodes_(0), stop_(false) {
+    set_hash(16);
+    target_time_ms_ = -1;
+    nodes_limit_ = -1;
+}
 
 void Search::set_threads(int threads) { threads_ = std::max(1, threads); }
 
@@ -82,6 +88,10 @@ void Search::set_eval_file(std::string path) { eval_file_ = std::move(path); }
 
 void Search::set_eval_file_small(std::string path) { eval_file_small_ = std::move(path); }
 
+void Search::set_nnue_evaluator(const nnue::Evaluator* evaluator) { nnue_eval_ = evaluator; }
+
+void Search::set_use_nnue(bool enable) { use_nnue_eval_ = enable; }
+
 Search::Result Search::find_bestmove(Board& board, const Limits& lim) {
     stop_.store(false, std::memory_order_relaxed);
     return search_position(board, lim);
@@ -91,12 +101,16 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
     Result result;
     auto start = std::chrono::steady_clock::now();
     nodes_.store(0, std::memory_order_relaxed);
+    search_start_ = start;
 
-    if (lim.movetime_ms > 0) {
-        deadline_ = start + std::chrono::milliseconds(lim.movetime_ms);
+    auto alloc = time::compute_allocation(lim, board.white_to_move(), move_overhead_ms_);
+    target_time_ms_ = alloc.optimal_ms;
+    if (alloc.maximum_ms > 0) {
+        deadline_ = start + std::chrono::milliseconds(alloc.maximum_ms);
     } else {
         deadline_.reset();
     }
+    nodes_limit_ = lim.nodes >= 0 ? lim.nodes : -1;
 
     auto legal = board.generate_legal_moves();
     if (legal.empty()) {
@@ -105,6 +119,8 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
         result.nodes = 0;
         result.time_ms = 0;
         deadline_.reset();
+        target_time_ms_ = -1;
+        nodes_limit_ = -1;
         return result;
     }
 
@@ -167,9 +183,16 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
             }
         }
 
-        if (deadline_ && std::chrono::steady_clock::now() >= *deadline_) {
+        auto now = std::chrono::steady_clock::now();
+        if (deadline_ && now >= *deadline_) {
             stop_.store(true, std::memory_order_relaxed);
             break;
+        }
+        if (target_time_ms_ > 0) {
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - search_start_).count();
+            if (elapsed >= target_time_ms_) {
+                break;
+            }
         }
     }
 
@@ -181,6 +204,8 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
     result.pv = extract_pv(board, result.bestmove);
 
     deadline_.reset();
+    target_time_ms_ = -1;
+    nodes_limit_ = -1;
     return result;
 }
 
@@ -192,7 +217,11 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
         return evaluate(board);
     }
 
-    nodes_.fetch_add(1, std::memory_order_relaxed);
+    uint64_t visited = nodes_.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (nodes_limit_ >= 0 && visited >= static_cast<uint64_t>(nodes_limit_)) {
+        stop_.store(true, std::memory_order_relaxed);
+        return evaluate(board);
+    }
 
     bool in_check = board.side_to_move_in_check();
     if (in_check) ++depth;
@@ -234,22 +263,24 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
     for (Move move : ordered) {
         ++move_count;
         int prev_alpha = alpha;
-        Board child = board.after_move(move);
         bool is_capture = move_is_capture(move);
         bool is_promo = move_promo(move) != 0;
         bool quiet = !is_capture && !is_promo;
-        bool gives_check = child.side_to_move_in_check();
+        Board::State state;
+        board.apply_move(move, state);
+        bool gives_check = board.side_to_move_in_check();
 
         if (!in_check && quiet && depth <= 3 && !gives_check) {
             int margin = kFutilityMargins[static_cast<size_t>(depth)];
             if (static_eval + margin <= alpha) {
+                board.undo_move(state);
                 continue;
             }
         }
 
         int score;
         if (first) {
-            score = -negamax(child, depth - 1, -beta, -alpha, pv_node, ply + 1, thread_data);
+            score = -negamax(board, depth - 1, -beta, -alpha, pv_node, ply + 1, thread_data);
             first = false;
         } else {
             int new_depth = depth - 1;
@@ -257,17 +288,19 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
             if (apply_lmr) {
                 int reduction = 1 + (move_count > 6) + (depth > 5);
                 new_depth = std::max(1, new_depth - reduction);
-                score = -negamax(child, new_depth, -alpha - 1, -alpha, false, ply + 1, thread_data);
+                score = -negamax(board, new_depth, -alpha - 1, -alpha, false, ply + 1, thread_data);
                 if (score > alpha) {
-                    score = -negamax(child, depth - 1, -alpha - 1, -alpha, false, ply + 1, thread_data);
+                    score = -negamax(board, depth - 1, -alpha - 1, -alpha, false, ply + 1, thread_data);
                 }
             } else {
-                score = -negamax(child, depth - 1, -alpha - 1, -alpha, false, ply + 1, thread_data);
+                score = -negamax(board, depth - 1, -alpha - 1, -alpha, false, ply + 1, thread_data);
             }
             if (score > alpha && score < beta) {
-                score = -negamax(child, depth - 1, -beta, -alpha, true, ply + 1, thread_data);
+                score = -negamax(board, depth - 1, -beta, -alpha, true, ply + 1, thread_data);
             }
         }
+
+        board.undo_move(state);
 
         if (stop_.load(std::memory_order_relaxed)) return score;
 
@@ -306,7 +339,11 @@ int Search::quiescence(Board& board, int alpha, int beta, int ply, ThreadData& t
         return evaluate(board);
     }
 
-    nodes_.fetch_add(1, std::memory_order_relaxed);
+    uint64_t visited = nodes_.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (nodes_limit_ >= 0 && visited >= static_cast<uint64_t>(nodes_limit_)) {
+        stop_.store(true, std::memory_order_relaxed);
+        return evaluate(board);
+    }
     int stand_pat = evaluate(board);
     if (stand_pat >= beta) return stand_pat;
     if (stand_pat > alpha) alpha = stand_pat;
@@ -314,8 +351,10 @@ int Search::quiescence(Board& board, int alpha, int beta, int ply, ThreadData& t
     auto moves = board.generate_legal_moves();
     for (Move move : moves) {
         if (!move_is_capture(move) && move_promo(move) == 0) continue;
-        Board child = board.after_move(move);
-        int score = -quiescence(child, -beta, -alpha, ply + 1, thread_data);
+        Board::State state;
+        board.apply_move(move, state);
+        int score = -quiescence(board, -beta, -alpha, ply + 1, thread_data);
+        board.undo_move(state);
         if (score >= beta) return score;
         if (score > alpha) alpha = score;
     }
@@ -447,7 +486,12 @@ std::vector<Move> Search::extract_pv(const Board& board, Move best) const {
     return pv;
 }
 
-int Search::evaluate(const Board& board) const { return eval::evaluate(board); }
+int Search::evaluate(const Board& board) const {
+    if (use_nnue_eval_ && nnue_eval_) {
+        return nnue_eval_->eval_cp(board);
+    }
+    return eval::evaluate(board);
+}
 
 std::optional<int> Search::probe_syzygy(const Board& board) const {
     if (!use_syzygy_) return std::nullopt;

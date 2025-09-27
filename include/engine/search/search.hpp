@@ -10,6 +10,9 @@
 
 namespace engine {
 class Board;
+namespace nnue {
+class Evaluator;
+}
 
 class Search {
 public:
@@ -36,6 +39,8 @@ public:
     void set_move_overhead(int overhead_ms);
     void set_eval_file(std::string path);
     void set_eval_file_small(std::string path);
+    void set_nnue_evaluator(const nnue::Evaluator* evaluator);
+    void set_use_nnue(bool enable);
 
 private:
     struct TTEntry {
@@ -79,6 +84,11 @@ private:
     std::string eval_file_ = "nn-1c0000000000.nnue";
     std::string eval_file_small_ = "nn-37f18f62d772.nnue";
     std::optional<std::chrono::steady_clock::time_point> deadline_;
+    const nnue::Evaluator* nnue_eval_ = nullptr;
+    bool use_nnue_eval_ = false;
+    int64_t target_time_ms_ = -1;
+    int64_t nodes_limit_ = -1;
+    std::chrono::steady_clock::time_point search_start_;
 };
 
 } // namespace engine

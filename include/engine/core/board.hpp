@@ -5,6 +5,7 @@
 #include <string_view>
 #include <vector>
 #include "engine/types.hpp"
+#include "engine/eval/nnue/accumulator.hpp"
 
 namespace engine {
 
@@ -49,9 +50,33 @@ public:
     bool set_fen(const std::string& fen);
     bool apply_moves_uci(const std::vector<std::string>& uci_moves);
 
+    struct State {
+        Move move = MOVE_NONE;
+        char moved_piece = '.';
+        char captured_piece = '.';
+        char promoted_piece = '.';
+        char rook_piece = '.';
+        int capture_square = INVALID_SQUARE;
+        int rook_from = INVALID_SQUARE;
+        int rook_to = INVALID_SQUARE;
+        uint8_t prev_castling_rights = 0;
+        int prev_en_passant_square = INVALID_SQUARE;
+        int prev_halfmove_clock = 0;
+        int prev_fullmove_number = 1;
+        bool prev_stm_white = true;
+        bool was_castling = false;
+        bool was_enpassant = false;
+        int prev_mg = 0;
+        int prev_eg = 0;
+        int prev_phase = 0;
+    };
+
     bool make_move(Move m);
     bool make_move_uci(const std::string& uci);
-    std::vector<Move> generate_legal_moves() const;
+    void apply_move(Move move, State& state);
+    void undo_move(const State& state);
+    void undo_move();
+    std::vector<Move> generate_legal_moves();
     std::string move_to_uci(Move move) const;
     Board after_move(Move move) const;
 
@@ -69,6 +94,7 @@ public:
     bool in_check(bool white) const;
     bool side_to_move_in_check() const { return in_check(stm_white_); }
     uint64_t zobrist_key() const;
+    const nnue::Accumulator& nnue_accumulator() const { return accumulator_; }
 
 private:
     enum Castling : uint8_t {
@@ -87,7 +113,9 @@ private:
     void generate_king_moves(int sq, std::vector<Move>& moves) const;
     bool is_square_attacked(int sq, bool by_white) const;
     int find_king_square(bool white) const;
-    void do_move(Move move);
+    static int piece_index(char pc);
+    void remove_piece(char pc, int sq, bool update_acc = true);
+    void add_piece(char pc, int sq, bool update_acc = true);
     static bool is_white_piece(char piece);
     static bool is_black_piece(char piece);
     static bool is_empty(char piece);
@@ -106,6 +134,8 @@ private:
     int fullmove_number_ = 1;
     std::string last_fen_;
     std::array<char, 64> squares_{};
+    nnue::Accumulator accumulator_{};
+    std::vector<State> history_{};
 };
 
 } // namespace engine

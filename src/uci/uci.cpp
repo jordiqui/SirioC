@@ -2,9 +2,12 @@
 #include "engine/config.hpp"
 #include "engine/core/board.hpp"
 #include "engine/core/fen.hpp"
+#include "engine/core/perft.hpp"
 #include "engine/search/search.hpp"
 #include "engine/eval/nnue/evaluator.hpp"
 #include <cmath>
+#include <cstdlib>
+#include <chrono>
 #include <iostream>
 #include <sstream>
 #include <vector>
@@ -27,6 +30,21 @@ static bool g_stop = false;
 static bool g_use_syzygy = false;
 static std::string g_syzygy_path;
 
+static void sync_search_options() {
+    g_search.set_hash(g_hash_mb);
+    g_search.set_threads(g_threads);
+    g_search.set_numa_offset(g_numa_offset);
+    g_search.set_ponder(g_ponder);
+    g_search.set_multi_pv(g_multi_pv);
+    g_search.set_move_overhead(g_move_overhead);
+    g_search.set_eval_file(g_eval_file);
+    g_search.set_eval_file_small(g_eval_file_small);
+    g_search.set_use_syzygy(g_use_syzygy);
+    g_search.set_syzygy_path(g_syzygy_path);
+    g_search.set_use_nnue(g_use_nnue);
+    g_search.set_nnue_evaluator(g_use_nnue ? &g_eval : nullptr);
+}
+
 void Uci::loop() {
     std::string line;
     while (std::getline(std::cin, line)) {
@@ -42,6 +60,8 @@ void Uci::handle_line(const std::string& line) {
     if (line == "ucinewgame") return cmd_ucinewgame();
     if (line.rfind("setoption",0)==0) return cmd_setoption(line);
     if (line.rfind("position",0)==0) return cmd_position(line);
+    if (line.rfind("perft",0)==0) return cmd_perft(line);
+    if (line.rfind("bench",0)==0) return cmd_bench(line);
     if (line.rfind("go",0)==0) return cmd_go(line);
     if (line == "stop") return cmd_stop();
     if (line == "quit") { /* handled in loop */ }
@@ -73,6 +93,7 @@ void Uci::cmd_ucinewgame() {
     g_board.set_startpos();
     // (Re)load network optionally
     if (g_use_nnue) g_eval.load_network(g_eval_file);
+    sync_search_options();
 }
 
 static std::vector<std::string> split(const std::string& s) {
@@ -127,16 +148,7 @@ void Uci::cmd_setoption(const std::string& s) {
             break;
         }
     }
-    g_search.set_hash(g_hash_mb);
-    g_search.set_threads(g_threads);
-    g_search.set_numa_offset(g_numa_offset);
-    g_search.set_ponder(g_ponder);
-    g_search.set_multi_pv(g_multi_pv);
-    g_search.set_move_overhead(g_move_overhead);
-    g_search.set_eval_file(g_eval_file);
-    g_search.set_eval_file_small(g_eval_file_small);
-    g_search.set_use_syzygy(g_use_syzygy);
-    g_search.set_syzygy_path(g_syzygy_path);
+    sync_search_options();
 }
 
 void Uci::cmd_position(const std::string& s) {
@@ -186,18 +198,7 @@ void Uci::cmd_go(const std::string& s) {
     g_stop = false;
     auto t = split(s);
     Limits lim = parse_go_tokens(t);
-    (void)lim;
-
-    g_search.set_threads(g_threads);
-    g_search.set_hash(g_hash_mb);
-    g_search.set_numa_offset(g_numa_offset);
-    g_search.set_ponder(g_ponder);
-    g_search.set_multi_pv(g_multi_pv);
-    g_search.set_move_overhead(g_move_overhead);
-    g_search.set_eval_file(g_eval_file);
-    g_search.set_eval_file_small(g_eval_file_small);
-    g_search.set_use_syzygy(g_use_syzygy);
-    g_search.set_syzygy_path(g_syzygy_path);
+    sync_search_options();
 
     auto result = g_search.find_bestmove(g_board, lim);
     std::string best_uci = g_board.move_to_uci(result.bestmove);
@@ -230,6 +231,99 @@ void Uci::cmd_go(const std::string& s) {
         std::cout << "bestmove " << best_uci << "\n";
     }
     std::cout << std::flush;
+}
+
+void Uci::cmd_perft(const std::string& s) {
+    auto tokens = split(s);
+    int depth = 1;
+    bool divide = false;
+    for (size_t i = 1; i < tokens.size(); ++i) {
+        if (tokens[i] == "divide") {
+            divide = true;
+        } else {
+            char* end = nullptr;
+            long val = std::strtol(tokens[i].c_str(), &end, 10);
+            if (end != tokens[i].c_str()) depth = static_cast<int>(val);
+        }
+    }
+
+    if (depth <= 0) {
+        std::cout << "perft depth " << depth << " nodes 1 time 0 nps 0\n";
+        return;
+    }
+
+    auto start = std::chrono::steady_clock::now();
+    if (!divide) {
+        uint64_t nodes = perft(g_board, depth);
+        auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                               std::chrono::steady_clock::now() - start)
+                               .count();
+        uint64_t nps = elapsed_ms > 0 ? nodes * 1000ULL / static_cast<uint64_t>(elapsed_ms) : 0;
+        std::cout << "perft depth " << depth << " nodes " << nodes << " time " << elapsed_ms
+                  << " nps " << nps << "\n";
+        return;
+    }
+
+    auto moves = g_board.generate_legal_moves();
+    uint64_t total = 0;
+    for (Move move : moves) {
+        std::string uci = g_board.move_to_uci(move);
+        Board::State state;
+        g_board.apply_move(move, state);
+        uint64_t count = perft(g_board, depth - 1);
+        g_board.undo_move(state);
+        total += count;
+        std::cout << uci << ": " << count << "\n";
+    }
+    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           std::chrono::steady_clock::now() - start)
+                           .count();
+    uint64_t nps = elapsed_ms > 0 ? total * 1000ULL / static_cast<uint64_t>(elapsed_ms) : 0;
+    std::cout << "total: " << total << " time " << elapsed_ms << " nps " << nps << "\n";
+}
+
+void Uci::cmd_bench(const std::string& s) {
+    auto tokens = split(s);
+    int depth = 6;
+    for (size_t i = 1; i + 1 < tokens.size(); ++i) {
+        if (tokens[i] == "depth") {
+            char* end = nullptr;
+            long val = std::strtol(tokens[i + 1].c_str(), &end, 10);
+            if (end != tokens[i + 1].c_str()) depth = static_cast<int>(val);
+        }
+    }
+    if (depth < 1) depth = 1;
+
+    static const std::vector<std::string> bench_fens = {
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "r3k2r/pp1bbppp/2n1pn2/q1pp4/3P4/2P1PN2/PPBN1PPP/R2QKB1R w KQkq - 4 9",
+        "r1bq1rk1/pp3pbp/2n1pnp1/3p4/3P4/2N1PN2/PPQ1BPPP/R1B2RK1 w - - 0 9",
+        "2rq1rk1/pp1b1pp1/2n1pn1p/2pp4/3P4/2P1PN2/PP1N1PPP/2RQ1RK1 w - - 0 10",
+        "r1bq1rk1/1p1nbppp/p2ppn2/2p5/2PP4/1PN1PN2/PB2BPPP/R2Q1RK1 w - - 0 9",
+        "2r2rk1/pp1bbppp/2n2n2/q2pp3/3P4/2N1PN2/PPQ1BPPP/R3KB1R w KQ - 4 11"
+    };
+
+    sync_search_options();
+
+    Limits lim;
+    lim.depth = depth;
+    lim.movetime_ms = -1;
+    uint64_t total_nodes = 0;
+    auto start = std::chrono::steady_clock::now();
+
+    for (const auto& fen : bench_fens) {
+        Board board;
+        board.set_fen(fen);
+        auto result = g_search.find_bestmove(board, lim);
+        total_nodes += result.nodes;
+    }
+
+    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           std::chrono::steady_clock::now() - start)
+                           .count();
+    uint64_t nps = elapsed_ms > 0 ? total_nodes * 1000ULL / static_cast<uint64_t>(elapsed_ms) : 0;
+    std::cout << "bench positions " << bench_fens.size() << " depth " << depth
+              << " nodes " << total_nodes << " time " << elapsed_ms << " nps " << nps << "\n";
 }
 
 void Uci::cmd_stop() {

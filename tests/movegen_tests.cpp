@@ -52,7 +52,7 @@ int main() {
     assert(no_moves.empty());
     Search search;
     auto best = search.find_bestmove(board, Limits{});
-    assert(best == MOVE_NONE);
+    assert(best.bestmove == MOVE_NONE);
 
     return 0;
 }
