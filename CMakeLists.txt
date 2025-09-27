@@ -40,12 +40,39 @@ file(GLOB_RECURSE SRC_FILES
   src/*.cpp
 )
 
-add_executable(SirioC ${SRC_FILES})
+set(MAIN_SOURCE ${CMAKE_SOURCE_DIR}/src/main.cpp)
+list(REMOVE_ITEM SRC_FILES ${MAIN_SOURCE})
+
+add_library(sirio_core ${SRC_FILES})
+target_compile_definitions(sirio_core PUBLIC
+  ENGINE_NAME=\"SirioC\"
+  ENGINE_VERSION=\"0.1.0\"
+)
+
+add_executable(SirioC ${MAIN_SOURCE})
+target_link_libraries(SirioC PRIVATE sirio_core)
+
+add_executable(legal_moves_cli tests/legal_moves_cli.cpp)
+target_link_libraries(legal_moves_cli PRIVATE sirio_core)
+
+add_executable(movegen_tests tests/movegen_tests.cpp)
+target_link_libraries(movegen_tests PRIVATE sirio_core)
 
 if (MINGW)
   target_link_libraries(SirioC PRIVATE stdc++ stdc++fs)
+  target_link_libraries(legal_moves_cli PRIVATE stdc++ stdc++fs)
+  target_link_libraries(movegen_tests PRIVATE stdc++ stdc++fs)
 endif()
 
+ codex/implement-legal-move-generation-and-testing
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+enable_testing()
+add_test(NAME movegen_unit_tests COMMAND movegen_tests)
+add_test(NAME go_command_responds_with_legal_move
+         COMMAND Python3::Interpreter
+                 ${CMAKE_SOURCE_DIR}/tests/test_go.py
+                 $<TARGET_FILE:SirioC>
+                 $<TARGET_FILE
 target_compile_definitions(SirioC PRIVATE
   ENGINE_NAME=\"SirioC\"
   ENGINE_VERSION=\"0.1.0\"
@@ -58,3 +85,4 @@ add_executable(SirioCTests
 )
 
 add_test(NAME board_fen_tests COMMAND SirioCTests)
+main
