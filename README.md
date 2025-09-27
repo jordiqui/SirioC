@@ -59,6 +59,46 @@ enable them only when the target CPUs actually support those instruction sets.
 * Optional Syzygy 5-7-man tablebase probing via the `UseSyzygy` and
   `SyzygyPath` options for perfect endgame information.
 
+## Functional details
+
+### Board representation and move generation
+
+SirioC stores the position in a `Board` class backed by per-piece bitboards,
+aggregate occupancy masks, and a 64-entry mailbox array. These redundant views
+let the engine answer attack and occupancy queries quickly while still having a
+piece-centric representation for NNUE input accumulation. Move generation is
+split by piece type into pseudo-legal generators that are filtered for legality
+through king-in-check detection. The board tracks castling rights, en passant
+files, halfmove counters, and a history stack so that moves can be made and
+undone during search without re-parsing FEN strings.
+
+### Search
+
+The searcher implements an iterative deepening negamax with alpha-beta
+pruning. A transposition table stores principal variation moves, bounds, and
+depth information to guide future visits to the same positions. Classic
+move-ordering aids—history and killer heuristics, late move reductions, and
+futility pruning—improve convergence. Multi-threading, ponder mode, search
+limits (time, depth, nodes), and Syzygy probing are exposed via the UCI loop,
+although time management still relies on simple overhead-based budgeting.
+
+### Evaluation
+
+Static evaluation currently relies on tapered piece-square tables derived from
+NNUE training material. Material and positional terms are blended between
+middlegame and endgame phases, and a small tempo bonus favors the side to move.
+The NNUE accumulator infrastructure is wired through the board state, enabling
+fast inference once the NNUE evaluator is connected. Until incremental NNUE
+updates land, the classical evaluation remains the default.
+
+### Engine influences
+
+The feature set intentionally mirrors proven concepts from Stockfish and
+Berserk. Late move reductions, quiet-move pruning, and history heuristics are
+lifted from Stockfish-style engines, while futility pruning and bench tooling
+borrow from Berserk. This mix yields a familiar, extensible baseline for future
+experimentation with NNUE networks and additional heuristics.
+
 ## Engine heuristics
 
 SirioC blends ideas from Berserk and Stockfish in the following ways:
