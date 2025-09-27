@@ -139,11 +139,16 @@ void Uci::cmd_go(const std::string& s) {
     Limits lim = parse_go_tokens(t);
     (void)lim;
 
-    // Minimal output for GUI friendliness
-    std::cout << "info depth 1 score cp 0 nodes 1 time 0 pv" << "\n" << std::flush;
+    auto best = g_search.find_bestmove(g_board, lim);
+    std::string best_uci = g_board.move_to_uci(best);
 
-    // Until movegen/search exists, we cannot choose a legal move.
-    std::cout << "bestmove (none)\n" << std::flush;
+    std::cout << "info depth 1 score cp 0 nodes 1 time 0 pv" << "\n";
+    if (best == MOVE_NONE) {
+        std::cout << "bestmove (none)\n";
+    } else {
+        std::cout << "bestmove " << best_uci << "\n";
+    }
+    std::cout << std::flush;
 }
 
 void Uci::cmd_stop() { g_stop = true; }
