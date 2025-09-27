@@ -51,6 +51,11 @@ constexpr int kNullMoveBaseReduction = 2;
 constexpr int kMaxNullMoveReduction = 3;
 constexpr int kReverseFutilityMargin = 200;
 constexpr int kRazoringMargin = 400;
+constexpr int kProbCutMargin = 200;
+constexpr int kSingularMarginScale = 32;
+constexpr int kSingularReductionBase = 2;
+constexpr std::array<int, 7> kLateMovePruningLimits{0, 3, 6, 10, 14, 18, 24};
+constexpr std::array<int, 7> kEnhancedBetaMargins{0, 90, 140, 200, 260, 340, 420};
 
 bool has_non_pawn_material(const Board& board, bool white) {
     const auto& bb = board.piece_bitboards();
@@ -190,15 +195,21 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
     int depth_limit = lim.depth > 0 ? lim.depth : 64;
     depth_limit = std::min(depth_limit, 64);
 
+    int aspiration_delta = kAspirationWindow;
+    int fail_high_streak = 0;
+    int fail_low_streak = 0;
+
     for (int depth = 1; depth <= depth_limit; ++depth) {
         if (stop_.load(std::memory_order_relaxed)) break;
 
         int alpha_window = -kInfiniteScore;
         int beta_window = kInfiniteScore;
-        int delta = kAspirationWindow;
+        int local_delta = std::max(kAspirationWindow,
+                                   aspiration_delta + fail_high_streak * 5 +
+                                       fail_low_streak * 5);
         if (depth > 1 && result.depth > 0) {
-            alpha_window = std::max(-kInfiniteScore, best_score - delta);
-            beta_window = std::min(kInfiniteScore, best_score + delta);
+            alpha_window = std::max(-kInfiniteScore, best_score - local_delta);
+            beta_window = std::min(kInfiniteScore, best_score + local_delta);
         }
 
         std::vector<std::pair<Move, int>> best_scores;
@@ -225,7 +236,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
                     Move move = root_moves[idx];
                     Board::State state;
                     local_board.apply_move(move, state);
-                    int score = -negamax(local_board, depth - 1, -search_beta, -search_alpha, true, 1, td, move);
+                    int score = -negamax(local_board, depth - 1, -search_beta, -search_alpha, true, 1, td, move, false);
                     local_board.undo_move(state);
                     scores[idx] = {move, score};
                     completed.fetch_add(1, std::memory_order_relaxed);
@@ -261,8 +272,10 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
                 bool failed_high = best_score >= search_beta;
 
                 if (failed_low) {
-                    delta *= 2;
-                    alpha_window = std::max(-kInfiniteScore, best_score - delta);
+                    fail_low_streak++;
+                    fail_high_streak = 0;
+                    local_delta = std::min(400, local_delta * 2 + 5);
+                    alpha_window = std::max(-kInfiniteScore, best_score - local_delta);
                     beta_window = search_beta;
                     if (alpha_window <= -kInfiniteScore + 1 || search_alpha == -kInfiniteScore) {
                         alpha_window = -kInfiniteScore;
@@ -272,8 +285,10 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
                     continue;
                 }
                 if (failed_high) {
-                    delta *= 2;
-                    beta_window = std::min(kInfiniteScore, best_score + delta);
+                    fail_high_streak++;
+                    fail_low_streak = 0;
+                    local_delta = std::min(400, local_delta * 2 + 5);
+                    beta_window = std::min(kInfiniteScore, best_score + local_delta);
                     alpha_window = search_alpha;
                     if (beta_window >= kInfiniteScore - 1 || search_beta == kInfiniteScore) {
                         beta_window = kInfiniteScore;
@@ -287,6 +302,10 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
                 result.depth = depth;
                 result.score = best_score;
                 result.is_mate = std::abs(best_score) >= kMateThreshold;
+
+                aspiration_delta = std::max(kAspirationWindow / 2, local_delta / 2);
+                fail_high_streak = 0;
+                fail_low_streak = 0;
 
                 if (info_callback_) {
                     Info info;
@@ -338,7 +357,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
 }
 
 int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, int ply,
-                    ThreadData& thread_data, Move prev_move) {
+                    ThreadData& thread_data, Move prev_move, bool in_iid) {
     if (stop_.load(std::memory_order_relaxed)) return 0;
     if (deadline_ && std::chrono::steady_clock::now() >= *deadline_) {
         stop_.store(true, std::memory_order_relaxed);
@@ -358,9 +377,7 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
         thread_data.killers.resize(ply + 1, {MOVE_NONE, MOVE_NONE});
     }
 
-    if (depth <= 0) {
-        return quiescence(board, alpha, beta, ply, thread_data);
-    }
+    if (depth <= 0) { return quiescence(board, alpha, beta, ply, thread_data); }
 
     if (use_syzygy_) {
         if (auto tb = probe_syzygy(board)) return *tb;
@@ -369,10 +386,14 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
     int static_eval = evaluate(board);
 
     Move tt_move = MOVE_NONE;
-    int tt_score = 0;
-    if (probe_tt(board, depth, alpha, beta, tt_move, tt_score, ply)) {
+    int tt_score = static_eval;
+    int tt_depth = -1;
+    int tt_flag = TT_EXACT;
+    int tt_eval = static_eval;
+    if (probe_tt(board, depth, alpha, beta, tt_move, tt_score, ply, tt_depth, tt_flag, tt_eval)) {
         return tt_score;
     }
+    static_eval = tt_eval;
 
     if (!pv_node && depth <= 3 && !in_check) {
         int margin = static_eval - kReverseFutilityMargin * depth;
@@ -390,7 +411,7 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
         board.apply_null_move(null_state);
         int reduction = kNullMoveBaseReduction + std::min(kMaxNullMoveReduction, depth / 4);
         int score = -negamax(board, depth - 1 - reduction, -beta, -beta + 1, false, ply + 1,
-                              thread_data, MOVE_NONE);
+                              thread_data, MOVE_NONE, false);
         board.undo_move(null_state);
         if (stop_.load(std::memory_order_relaxed)) return beta;
         if (score >= beta) {
@@ -398,10 +419,48 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
         }
     }
 
+    if (!pv_node && !in_check && depth <= static_cast<int>(kEnhancedBetaMargins.size() - 1)) {
+        int margin = kEnhancedBetaMargins[static_cast<size_t>(std::min(
+            depth, static_cast<int>(kEnhancedBetaMargins.size() - 1)))];
+        if (static_eval - margin >= beta) {
+            return static_eval - margin;
+        }
+    }
+
+    if (!in_iid && depth >= 6 && !in_check && tt_move == MOVE_NONE &&
+        std::abs(beta) < kMateThreshold) {
+        int iid_depth = depth - 2;
+        int iid_beta = std::min(beta, alpha + 1);
+        int iid_score = negamax(board, iid_depth, alpha, iid_beta, pv_node, ply, thread_data,
+                                 prev_move, true);
+        if (stop_.load(std::memory_order_relaxed)) {
+            return iid_score;
+        }
+        probe_tt(board, depth, alpha, beta, tt_move, tt_score, ply, tt_depth, tt_flag, tt_eval);
+        static_eval = tt_eval;
+    }
+
     auto moves = board.generate_legal_moves();
     if (moves.empty()) {
         if (board.side_to_move_in_check()) return -kMateValue + ply;
         return 0;
+    }
+
+    if (!pv_node && depth >= 5 && !in_check && std::abs(beta) < kMateThreshold) {
+        int probcut_beta = beta + kProbCutMargin;
+        int probcut_alpha = probcut_beta - 1;
+        int probcut_depth = depth - 3;
+        for (Move move : moves) {
+            if (!move_is_capture(move) && move_promo(move) == 0) continue;
+            if (static_exchange_eval(board, move) < -80) continue;
+            Board::State pc_state;
+            board.apply_move(move, pc_state);
+            int score = -negamax(board, probcut_depth, -probcut_beta, -probcut_alpha, false,
+                                  ply + 1, thread_data, move, false);
+            board.undo_move(pc_state);
+            if (stop_.load(std::memory_order_relaxed)) return probcut_beta;
+            if (score >= probcut_beta) return score;
+        }
     }
 
     auto ordered = order_moves(board, moves, tt_move, ply, thread_data, prev_move);
@@ -412,6 +471,13 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
     bool first = true;
     int move_count = 0;
 
+    bool singular_ready = (!in_check && tt_move != MOVE_NONE && tt_flag == TT_LOWER &&
+                           tt_depth >= depth - 1 && depth >= 4 &&
+                           std::abs(tt_score) < kMateThreshold);
+    int singular_beta = tt_score - kSingularMarginScale * depth;
+    int singular_depth = depth - 1 - (kSingularReductionBase + depth / 4);
+    bool allow_singular = singular_ready && singular_depth >= 1 && singular_beta > alpha;
+
     for (Move move : ordered) {
         ++move_count;
         int prev_alpha = alpha;
@@ -420,17 +486,31 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
         bool quiet = !is_capture && !is_promo;
         int history_score = thread_data.history[static_cast<size_t>(history_index(move))];
 
-        if (!pv_node && quiet) {
-            if (depth <= 2 && move_count > 8 && !in_check) {
-                continue;
-            }
-            if (depth <= 3 && move_count > 5 && history_score < 0) {
-                continue;
-            }
-        }
-
         if (!pv_node && is_capture && depth <= 1 && static_exchange_eval(board, move) < 0) {
             continue;
+        }
+
+        int extension = 0;
+        if (allow_singular && move == tt_move) {
+            int best_other = singular_beta - 1;
+            for (Move alt : moves) {
+                if (alt == move) continue;
+                Board::State singular_state;
+                board.apply_move(alt, singular_state);
+                int score = -negamax(board, singular_depth, -singular_beta, -best_other, false,
+                                      ply + 1, thread_data, alt, false);
+                board.undo_move(singular_state);
+                if (stop_.load(std::memory_order_relaxed)) break;
+                if (score >= singular_beta) {
+                    best_other = score;
+                    break;
+                }
+                best_other = std::max(best_other, score);
+            }
+            if (stop_.load(std::memory_order_relaxed)) return alpha;
+            if (best_other < singular_beta) {
+                extension = 1;
+            }
         }
 
         Board::State state;
@@ -438,40 +518,60 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
         bool gives_check = board.side_to_move_in_check();
 
         if (!in_check && quiet && depth <= 3 && !gives_check) {
-            int margin = kFutilityMargins[static_cast<size_t>(depth)];
+            int margin = kFutilityMargins[static_cast<size_t>(std::min(depth, 3))];
             if (static_eval + margin <= alpha) {
                 board.undo_move(state);
                 continue;
             }
         }
 
-        if (!pv_node && quiet && depth <= 2 && move_count > 8 && !gives_check) {
+        if (!pv_node && quiet && !in_check && !gives_check) {
+            int depth_idx = std::min<int>(depth, kLateMovePruningLimits.size() - 1);
+            int lmp_limit = kLateMovePruningLimits[static_cast<size_t>(depth_idx)] +
+                            move_overhead_ms_ / 40;
+            if (history_score < 0) --lmp_limit;
+            if (move_count > std::max(1, lmp_limit)) {
+                board.undo_move(state);
+                continue;
+            }
+        }
+
+        if (!pv_node && quiet && depth <= 3 && move_count > 4 + depth && history_score < 0) {
             board.undo_move(state);
             continue;
         }
 
         int score;
+        int child_depth = std::max(0, depth - 1 + extension);
         if (first) {
-            score = -negamax(board, depth - 1, -beta, -alpha, pv_node, ply + 1, thread_data, move);
+            score = -negamax(board, child_depth, -beta, -alpha, pv_node, ply + 1, thread_data,
+                              move, false);
             first = false;
         } else {
-            int new_depth = depth - 1;
-            bool apply_lmr = new_depth > 0 && depth >= 3 && move_count > 3 && quiet && !gives_check && !pv_node;
+            int new_depth = child_depth;
+            bool apply_lmr = new_depth > 0 && depth >= 3 && move_count > 3 && quiet &&
+                             !gives_check && !pv_node;
             if (apply_lmr) {
-                int reduction = 1 + (move_count > 6) + (depth > 5);
+                int reduction = 1 + (depth > 4) + (move_count > 4) + (move_count > 8);
                 if (history_score < 0) {
                     reduction += 1;
                 }
-                new_depth = std::max(1, new_depth - reduction);
-                score = -negamax(board, new_depth, -alpha - 1, -alpha, false, ply + 1, thread_data, move);
+                reduction += move_overhead_ms_ / 60;
+                reduction = std::min(reduction, new_depth);
+                int reduced_depth = std::max(1, new_depth - reduction);
+                score = -negamax(board, reduced_depth, -alpha - 1, -alpha, false, ply + 1,
+                                  thread_data, move, false);
                 if (score > alpha) {
-                    score = -negamax(board, depth - 1, -alpha - 1, -alpha, false, ply + 1, thread_data, move);
+                    score = -negamax(board, new_depth, -alpha - 1, -alpha, false, ply + 1,
+                                      thread_data, move, false);
                 }
             } else {
-                score = -negamax(board, depth - 1, -alpha - 1, -alpha, false, ply + 1, thread_data, move);
+                score = -negamax(board, new_depth, -alpha - 1, -alpha, false, ply + 1,
+                                  thread_data, move, false);
             }
             if (score > alpha && score < beta) {
-                score = -negamax(board, depth - 1, -beta, -alpha, true, ply + 1, thread_data, move);
+                score = -negamax(board, new_depth, -beta, -alpha, true, ply + 1, thread_data,
+                                  move, false);
             }
         }
 
@@ -541,8 +641,13 @@ int Search::quiescence(Board& board, int alpha, int beta, int ply, ThreadData& t
 }
 
 bool Search::probe_tt(const Board& board, int depth, int alpha, int beta, Move& tt_move,
-                      int& score, int ply) const {
-    if (tt_.empty()) return false;
+                      int& score, int ply, int& tt_depth, int& tt_flag, int& tt_eval) const {
+    if (tt_.empty()) {
+        tt_move = MOVE_NONE;
+        tt_depth = -1;
+        tt_flag = TT_EXACT;
+        return false;
+    }
     uint64_t key = board.zobrist_key();
     const TTEntry* entry = nullptr;
     {
@@ -550,10 +655,18 @@ bool Search::probe_tt(const Board& board, int depth, int alpha, int beta, Move& 
         TTEntry const& slot = tt_[key & tt_mask_];
         if (slot.key == key) entry = &slot;
     }
-    if (!entry) return false;
+    if (!entry) {
+        tt_move = MOVE_NONE;
+        tt_depth = -1;
+        tt_flag = TT_EXACT;
+        return false;
+    }
 
     tt_move = entry->move;
     score = entry->score;
+    tt_depth = entry->depth;
+    tt_flag = entry->flag;
+    tt_eval = entry->eval;
     if (score > kMateThreshold) score -= ply;
     else if (score < -kMateThreshold) score += ply;
 
