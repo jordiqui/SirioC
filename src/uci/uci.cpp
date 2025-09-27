@@ -69,7 +69,7 @@ void Uci::handle_line(const std::string& line) {
 
 void Uci::cmd_uci() {
     std::cout << "id name " << engine::kEngineName << " " << engine::kEngineVersion << "\n";
-    std::cout << "id author Jorge Ruiz créditos Codex OpenAi\n";
+    std::cout << "id author Jorge Ruiz creditos Codex OpenAi\n";
     std::cout << "option name Hash type spin default 64 min 1 max 4096\n";
     std::cout << "option name Threads type spin default 1 min 1 max 256\n";
     std::cout << "option name NUMA Offset type spin default 0 min -1 max 32\n";
@@ -200,9 +200,6 @@ void Uci::cmd_go(const std::string& s) {
     Limits lim = parse_go_tokens(t);
     sync_search_options();
 
-    auto result = g_search.find_bestmove(g_board, lim);
-    std::string best_uci = g_board.move_to_uci(result.bestmove);
-
     auto format_score = [](int score) {
         constexpr int kMateValue = 30000;
         constexpr int kMateThreshold = 29000;
@@ -214,16 +211,27 @@ void Uci::cmd_go(const std::string& s) {
         return std::string("cp ") + std::to_string(score);
     };
 
-    std::cout << "info depth " << result.depth << " score " << format_score(result.score)
-              << " nodes " << result.nodes << " time " << result.time_ms << " pv";
-    Board pv_board = g_board;
-    for (Move mv : result.pv) {
-        std::string uci = pv_board.move_to_uci(mv);
-        if (uci == "0000") break;
-        std::cout << ' ' << uci;
-        pv_board = pv_board.after_move(mv);
+    g_search.set_info_callback([&](const Search::Info& info) {
+        std::cout << "info depth " << info.depth << " score " << format_score(info.score)
+                  << " nodes " << info.nodes << " time " << info.time_ms << " pv";
+        Board pv_board = g_board;
+        for (Move mv : info.pv) {
+            std::string uci = pv_board.move_to_uci(mv);
+            if (uci == "0000") break;
+            std::cout << ' ' << uci;
+            pv_board = pv_board.after_move(mv);
+        }
+        std::cout << "\n" << std::flush;
+    });
+
+    auto result = g_search.find_bestmove(g_board, lim);
+    g_search.set_info_callback(nullptr);
+    std::string best_uci = g_board.move_to_uci(result.bestmove);
+
+    if (result.depth == 0 && result.pv.empty() && result.bestmove == MOVE_NONE) {
+        std::cout << "info depth 0 score cp 0 nodes " << result.nodes << " time " << result.time_ms
+                  << " pv\n";
     }
-    std::cout << "\n";
 
     if (result.bestmove == MOVE_NONE) {
         std::cout << "bestmove (none)\n";
