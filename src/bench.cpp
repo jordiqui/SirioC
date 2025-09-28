@@ -1,7 +1,16 @@
- codex/apply-performance-patch-for-sirioc
-#include "engine/core/board.hpp"
+#include "engine/bench/bench.hpp"
 
+#include "engine/core/board.hpp"
+#include "engine/core/perft.hpp"
+#include "engine/search/search.hpp"
+#include "engine/types.hpp"
+
+#include <algorithm>
+#include <array>
+#include <chrono>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 namespace engine {
@@ -24,24 +33,7 @@ const std::vector<std::string>& bench_positions() {
     return positions;
 }
 
-} // namespace engine
-
-#include "engine/bench/bench.hpp"
-
-#include "engine/core/board.hpp"
-#include "engine/core/perft.hpp"
-#include "engine/search/search.hpp"
-#include "engine/types.hpp"
-
-#include <algorithm>
-#include <array>
-#include <chrono>
-#include <string>
-#include <string_view>
-#include <utility>
-#include <vector>
-
-namespace engine::bench {
+namespace bench {
 
 namespace {
 
@@ -55,7 +47,7 @@ struct PerftEntry {
 };
 
 const std::array<BenchEntry, 8>& bench_suite() {
-    static const std::array<BenchEntry, 8> suite = { {
+    static const std::array<BenchEntry, 8> suite = {{
         {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"},
         {"rnbq1k1r/pp3ppp/2p2n2/3p4/3P4/2N1PN2/PP3PPP/R1BQKB1R w KQ - 0 8"},
         {"r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P3/2NP1N2/PPP2PPP/2KR3R w - - 0 10"},
@@ -64,19 +56,20 @@ const std::array<BenchEntry, 8>& bench_suite() {
         {"r2q1rk1/pp2bppp/1np1pn2/8/2PN4/2N1BP2/PP3PPP/R2Q1RK1 w - - 0 10"},
         {"r1bq1rk1/ppp1ppbp/2np1np1/8/2PP4/2N1PN2/PP2BPPP/R1BQ1RK1 w - - 0 8"},
         {"r4rk1/1pp2ppp/p1npbn2/2b1p3/2B1P3/2NP1N2/PPP2PPP/2KR3R w - - 0 12"},
-    } };
+    }};
     return suite;
 }
 
 const std::array<PerftEntry, 3>& perft_suite() {
-    static const std::array<PerftEntry, 3> suite = { {
+    static const std::array<PerftEntry, 3> suite = {{
         {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
          {{1, 20ULL}, {2, 400ULL}, {3, 8902ULL}, {4, 197281ULL}, {5, 4865609ULL}}},
         {"r3k2r/p1ppqpb1/bn2pnp1/2Pp4/1p2P3/2N2N2/PPQ1BPPP/R3K2R w KQkq - 0 1",
          {{1, 48ULL}, {2, 2039ULL}, {3, 97862ULL}, {4, 4085603ULL}, {5, 193690690ULL}}},
         {"8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
-         {{1, 14ULL}, {2, 191ULL}, {3, 2812ULL}, {4, 43238ULL}, {5, 674624ULL}, {6, 11030083ULL}}},
-    } };
+         {{1, 14ULL}, {2, 191ULL}, {3, 2812ULL}, {4, 43238ULL}, {5, 674624ULL},
+          {6, 11030083ULL}}},
+    }};
     return suite;
 }
 
@@ -141,6 +134,7 @@ PerftResult run_perft_suite(int depth) {
     return result;
 }
 
-} // namespace engine::bench
- main
+} // namespace bench
+
+} // namespace engine
 

@@ -18,7 +18,6 @@ enum class TBProbe : uint8_t {
     Root = 1 << 1
 };
 
-codex/replace-engine-syzygy-with-tbconfig-functions
 inline TBProbe operator|(TBProbe lhs, TBProbe rhs) {
     return static_cast<TBProbe>(static_cast<uint8_t>(lhs) |
                                 static_cast<uint8_t>(rhs));
@@ -41,9 +40,9 @@ inline bool any(TBProbe value, TBProbe mask) {
 struct TBConfig {
     bool enabled = false;
     std::string path;
-    int probeDepth = 0;
-    int probeLimit = 0;
-    bool useRule50 = true;
+    int probe_depth = 1;
+    int probe_limit = 7;
+    bool use_rule50 = true;
 };
 
 struct TBMoveInfo {
@@ -63,22 +62,6 @@ struct TBResult {
     std::vector<TBMoveInfo> moves;
 };
 
-namespace TB {
-
-bool init(const TBConfig& config);
-void release();
-int pieceCount();
-std::optional<TBResult> probePosition(const Board& board, TBProbe probeType,
-                                      int searchDepth);
-=======
-struct TBConfig {
-    bool enabled = false;
-    std::string path;
-    int probe_depth = 1;
-    int probe_limit = 7;
-    bool use_rule50 = true;
-};
-
 bool configure(const TBConfig& config);
 void shutdown();
 bool is_available();
@@ -94,10 +77,10 @@ struct ProbeResult {
 int pieceCount(const Board& board);
 std::optional<ProbeResult> probePosition(const Board& board, const TBConfig& config,
                                          bool root);
- main
 
 } // namespace TB
 
 } // namespace syzygy
 
 } // namespace engine
+

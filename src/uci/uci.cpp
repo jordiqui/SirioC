@@ -395,54 +395,29 @@ void Uci::cmd_bench(const std::string& s) {
     auto tokens = split(s);
     int depth = 8;
     int threads = g_threads;
-codex/apply-performance-patch-for-sirioc
     bool explicit_threads = false;
+    bool perft_mode = false;
     for (size_t i = 1; i < tokens.size(); ++i) {
-        if (tokens[i] == "depth" && i + 1 < tokens.size()) depth = std::stoi(tokens[i + 1]);
-        if (tokens[i] == "threads" && i + 1 < tokens.size()) {
+        if (tokens[i] == "depth" && i + 1 < tokens.size()) {
+            depth = std::stoi(tokens[i + 1]);
+            ++i;
+        } else if (tokens[i] == "threads" && i + 1 < tokens.size()) {
             threads = std::stoi(tokens[i + 1]);
             explicit_threads = true;
+            ++i;
+        } else if (tokens[i] == "perft") {
+            perft_mode = true;
         }
     }
 
     if (!explicit_threads && g_threads == 1) {
         threads = std::max(1, g_default_threads);
-=======
-    bool perft_mode = false;
-    for (size_t i = 1; i < tokens.size(); ++i) {
-        if (tokens[i] == "depth" && i + 1 < tokens.size()) depth = std::stoi(tokens[i + 1]);
-        else if (tokens[i] == "threads" && i + 1 < tokens.size()) threads = std::stoi(tokens[i + 1]);
-        else if (tokens[i] == "perft") perft_mode = true;
-main
     }
 
     int previous_threads = g_threads;
     g_threads = std::clamp(threads, 1, kThreadsMax);
     sync_search_options();
 
- codex/apply-performance-patch-for-sirioc
-    Limits lim;
-    lim.depth = depth;
-
-    auto start = std::chrono::steady_clock::now();
-    uint64_t total_nodes = 0;
-
-    Board saved_board = g_board;
-    for (const auto& fen : bench_positions()) {
-        g_board.set_fen(fen);
-        auto result = g_search.find_bestmove(g_board, lim);
-        total_nodes += result.nodes;
-    }
-    g_board = saved_board;
-
-    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                          std::chrono::steady_clock::now() - start)
-                          .count();
-    uint64_t nps = elapsed_ms > 0 ? total_nodes * 1000ULL / static_cast<uint64_t>(elapsed_ms) : 0;
-
-    std::cout << "bench depth " << depth << " nodes " << total_nodes << " time " << elapsed_ms
-              << " nps " << nps << "\n";
-=======
     if (perft_mode) {
         auto result = bench::run_perft_suite(depth);
         uint64_t nps = result.time_ms > 0
@@ -460,7 +435,6 @@ main
                   << result.time_ms << " nps " << nps << " positions " << result.positions
                   << "\n";
     }
- main
 
     g_threads = previous_threads;
     sync_search_options();
