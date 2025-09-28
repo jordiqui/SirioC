@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <thread>
 
 namespace engine {
 
@@ -19,6 +20,10 @@ private:
     void cmd_stop();
     void cmd_perft(const std::string& s);
     void cmd_bench(const std::string& s);
+
+    void stop_search_thread();
+
+    std::thread search_thread_{};
 };
 
 } // namespace engine
