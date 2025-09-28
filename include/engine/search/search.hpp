@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/syzygy/syzygy.hpp"
 #include "engine/types.hpp"
+#include "engine/util/time.hpp"
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -54,6 +55,7 @@ public:
     void set_ponder(bool enable);
     void set_multi_pv(int multi_pv);
     void set_move_overhead(int overhead_ms);
+    void set_time_config(time::TimeConfig config);
     void set_eval_file(std::string path);
     void set_eval_file_small(std::string path);
     void set_nnue_evaluator(const nnue::Evaluator* evaluator);
@@ -161,6 +163,7 @@ private:
     bool ponder_ = true;
     int multi_pv_ = 1;
     int move_overhead_ms_ = 10;
+    time::TimeConfig time_config_{};
     std::string eval_file_ = "nn-1c0000000000.nnue";
     std::string eval_file_small_ = "nn-37f18f62d772.nnue";
     std::optional<std::chrono::steady_clock::time_point> deadline_;
