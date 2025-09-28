@@ -19,6 +19,11 @@
 #include <sstream>
 #include <thread>
 #include <vector>
+#if defined(_WIN32)
+#    include <io.h>
+#else
+#    include <unistd.h>
+#endif
 
 namespace engine {
 
@@ -160,14 +165,37 @@ std::string pv_to_string(const Board& base, const std::vector<Move>& pv) {
     return out;
 }
 
+bool stdin_is_terminal() {
+#if defined(_WIN32)
+    return _isatty(_fileno(stdin)) != 0;
+#else
+    return isatty(fileno(stdin)) != 0;
+#endif
+}
+
+void wait_for_enter_if_interactive() {
+    if (!stdin_is_terminal()) return;
+    std::cout << "info string SirioC espera comandos UCI desde una consola o GUI compatible.\n"
+              << std::flush;
+    std::cout << "info string Presiona Enter para cerrar...\n" << std::flush;
+    std::cin.clear();
+    std::string dummy;
+    std::getline(std::cin, dummy);
+}
+
 } // namespace
 
 void Uci::loop() {
     std::string line;
+    bool processed_command = false;
     while (std::getline(std::cin, line)) {
         if (line.empty()) continue;
+        processed_command = true;
         handle_line(line);
         if (line == "quit") break;
+    }
+    if (!processed_command) {
+        wait_for_enter_if_interactive();
     }
     syzygy::shutdown();
 }
