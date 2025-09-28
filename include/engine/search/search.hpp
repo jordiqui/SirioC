@@ -5,11 +5,15 @@
 #include <atomic>
 #include <cstdint>
 #include <chrono>
+#include <condition_variable>
+#include <deque>
 #include <functional>
 #include <optional>
 #include <shared_mutex>
 #include <string>
+#include <thread>
 #include <vector>
+#include <mutex>
 
 namespace engine {
 class Board;
@@ -147,6 +151,19 @@ private:
     size_t thread_data_thread_count_ = 0;
     bool thread_data_initialized_ = false;
     int threads_ = 1;
+    void start_worker_threads(size_t thread_count);
+    void stop_worker_threads();
+    void submit_task(std::function<void(ThreadData&)> task);
+    bool run_available_task(ThreadData& main_td);
+    void wait_for_all_tasks(ThreadData& main_td);
+    void worker_loop(size_t index);
+    std::vector<std::thread> worker_threads_;
+    std::deque<std::function<void(ThreadData&)>> task_queue_;
+    std::mutex task_mutex_;
+    std::condition_variable task_cv_;
+    std::condition_variable task_done_cv_;
+    std::atomic<bool> pool_stop_{false};
+    std::atomic<size_t> pending_tasks_{0};
     syzygy::TBConfig syzygy_config_{};
     int numa_offset_ = 0;
     bool ponder_ = true;
