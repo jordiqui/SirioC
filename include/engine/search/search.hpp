@@ -15,7 +15,7 @@
 #include <vector>
 #include <mutex>
 
-#include "engine/util/nodes.hpp"
+#include "tt.h"
 
 namespace engine {
 class Board;
@@ -60,14 +60,6 @@ public:
     void set_use_nnue(bool enable);
 
 private:
-    struct TTEntry {
-        uint64_t key = 0;
-        Move move = MOVE_NONE;
-        int16_t score = 0;
-        int16_t eval = 0;
-        int8_t depth = -1;
-        uint8_t flag = 0;
-    };
     struct ThreadData {
         ThreadData();
         void reset();
@@ -144,10 +136,7 @@ private:
     std::optional<int> probe_syzygy(const Board& board, int depth,
                                     bool root_probe) const;
 
-    std::vector<TTEntry> tt_;
-    size_t tt_mask_ = 0;
-    mutable std::shared_mutex tt_mutex_;
-    NodesCounter nodes_;
+    TranspositionTable tt_;
     std::atomic<bool> stop_;
     std::vector<ThreadData> thread_data_pool_;
     uint64_t thread_data_position_key_ = 0;

@@ -70,6 +70,14 @@ else()
   if (SIRIOC_FEATURE_FLAGS)
     add_compile_options(${SIRIOC_FEATURE_FLAGS})
   endif()
+
+  if (NOT ENABLE_AVX2)
+    check_cxx_compiler_flag("-mbmi2" COMPILER_SUPPORTS_STANDALONE_BMI2)
+    if (COMPILER_SUPPORTS_STANDALONE_BMI2)
+      add_compile_options(-mbmi2)
+      add_compile_definitions(SIRIOC_USE_BMI2=1)
+    endif()
+  endif()
 endif()
 
 if (ENABLE_LTO)
@@ -89,9 +97,11 @@ set(SIRIOC_SOURCES
   ${CMAKE_SOURCE_DIR}/src/core/fen.cpp
   ${CMAKE_SOURCE_DIR}/src/core/movegen.cpp
   ${CMAKE_SOURCE_DIR}/src/core/perft.cpp
+  ${CMAKE_SOURCE_DIR}/src/bench.cpp
   ${CMAKE_SOURCE_DIR}/src/eval/eval.cpp
   ${CMAKE_SOURCE_DIR}/src/eval/nnue/accumulator.cpp
   ${CMAKE_SOURCE_DIR}/src/eval/nnue/evaluator.cpp
+  ${CMAKE_SOURCE_DIR}/src/tt.cpp
   ${CMAKE_SOURCE_DIR}/src/search/search.cpp
   ${CMAKE_SOURCE_DIR}/src/syzygy/syzygy.cpp
   ${CMAKE_SOURCE_DIR}/src/uci/uci.cpp
@@ -105,6 +115,7 @@ set(MAIN_SOURCE ${CMAKE_SOURCE_DIR}/src/main.cpp)
 add_library(sirio_core ${SIRIOC_SOURCES})
 target_include_directories(sirio_core PUBLIC
   ${CMAKE_SOURCE_DIR}/include
+  ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_SOURCE_DIR}/include/engine/syzygy
   ${CMAKE_SOURCE_DIR}/3rdparty/fathom
 )
