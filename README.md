@@ -101,7 +101,9 @@ NNUE training material. Material and positional terms are blended between
 middlegame and endgame phases, and a small tempo bonus favors the side to move.
 The NNUE accumulator infrastructure is wired through the board state, enabling
 fast inference once the NNUE evaluator is connected. Until incremental NNUE
-updates land, the classical evaluation remains the default.
+updates land, the classical evaluation remains the default. Placeholder
+`.nnue` network files are bundled so the UCI options resolve to real files even
+though full neural evaluation is not yet implemented.
 
 ### Engine influences
 
