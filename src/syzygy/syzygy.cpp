@@ -5,16 +5,13 @@
 
 #include <algorithm>
 #include <atomic>
-
 #include <bit>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
->>>>>>> main
 #include <mutex>
 #include <optional>
 #include <string>
-#include <unordered_map>
-#include <vector>
 
 namespace engine::syzygy {
 
@@ -22,21 +19,8 @@ namespace {
 
 std::mutex g_mutex;
 std::atomic<bool> g_ready{false};
-TBConfig g_config{};
-std::string g_current_path;
 TBConfig g_active_config{};
-
-bool has_tablebases_loaded() {
-    return g_ready.load(std::memory_order_acquire) && TB_LARGEST > 0;
-}
-
-unsigned to_tb_move_bits(unsigned from, unsigned to, unsigned promotes) {
-    unsigned value = 0;
-    value = TB_SET_FROM(value, from);
-    value = TB_SET_TO(value, to);
-    value = TB_SET_PROMOTES(value, promotes);
-    return value;
-}
+std::string g_current_path;
 
 int convert_tb_promotion(int tb_code) {
     switch (tb_code) {
@@ -48,15 +32,13 @@ int convert_tb_promotion(int tb_code) {
     }
 }
 
- codex/replace-engine-syzygy-with-tbconfig-functions
-bool TB::init(const TBConfig& config) {
-    std::lock_guard<std::mutex> lock(g_mutex);
-
-    g_config = config;
-
 Move build_move_from_tb(const Board& board, int from, int to, int promo_code, bool is_ep) {
+    if (from < 0 || from >= 64 || to < 0 || to >= 64) return MOVE_NONE;
+
     const auto& squares = board.squares();
     char moving = squares[static_cast<size_t>(from)];
+    if (moving == '.') return MOVE_NONE;
+
     bool capture = board.piece_on(to) != '.' || is_ep;
     bool pawn = std::tolower(static_cast<unsigned char>(moving)) == 'p';
     bool double_push = pawn && std::abs(to - from) == 16;
@@ -64,8 +46,38 @@ Move build_move_from_tb(const Board& board, int from, int to, int promo_code, bo
     return make_move(from, to, promo, capture, double_push, is_ep, false);
 }
 
+bool has_en_passant_capture(const Board& board, int ep_square) {
+    if (ep_square == Board::INVALID_SQUARE) return false;
+
+    int file = ep_square % 8;
+    int rank = ep_square / 8;
+    const auto& squares = board.squares();
+
+    if (board.white_to_move()) {
+        if (rank != 5) return false;
+        int from_rank = rank - 1;
+        if (from_rank < 0) return false;
+        for (int df : {-1, 1}) {
+            int from_file = file + df;
+            if (from_file < 0 || from_file >= 8) continue;
+            int from_sq = from_rank * 8 + from_file;
+            if (squares[static_cast<size_t>(from_sq)] == 'P') return true;
+        }
+    } else {
+        if (rank != 2) return false;
+        int from_rank = rank + 1;
+        if (from_rank >= 8) return false;
+        for (int df : {-1, 1}) {
+            int from_file = file + df;
+            if (from_file < 0 || from_file >= 8) continue;
+            int from_sq = from_rank * 8 + from_file;
+            if (squares[static_cast<size_t>(from_sq)] == 'p') return true;
+        }
+    }
+    return false;
+}
+
 bool ensure_initialized_locked(const TBConfig& config) {
- main
     if (!config.enabled || config.path.empty()) {
         if (g_ready.exchange(false, std::memory_order_acq_rel)) {
             tb_free();
@@ -84,35 +96,25 @@ bool ensure_initialized_locked(const TBConfig& config) {
 
     if (tb_init(config.path.c_str())) {
         g_current_path = config.path;
- codex/replace-engine-syzygy-with-tbconfig-functions
-        bool ready = TB_LARGEST > 0;
-        g_ready.store(ready, std::memory_order_release);
-        return ready;
-
         bool available = TB_LARGEST > 0;
         g_ready.store(available, std::memory_order_release);
         return available;
- main
     }
 
-    g_current_path = config.path;
+    g_current_path.clear();
     g_ready.store(false, std::memory_order_release);
     return false;
 }
-
- codex/replace-engine-syzygy-with-tbconfig-functions
-void TB::release() {
 
 } // namespace
 
 bool configure(const TBConfig& config) {
     std::lock_guard<std::mutex> lock(g_mutex);
     g_active_config = config;
-    return ensure_initialized_locked(config);
+    return ensure_initialized_locked(g_active_config);
 }
 
 void shutdown() {
- main
     std::lock_guard<std::mutex> lock(g_mutex);
     g_active_config = TBConfig{};
     if (g_ready.exchange(false, std::memory_order_acq_rel)) {
@@ -121,162 +123,8 @@ void shutdown() {
     g_current_path.clear();
 }
 
-codex/replace-engine-syzygy-with-tbconfig-functions
-int TB::pieceCount() {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    if (!has_tablebases_loaded()) return 0;
-    return static_cast<int>(TB_LARGEST);
-}
-
-std::optional<TBResult> TB::probePosition(const Board& board, TBProbe probeType,
-                                          int searchDepth) {
-    std::lock_guard<std::mutex> lock(g_mutex);
-
-    if (!g_config.enabled || !has_tablebases_loaded()) return std::nullopt;
-
-    int pieces = board.countPiecesTotal();
-    if (pieces > static_cast<int>(TB_LARGEST)) return std::nullopt;
-    if (g_config.probeLimit > 0 && pieces > g_config.probeLimit) return std::nullopt;
-
-    if (!any(probeType, TBProbe::Root) && searchDepth < g_config.probeDepth) {
-        return std::nullopt;
-    }
-
-    auto state = board.exportToFathom();
-    if (state.castling != 0) return std::nullopt;
-
-    unsigned rule50 = g_config.useRule50 ? state.rule50 : 0U;
-
-    TBResult result;
-
-    bool attemptRoot = any(probeType, TBProbe::Root) && board.plyFromRoot() == 0;
-    if (attemptRoot) {
-        unsigned results[TB_MAX_MOVES] = {};
-        unsigned root = tb_probe_root(state.white, state.black, state.kings, state.queens,
-                                      state.rooks, state.bishops, state.knights, state.pawns,
-                                      rule50, state.castling, state.ep, state.whiteToMove,
-                                      results);
-
-        if (root != TB_RESULT_FAILED) {
-            result.probe = TBProbe::Root;
-            result.wdl = static_cast<int>(TB_GET_WDL(root));
-            result.dtz = static_cast<int>(TB_GET_DTZ(root));
-
-            unsigned tb_move_bits = to_tb_move_bits(TB_GET_FROM(root), TB_GET_TO(root),
-                                                    TB_GET_PROMOTES(root));
-            bool ep_hint = TB_GET_EP(root) != 0;
-            result.bestMove = board.convertFromTbMove(static_cast<TbMove>(tb_move_bits), ep_hint);
-
-            std::unordered_map<Move, std::pair<int, int>> wdl_dtz_map;
-            std::vector<Move> move_order;
-            for (unsigned i = 0; i < TB_MAX_MOVES && results[i] != TB_RESULT_FAILED; ++i) {
-                unsigned res = results[i];
-                unsigned move_bits = to_tb_move_bits(TB_GET_FROM(res), TB_GET_TO(res),
-                                                     TB_GET_PROMOTES(res));
-                bool ep = TB_GET_EP(res) != 0;
-                Move move = board.convertFromTbMove(static_cast<TbMove>(move_bits), ep);
-                if (move == MOVE_NONE) continue;
-                move_order.push_back(move);
-                int wdl = static_cast<int>(TB_GET_WDL(res));
-                int dtz = static_cast<int>(TB_GET_DTZ(res));
-                wdl_dtz_map[move] = {wdl, dtz};
-            }
-
-            TbRootMoves tb_moves{};
-            bool have_scores = tb_probe_root_dtz(state.white, state.black, state.kings,
-                                                 state.queens, state.rooks, state.bishops,
-                                                 state.knights, state.pawns, rule50,
-                                                 state.castling, state.ep, state.whiteToMove,
-                                                 false, g_config.useRule50, &tb_moves) != 0;
-            if (!have_scores) {
-                have_scores = tb_probe_root_wdl(state.white, state.black, state.kings,
-                                                state.queens, state.rooks, state.bishops,
-                                                state.knights, state.pawns, rule50,
-                                                state.castling, state.ep, state.whiteToMove,
-                                                g_config.useRule50, &tb_moves) != 0;
-            }
-
-            std::unordered_map<Move, std::pair<int, int>> score_rank_map;
-            if (have_scores) {
-                for (unsigned i = 0; i < tb_moves.size; ++i) {
-                    const auto& entry = tb_moves.moves[i];
-                    Move move = board.convertFromTbMove(entry.move);
-                    if (move == MOVE_NONE) continue;
-                    score_rank_map[move] = {entry.tbScore, entry.tbRank};
-                }
-            }
-
-            for (Move move : move_order) {
-                TBMoveInfo info;
-                info.move = move;
-                if (auto it = wdl_dtz_map.find(move); it != wdl_dtz_map.end()) {
-                    info.wdl = it->second.first;
-                    info.dtz = it->second.second;
-                }
-                if (auto it = score_rank_map.find(move); it != score_rank_map.end()) {
-                    info.score = it->second.first;
-                    info.rank = it->second.second;
-                }
-                result.moves.push_back(info);
-            }
-
-            for (const auto& [move, score_rank] : score_rank_map) {
-                auto exists = std::find_if(result.moves.begin(), result.moves.end(),
-                                           [&](const TBMoveInfo& info) {
-                                               return info.move == move;
-                                           });
-                if (exists != result.moves.end()) continue;
-                TBMoveInfo info;
-                info.move = move;
-                info.score = score_rank.first;
-                info.rank = score_rank.second;
-                if (auto it = wdl_dtz_map.find(move); it != wdl_dtz_map.end()) {
-                    info.wdl = it->second.first;
-                    info.dtz = it->second.second;
-                }
-                result.moves.push_back(info);
-            }
-
-            if (result.moves.empty() && result.bestMove != MOVE_NONE) {
-                TBMoveInfo info;
-                info.move = result.bestMove;
-                if (auto it = wdl_dtz_map.find(result.bestMove); it != wdl_dtz_map.end()) {
-                    info.wdl = it->second.first;
-                    info.dtz = it->second.second;
-                }
-                if (auto it = score_rank_map.find(result.bestMove); it != score_rank_map.end()) {
-                    info.score = it->second.first;
-                    info.rank = it->second.second;
-                }
-                result.moves.push_back(info);
-            }
-
-            if (result.bestMove != MOVE_NONE) {
-                if (auto it = score_rank_map.find(result.bestMove); it != score_rank_map.end()) {
-                    result.tbScore = it->second.first;
-                }
-            }
-
-            return result;
-        }
-    }
-
-    if (any(probeType, TBProbe::Wdl)) {
-        unsigned wdl = tb_probe_wdl(state.white, state.black, state.kings, state.queens,
-                                    state.rooks, state.bishops, state.knights, state.pawns,
-                                    rule50, state.castling, state.ep, state.whiteToMove);
-        if (wdl != TB_RESULT_FAILED) {
-            result.probe = TBProbe::Wdl;
-            result.wdl = static_cast<int>(wdl);
-            return result;
-        }
-    }
-
-    return std::nullopt;
-
 bool is_available() {
-    return g_active_config.enabled &&
-           g_ready.load(std::memory_order_acquire) && TB_LARGEST > 0;
+    return g_ready.load(std::memory_order_acquire) && TB_LARGEST > 0;
 }
 
 namespace TB {
@@ -287,15 +135,22 @@ int pieceCount(const Board& board) {
 }
 
 std::optional<ProbeResult> probePosition(const Board& board, const TBConfig& config,
-                                         bool root) {
+                                         bool root_probe) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+
     if (!config.enabled || config.path.empty()) return std::nullopt;
+
+    if (config.enabled != g_active_config.enabled || config.path != g_active_config.path) {
+        g_active_config = config;
+        if (!ensure_initialized_locked(g_active_config)) return std::nullopt;
+    }
+
     if (!is_available()) return std::nullopt;
     if (board.castling_rights() != 0) return std::nullopt;
 
-    const auto& occupancy = board.occupancy();
-    if (static_cast<int>(std::popcount(occupancy[Board::OCC_BOTH])) > TB_LARGEST) {
-        return std::nullopt;
-    }
+    int pieces = pieceCount(board);
+    if (pieces > static_cast<int>(TB_LARGEST)) return std::nullopt;
+    if (config.probe_limit >= 0 && pieces > config.probe_limit) return std::nullopt;
 
     unsigned ep = 0;
     int ep_square = board.en_passant_square();
@@ -303,60 +158,52 @@ std::optional<ProbeResult> probePosition(const Board& board, const TBConfig& con
         ep = static_cast<unsigned>(ep_square);
     }
 
-    const auto& pieces = board.piece_bitboards();
+    const auto& occupancy = board.occupancy();
+    const auto& pieces_bb = board.piece_bitboards();
+
     uint64_t white = occupancy[Board::OCC_WHITE];
     uint64_t black = occupancy[Board::OCC_BLACK];
-    uint64_t kings = pieces[Board::WHITE_KING] | pieces[Board::BLACK_KING];
-    uint64_t queens = pieces[Board::WHITE_QUEEN] | pieces[Board::BLACK_QUEEN];
-    uint64_t rooks = pieces[Board::WHITE_ROOK] | pieces[Board::BLACK_ROOK];
-    uint64_t bishops = pieces[Board::WHITE_BISHOP] | pieces[Board::BLACK_BISHOP];
-    uint64_t knights = pieces[Board::WHITE_KNIGHT] | pieces[Board::BLACK_KNIGHT];
-    uint64_t pawns = pieces[Board::WHITE_PAWN] | pieces[Board::BLACK_PAWN];
+    uint64_t kings = pieces_bb[Board::WHITE_KING] | pieces_bb[Board::BLACK_KING];
+    uint64_t queens = pieces_bb[Board::WHITE_QUEEN] | pieces_bb[Board::BLACK_QUEEN];
+    uint64_t rooks = pieces_bb[Board::WHITE_ROOK] | pieces_bb[Board::BLACK_ROOK];
+    uint64_t bishops = pieces_bb[Board::WHITE_BISHOP] | pieces_bb[Board::BLACK_BISHOP];
+    uint64_t knights = pieces_bb[Board::WHITE_KNIGHT] | pieces_bb[Board::BLACK_KNIGHT];
+    uint64_t pawns = pieces_bb[Board::WHITE_PAWN] | pieces_bb[Board::BLACK_PAWN];
     bool turn = board.white_to_move();
 
-    if (root) {
-        unsigned result = tb_probe_root_impl(white, black, kings, queens, rooks, bishops,
-                                             knights, pawns,
-                                             static_cast<unsigned>(board.halfmove_clock()),
-                                             ep, turn, nullptr);
+    unsigned rule50 = config.use_rule50 ? static_cast<unsigned>(board.halfmove_clock()) : 0;
+    unsigned castling = 0; // already filtered positions with castling rights
+
+    if (root_probe) {
+        unsigned result = tb_probe_root(white, black, kings, queens, rooks, bishops, knights,
+                                        pawns, rule50, castling, ep, turn, nullptr);
         if (result == TB_RESULT_FAILED) return std::nullopt;
 
         ProbeResult out;
-        if (result == TB_RESULT_CHECKMATE) {
-            out.wdl = WdlOutcome::Loss;
-            out.dtz = -1;
-            return out;
-        }
-        if (result == TB_RESULT_STALEMATE) {
-            out.wdl = WdlOutcome::Draw;
-            out.dtz = 0;
-            return out;
-        }
-
         out.wdl = static_cast<WdlOutcome>(TB_GET_WDL(result));
+
         int dtz = static_cast<int>(TB_GET_DTZ(result));
-        if (dtz != 0 &&
-            (out.wdl == WdlOutcome::Loss || out.wdl == WdlOutcome::BlessedLoss)) {
+        if (dtz != 0 && (out.wdl == WdlOutcome::Loss || out.wdl == WdlOutcome::BlessedLoss)) {
             dtz = -dtz;
         }
-        out.dtz = dtz;
+        if (dtz != 0) out.dtz = dtz;
 
         int from = TB_GET_FROM(result);
         int to = TB_GET_TO(result);
         int promo = TB_GET_PROMOTES(result);
         bool is_ep = TB_GET_EP(result) != 0;
-        out.best_move = build_move_from_tb(board, from, to, promo, is_ep);
+        Move move = build_move_from_tb(board, from, to, promo, is_ep);
+        if (move != MOVE_NONE) out.best_move = move;
         return out;
     }
 
-    unsigned result = tb_probe_wdl_impl(white, black, kings, queens, rooks, bishops,
-                                        knights, pawns, ep, turn);
-    if (result == TB_RESULT_FAILED) return std::nullopt;
+    unsigned wdl = tb_probe_wdl(white, black, kings, queens, rooks, bishops, knights, pawns,
+                                rule50, castling, ep, turn);
+    if (wdl == TB_RESULT_FAILED) return std::nullopt;
 
     ProbeResult out;
-    out.wdl = static_cast<WdlOutcome>(result);
+    out.wdl = static_cast<WdlOutcome>(wdl);
     return out;
->>>>>>> main
 }
 
 } // namespace TB
