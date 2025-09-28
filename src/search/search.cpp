@@ -45,6 +45,240 @@ int piece_value(char piece) {
     }
 }
 
+constexpr uint64_t bit(int sq) { return 1ULL << sq; }
+
+constexpr std::array<std::pair<int, int>, 4> kBishopDirs{{{1, 1}, {-1, 1},
+                                                          {1, -1}, {-1, -1}}};
+constexpr std::array<std::pair<int, int>, 4> kRookDirs{{{1, 0}, {-1, 0},
+                                                        {0, 1}, {0, -1}}};
+
+inline bool on_board(int file, int rank) {
+    return file >= 0 && file < 8 && rank >= 0 && rank < 8;
+}
+
+uint64_t knight_attacks(int sq) {
+    static const std::array<std::pair<int, int>, 8> kOffsets{{{1, 2},  {2, 1},
+                                                              {2, -1}, {1, -2},
+                                                              {-1, -2}, {-2, -1},
+                                                              {-2, 1},  {-1, 2}}};
+    static std::array<uint64_t, 64> table = [] {
+        std::array<uint64_t, 64> out{};
+        for (int sq = 0; sq < 64; ++sq) {
+            int file = sq % 8;
+            int rank = sq / 8;
+            uint64_t mask = 0ULL;
+            for (auto [df, dr] : kOffsets) {
+                int nf = file + df;
+                int nr = rank + dr;
+                if (on_board(nf, nr)) mask |= bit(nr * 8 + nf);
+            }
+            out[static_cast<size_t>(sq)] = mask;
+        }
+        return out;
+    }();
+    return table[static_cast<size_t>(sq)];
+}
+
+uint64_t king_attacks(int sq) {
+    static const std::array<std::pair<int, int>, 8> kOffsets{{{1, 0},  {1, 1},
+                                                              {0, 1},  {-1, 1},
+                                                              {-1, 0}, {-1, -1},
+                                                              {0, -1}, {1, -1}}};
+    static std::array<uint64_t, 64> table = [] {
+        std::array<uint64_t, 64> out{};
+        for (int sq = 0; sq < 64; ++sq) {
+            int file = sq % 8;
+            int rank = sq / 8;
+            uint64_t mask = 0ULL;
+            for (auto [df, dr] : kOffsets) {
+                int nf = file + df;
+                int nr = rank + dr;
+                if (on_board(nf, nr)) mask |= bit(nr * 8 + nf);
+            }
+            out[static_cast<size_t>(sq)] = mask;
+        }
+        return out;
+    }();
+    return table[static_cast<size_t>(sq)];
+}
+
+uint64_t sliding_attacks(int sq, uint64_t occ,
+                         const std::array<std::pair<int, int>, 4>& dirs) {
+    uint64_t attacks = 0ULL;
+    int file = sq % 8;
+    int rank = sq / 8;
+    for (auto [df, dr] : dirs) {
+        int nf = file + df;
+        int nr = rank + dr;
+        while (on_board(nf, nr)) {
+            int nsq = nr * 8 + nf;
+            attacks |= bit(nsq);
+            if (occ & bit(nsq)) break;
+            nf += df;
+            nr += dr;
+        }
+    }
+    return attacks;
+}
+
+uint64_t bishop_attacks(int sq, uint64_t occ) {
+    return sliding_attacks(sq, occ, kBishopDirs);
+}
+
+uint64_t rook_attacks(int sq, uint64_t occ) {
+    return sliding_attacks(sq, occ, kRookDirs);
+}
+
+int pop_lsb(uint64_t& bb) {
+    uint64_t lsb = bb & -bb;
+    int sq = std::countr_zero(lsb);
+    bb &= bb - 1;
+    return sq;
+}
+
+int piece_type_from_char(char piece) {
+    switch (std::tolower(static_cast<unsigned char>(piece))) {
+    case 'p': return 0;
+    case 'n': return 1;
+    case 'b': return 2;
+    case 'r': return 3;
+    case 'q': return 4;
+    case 'k': return 5;
+    default: return -1;
+    }
+}
+
+char piece_char_from_type(int color, int type) {
+    static const std::array<std::array<char, 6>, 2> chars{{{{'P', 'N', 'B', 'R', 'Q', 'K'}},
+                                                           {{'p', 'n', 'b', 'r', 'q', 'k'}}}};
+    if (color < 0 || color > 1 || type < 0 || type >= 6) return '.';
+    return chars[static_cast<size_t>(color)][static_cast<size_t>(type)];
+}
+
+char promotion_piece_char(int promo, bool white) {
+    switch (promo) {
+    case 1: return white ? 'N' : 'n';
+    case 2: return white ? 'B' : 'b';
+    case 3: return white ? 'R' : 'r';
+    case 4: return white ? 'Q' : 'q';
+    default: return white ? 'P' : 'p';
+    }
+}
+
+struct PinInfo {
+    uint64_t pinned_mask = 0ULL;
+    std::array<uint64_t, 64> rays{};
+};
+
+PinInfo compute_pin_info(int color,
+                         const std::array<std::array<uint64_t, 6>, 2>& pieces,
+                         uint64_t occ) {
+    PinInfo info;
+    uint64_t king_bb = pieces[static_cast<size_t>(color)][5];
+    if (!king_bb) return info;
+    int king_sq = std::countr_zero(king_bb);
+    int king_file = king_sq % 8;
+    int king_rank = king_sq / 8;
+    int enemy = color ^ 1;
+    uint64_t friendly = 0ULL;
+    for (int t = 0; t < 6; ++t) {
+        friendly |= pieces[static_cast<size_t>(color)][static_cast<size_t>(t)];
+    }
+
+    auto handle_dir = [&](const std::pair<int, int>& dir, uint64_t enemy_sliders) {
+        int nf = king_file + dir.first;
+        int nr = king_rank + dir.second;
+        int pinned_sq = -1;
+        while (on_board(nf, nr)) {
+            int sq = nr * 8 + nf;
+            uint64_t mask = bit(sq);
+            if (occ & mask) {
+                if (mask & king_bb) {
+                    break;
+                }
+                if (pinned_sq == -1 && (mask & friendly)) {
+                    pinned_sq = sq;
+                } else {
+                    if (mask & enemy_sliders && pinned_sq != -1) {
+                        info.pinned_mask |= bit(pinned_sq);
+                        int pf = king_file + dir.first;
+                        int pr = king_rank + dir.second;
+                        uint64_t ray = 0ULL;
+                        while (on_board(pf, pr)) {
+                            int psq = pr * 8 + pf;
+                            ray |= bit(psq);
+                            if (psq == sq) break;
+                            pf += dir.first;
+                            pr += dir.second;
+                        }
+                        info.rays[static_cast<size_t>(pinned_sq)] = ray;
+                    }
+                    break;
+                }
+            }
+            nf += dir.first;
+            nr += dir.second;
+        }
+    };
+
+    uint64_t enemy_bishops = pieces[static_cast<size_t>(enemy)][2] |
+                             pieces[static_cast<size_t>(enemy)][4];
+    uint64_t enemy_rooks = pieces[static_cast<size_t>(enemy)][3] |
+                           pieces[static_cast<size_t>(enemy)][4];
+
+    for (const auto& dir : kBishopDirs) {
+        handle_dir(dir, enemy_bishops);
+    }
+    for (const auto& dir : kRookDirs) {
+        handle_dir(dir, enemy_rooks);
+    }
+
+    return info;
+}
+
+std::array<uint64_t, 2>
+attackers_to(int sq, uint64_t occ,
+             const std::array<std::array<uint64_t, 6>, 2>& pieces) {
+    std::array<uint64_t, 2> attackers{0ULL, 0ULL};
+    int file = sq % 8;
+    int rank = sq / 8;
+
+    if (file > 0 && rank > 0) {
+        int from = sq - 9;
+        if (pieces[0][0] & bit(from)) attackers[0] |= bit(from);
+    }
+    if (file < 7 && rank > 0) {
+        int from = sq - 7;
+        if (pieces[0][0] & bit(from)) attackers[0] |= bit(from);
+    }
+    if (file > 0 && rank < 7) {
+        int from = sq + 7;
+        if (pieces[1][0] & bit(from)) attackers[1] |= bit(from);
+    }
+    if (file < 7 && rank < 7) {
+        int from = sq + 9;
+        if (pieces[1][0] & bit(from)) attackers[1] |= bit(from);
+    }
+
+    uint64_t knight_mask = knight_attacks(sq);
+    attackers[0] |= knight_mask & pieces[0][1];
+    attackers[1] |= knight_mask & pieces[1][1];
+
+    uint64_t bishop_mask = bishop_attacks(sq, occ);
+    attackers[0] |= bishop_mask & (pieces[0][2] | pieces[0][4]);
+    attackers[1] |= bishop_mask & (pieces[1][2] | pieces[1][4]);
+
+    uint64_t rook_mask = rook_attacks(sq, occ);
+    attackers[0] |= rook_mask & (pieces[0][3] | pieces[0][4]);
+    attackers[1] |= rook_mask & (pieces[1][3] | pieces[1][4]);
+
+    uint64_t king_mask = king_attacks(sq);
+    attackers[0] |= king_mask & pieces[0][5];
+    attackers[1] |= king_mask & pieces[1][5];
+
+    return attackers;
+}
+
 constexpr int kHistoryMax = 1'000'000;
 constexpr int kHistoryMin = -kHistoryMax;
 
@@ -80,14 +314,150 @@ bool has_non_pawn_material(const Board& board, bool white) {
 }
 
 int static_exchange_eval(const Board& board, Move move) {
-    char captured = board.piece_on(move_to(move));
-    if (move_is_enpassant(move)) {
-        captured = board.white_to_move() ? 'p' : 'P';
+    int from = move_from(move);
+    int to = move_to(move);
+    char moving_piece = board.piece_on(from);
+    bool en_passant = move_is_enpassant(move);
+    bool is_capture = move_is_capture(move) || en_passant;
+    if (!is_capture) return 0;
+
+    char captured = board.piece_on(to);
+    bool moving_white = std::isupper(static_cast<unsigned char>(moving_piece));
+    if (en_passant) {
+        captured = moving_white ? 'p' : 'P';
     }
     if (captured == '.') return 0;
-    char mover = board.piece_on(move_from(move));
-    int gain = piece_value(captured) - piece_value(mover);
-    return gain;
+
+    int promo = move_promo(move);
+    char promoted_piece = moving_piece;
+    if (promo != 0 && std::tolower(static_cast<unsigned char>(moving_piece)) == 'p') {
+        promoted_piece = promotion_piece_char(promo, moving_white);
+    }
+
+    constexpr int WHITE = 0;
+    constexpr int BLACK = 1;
+
+    std::array<std::array<uint64_t, 6>, 2> pieces{};
+    const auto& bb = board.piece_bitboards();
+    pieces[WHITE][0] = bb[Board::WHITE_PAWN];
+    pieces[WHITE][1] = bb[Board::WHITE_KNIGHT];
+    pieces[WHITE][2] = bb[Board::WHITE_BISHOP];
+    pieces[WHITE][3] = bb[Board::WHITE_ROOK];
+    pieces[WHITE][4] = bb[Board::WHITE_QUEEN];
+    pieces[WHITE][5] = bb[Board::WHITE_KING];
+    pieces[BLACK][0] = bb[Board::BLACK_PAWN];
+    pieces[BLACK][1] = bb[Board::BLACK_KNIGHT];
+    pieces[BLACK][2] = bb[Board::BLACK_BISHOP];
+    pieces[BLACK][3] = bb[Board::BLACK_ROOK];
+    pieces[BLACK][4] = bb[Board::BLACK_QUEEN];
+    pieces[BLACK][5] = bb[Board::BLACK_KING];
+
+    std::array<uint64_t, 2> occ_color{board.occupancy()[Board::OCC_WHITE],
+                                      board.occupancy()[Board::OCC_BLACK]};
+    uint64_t occ_all = board.occupancy()[Board::OCC_BOTH];
+
+    std::array<int, 32> gains{};
+    gains[0] = piece_value(captured);
+    int depth = 0;
+
+    int side = moving_white ? WHITE : BLACK;
+    int from_piece_type = piece_type_from_char(moving_piece);
+    if (from_piece_type < 0) return gains[0];
+
+    char target_piece = captured;
+
+    auto apply_capture = [&](int color, int from_sq, int piece_type_from,
+                             char arriving_piece, char& captured_piece,
+                             bool en_passant_capture) {
+        gains[++depth] = piece_value(arriving_piece) - gains[depth - 1];
+        bool continue_sequence = std::max(-gains[depth - 1], gains[depth]) >= 0;
+
+        int enemy = color ^ 1;
+        uint64_t from_bb = bit(from_sq);
+        uint64_t to_bb = bit(to);
+
+        if (en_passant_capture) {
+            int ep_sq = to + (color == WHITE ? -8 : 8);
+            uint64_t ep_bb = bit(ep_sq);
+            pieces[static_cast<size_t>(enemy)][0] &= ~ep_bb;
+            occ_color[static_cast<size_t>(enemy)] &= ~ep_bb;
+        } else {
+            int captured_type = piece_type_from_char(captured_piece);
+            if (captured_type >= 0) {
+                pieces[static_cast<size_t>(enemy)][static_cast<size_t>(captured_type)] &=
+                    ~to_bb;
+            }
+            occ_color[static_cast<size_t>(enemy)] &= ~to_bb;
+        }
+
+        pieces[static_cast<size_t>(color)][static_cast<size_t>(piece_type_from)] &=
+            ~from_bb;
+
+        int new_type = piece_type_from_char(arriving_piece);
+        if (new_type < 0) new_type = piece_type_from;
+        pieces[static_cast<size_t>(color)][static_cast<size_t>(new_type)] |= to_bb;
+
+        occ_color[static_cast<size_t>(color)] &= ~from_bb;
+        occ_color[static_cast<size_t>(color)] |= to_bb;
+        occ_all = occ_color[WHITE] | occ_color[BLACK];
+
+        captured_piece = arriving_piece;
+        return continue_sequence;
+    };
+
+    bool continue_sequence =
+        apply_capture(side, from, from_piece_type, promoted_piece, target_piece,
+                      en_passant);
+    if (!continue_sequence) {
+        while (depth > 0) {
+            gains[depth - 1] = -std::max(-gains[depth - 1], gains[depth]);
+            --depth;
+        }
+        return gains[0];
+    }
+
+    en_passant = false;
+    side ^= 1;
+
+    while (true) {
+        auto attackers = attackers_to(to, occ_all, pieces);
+        PinInfo pins = compute_pin_info(side, pieces, occ_all);
+        uint64_t mask = attackers[static_cast<size_t>(side)];
+
+        auto select_attacker = [&](uint64_t candidates) -> std::pair<int, int> {
+            static constexpr std::array<int, 6> kOrder{0, 1, 2, 3, 4, 5};
+            for (int type : kOrder) {
+                uint64_t bb_mask =
+                    pieces[static_cast<size_t>(side)][static_cast<size_t>(type)] &
+                    candidates;
+                while (bb_mask) {
+                    int sq = pop_lsb(bb_mask);
+                    uint64_t sq_bb = bit(sq);
+                    if ((pins.pinned_mask & sq_bb) &&
+                        !(pins.rays[static_cast<size_t>(sq)] & bit(to))) {
+                        continue;
+                    }
+                    return {sq, type};
+                }
+            }
+            return {-1, -1};
+        };
+
+        auto [attacker_sq, attacker_type] = select_attacker(mask);
+        if (attacker_sq == -1) break;
+
+        char attacker_piece = piece_char_from_type(side, attacker_type);
+        continue_sequence = apply_capture(side, attacker_sq, attacker_type,
+                                          attacker_piece, target_piece, false);
+        if (!continue_sequence) break;
+        side ^= 1;
+    }
+
+    while (depth > 0) {
+        gains[depth - 1] = -std::max(-gains[depth - 1], gains[depth]);
+        --depth;
+    }
+    return gains[0];
 }
 
 std::string wdl_to_string(syzygy::WdlOutcome outcome) {
