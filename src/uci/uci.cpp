@@ -20,6 +20,8 @@
 
 namespace engine {
 
+const std::vector<std::string>& bench_positions();
+
 namespace {
 
 Board g_board;
@@ -52,6 +54,15 @@ std::string g_syzygy_path;
 int g_syzygy_probe_depth = 1;
 int g_syzygy_probe_limit = 7;
 bool g_syzygy_rule50 = true;
+
+struct UciLiteInfo {
+    int depth = 0;
+    int score = 0;
+    uint64_t nodes = 0;
+    uint64_t nps = 0;
+    int time_ms = 0;
+    std::string pv;
+};
 
 void ensure_nnue_loaded() {
     if (!g_use_nnue) return;
@@ -121,6 +132,30 @@ std::string format_score(int score) {
         return std::string("mate ") + std::to_string(mate);
     }
     return std::string("cp ") + std::to_string(score);
+}
+
+std::string pv_to_string(const Board& base, const std::vector<Move>& pv) {
+    if (pv.empty()) return {};
+    Board copy = base;
+    std::vector<Board::State> states;
+    states.reserve(pv.size());
+    std::string out;
+    bool first = true;
+    for (Move mv : pv) {
+        if (mv == MOVE_NONE) break;
+        std::string uci = copy.move_to_uci(mv);
+        if (uci == "0000") break;
+        if (!first) out.push_back(' ');
+        first = false;
+        out += uci;
+        Board::State st;
+        copy.apply_move(mv, st);
+        states.push_back(st);
+    }
+    for (auto it = states.rbegin(); it != states.rend(); ++it) {
+        copy.undo_move(*it);
+    }
+    return out;
 }
 
 } // namespace
@@ -272,27 +307,19 @@ void Uci::cmd_go(const std::string& s) {
     sync_search_options();
 
     g_search.set_info_callback([&](const Search::Info& info) {
-        uint64_t nps = 0;
-        if (info.time_ms > 0) {
-            nps = info.nodes * 1000ULL / static_cast<uint64_t>(info.time_ms);
-        }
+        UciLiteInfo lite;
+        lite.depth = info.depth;
+        lite.score = info.score;
+        lite.nodes = info.nodes;
+        lite.time_ms = info.time_ms;
+        lite.nps = info.time_ms > 0 ? info.nodes * 1000ULL / static_cast<uint64_t>(info.time_ms) : 0;
+        lite.pv = pv_to_string(g_board, info.pv);
 
-        std::cout << "info depth " << info.depth << " score " << format_score(info.score)
-                  << " nodes " << info.nodes << " time " << info.time_ms << " nps " << nps
-                  << " pv";
-        Board pv_board = g_board;
-        std::vector<Board::State> pv_states;
-        pv_states.reserve(info.pv.size());
-        for (Move mv : info.pv) {
-            std::string uci = pv_board.move_to_uci(mv);
-            if (uci == "0000") break;
-            std::cout << ' ' << uci;
-            Board::State pv_state;
-            pv_board.apply_move(mv, pv_state);
-            pv_states.push_back(pv_state);
-        }
-        for (auto it = pv_states.rbegin(); it != pv_states.rend(); ++it) {
-            pv_board.undo_move(*it);
+        std::cout << "info depth " << lite.depth << " score " << format_score(lite.score)
+                  << " nodes " << lite.nodes << " time " << lite.time_ms << " nps "
+                  << lite.nps;
+        if (!lite.pv.empty()) {
+            std::cout << " pv " << lite.pv;
         }
         std::cout << "\n" << std::flush;
     });
@@ -366,9 +393,17 @@ void Uci::cmd_bench(const std::string& s) {
     auto tokens = split(s);
     int depth = 8;
     int threads = g_threads;
+    bool explicit_threads = false;
     for (size_t i = 1; i < tokens.size(); ++i) {
         if (tokens[i] == "depth" && i + 1 < tokens.size()) depth = std::stoi(tokens[i + 1]);
-        if (tokens[i] == "threads" && i + 1 < tokens.size()) threads = std::stoi(tokens[i + 1]);
+        if (tokens[i] == "threads" && i + 1 < tokens.size()) {
+            threads = std::stoi(tokens[i + 1]);
+            explicit_threads = true;
+        }
+    }
+
+    if (!explicit_threads && g_threads == 1) {
+        threads = std::max(1, g_default_threads);
     }
 
     int previous_threads = g_threads;
@@ -379,16 +414,23 @@ void Uci::cmd_bench(const std::string& s) {
     lim.depth = depth;
 
     auto start = std::chrono::steady_clock::now();
-    auto result = g_search.find_bestmove(g_board, lim);
+    uint64_t total_nodes = 0;
+
+    Board saved_board = g_board;
+    for (const auto& fen : bench_positions()) {
+        g_board.set_fen(fen);
+        auto result = g_search.find_bestmove(g_board, lim);
+        total_nodes += result.nodes;
+    }
+    g_board = saved_board;
+
     auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                           std::chrono::steady_clock::now() - start)
                           .count();
+    uint64_t nps = elapsed_ms > 0 ? total_nodes * 1000ULL / static_cast<uint64_t>(elapsed_ms) : 0;
 
-    std::cout << "bench depth " << depth << " nodes " << result.nodes << " time " << elapsed_ms
-              << " nps "
-              << (elapsed_ms > 0 ? result.nodes * 1000ULL / static_cast<uint64_t>(elapsed_ms)
-                                 : 0)
-              << "\n";
+    std::cout << "bench depth " << depth << " nodes " << total_nodes << " time " << elapsed_ms
+              << " nps " << nps << "\n";
 
     g_threads = previous_threads;
     sync_search_options();

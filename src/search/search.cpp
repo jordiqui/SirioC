@@ -6,6 +6,7 @@
 #include "engine/syzygy/syzygy.hpp"
 #include "tbprobe.h"
 #include "engine/util/time.hpp"
+#include "nodes.h"
 
 #include <algorithm>
 #include <array>
@@ -394,16 +395,7 @@ void Search::set_info_callback(std::function<void(const Info&)> cb) {
 
 void Search::set_threads(int threads) { threads_ = std::max(1, threads); }
 
-void Search::set_hash(int megabytes) {
-    size_t bytes = static_cast<size_t>(std::max(1, megabytes)) * 1024ULL * 1024ULL;
-    size_t entry_size = sizeof(TTEntry);
-    size_t count = 1;
-    while ((count * entry_size) < bytes && count < (1ULL << 26)) {
-        count <<= 1;
-    }
-    tt_.assign(count, {});
-    tt_mask_ = count - 1;
-}
+void Search::set_hash(int megabytes) { tt_.resize(static_cast<size_t>(std::max(1, megabytes))); }
 
 void Search::stop() { stop_.store(true, std::memory_order_relaxed); }
 
@@ -455,7 +447,9 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
             td.reset();
         }
     }
-    nodes_.configure(thread_count);
+    init_nodes(thread_count);
+    publish_nodes_relaxed();
+    tt_.new_search();
     thread_data_thread_count_ = thread_count;
     thread_data_position_key_ = position_key;
     thread_data_initialized_ = true;
@@ -520,7 +514,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
                     result.depth = depth;
                     result.score = tb_score;
                     result.is_mate = std::abs(tb_score) >= kMateThreshold;
-                    result.nodes = nodes_.total_nodes();
+                    result.nodes = publish_nodes_relaxed();
                     result.time_ms = static_cast<int>(
                         std::chrono::duration_cast<std::chrono::milliseconds>(
                             std::chrono::steady_clock::now() - start)
@@ -549,7 +543,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
             attempted_root_tb = true;
         }
 
-        tuning_.begin_iteration(nodes_.total_nodes(), std::chrono::steady_clock::now());
+        tuning_.begin_iteration(total_nodes_relaxed(), std::chrono::steady_clock::now());
 
         int alpha_window = -kInfiniteScore;
         int beta_window = kInfiniteScore;
@@ -661,7 +655,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
                     Info info;
                     info.depth = depth;
                     info.score = best_score;
-                    info.nodes = nodes_.total_nodes();
+                    info.nodes = publish_nodes_relaxed();
                     info.time_ms = static_cast<int>(
                         std::chrono::duration_cast<std::chrono::milliseconds>(
                             std::chrono::steady_clock::now() - start)
@@ -681,7 +675,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
         }
 
         auto now = std::chrono::steady_clock::now();
-        tuning_.end_iteration(nodes_.total_nodes(), now);
+        tuning_.end_iteration(total_nodes_relaxed(), now);
         if (deadline_ && now >= *deadline_) {
             stop_.store(true, std::memory_order_relaxed);
             break;
@@ -694,7 +688,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
         }
     }
 
-    result.nodes = nodes_.total_nodes();
+    result.nodes = publish_nodes_relaxed();
     result.time_ms = static_cast<int>(
         std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - start)
@@ -715,7 +709,7 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
         return evaluate(board);
     }
 
-    uint64_t visited = nodes_.increment(thread_data.id);
+    uint64_t visited = inc_node(thread_data.id);
     if (nodes_limit_ >= 0 && visited >= static_cast<uint64_t>(nodes_limit_)) {
         stop_.store(true, std::memory_order_relaxed);
         return evaluate(board);
@@ -969,7 +963,7 @@ int Search::quiescence(Board& board, int alpha, int beta, int ply, ThreadData& t
         return evaluate(board);
     }
 
-    uint64_t visited = nodes_.increment(thread_data.id);
+    uint64_t visited = inc_node(thread_data.id);
     if (nodes_limit_ >= 0 && visited >= static_cast<uint64_t>(nodes_limit_)) {
         stop_.store(true, std::memory_order_relaxed);
         return evaluate(board);
@@ -999,55 +993,24 @@ bool Search::probe_tt(const Board& board, int depth, int alpha, int beta, Move& 
         tt_flag = TT_EXACT;
         return false;
     }
+
+    Move move = MOVE_NONE;
+    int stored_depth = -1;
+    int stored_flag = TT_EXACT;
+    int stored_eval = tt_eval;
     uint64_t key = board.zobrist_key();
-    const TTEntry* entry = nullptr;
-    {
-        std::shared_lock lock(tt_mutex_);
-        TTEntry const& slot = tt_[key & tt_mask_];
-        if (slot.key == key) entry = &slot;
-    }
-    if (!entry) {
-        tt_move = MOVE_NONE;
-        tt_depth = -1;
-        tt_flag = TT_EXACT;
-        return false;
-    }
-
-    tt_move = entry->move;
-    score = entry->score;
-    tt_depth = entry->depth;
-    tt_flag = entry->flag;
-    tt_eval = entry->eval;
-    if (score > kMateThreshold) score -= ply;
-    else if (score < -kMateThreshold) score += ply;
-
-    if (entry->depth >= depth) {
-        if (entry->flag == TT_EXACT) return true;
-        if (entry->flag == TT_LOWER && score >= beta) return true;
-        if (entry->flag == TT_UPPER && score <= alpha) return true;
-    }
-    return false;
+    bool usable = tt_.probe(key, depth, alpha, beta, ply, move, score, stored_depth, stored_flag,
+                            stored_eval);
+    tt_move = move;
+    tt_depth = stored_depth;
+    tt_flag = stored_flag;
+    tt_eval = stored_eval;
+    return usable;
 }
 
 void Search::store_tt(uint64_t key, Move best, int depth, int score, int flag, int ply, int eval) {
     if (tt_.empty()) return;
-    TTEntry entry;
-    entry.key = key;
-    entry.move = best;
-    entry.depth = static_cast<int8_t>(std::min(depth, 127));
-    entry.flag = static_cast<uint8_t>(flag);
-    entry.eval = static_cast<int16_t>(std::clamp(eval, -kInfiniteScore, kInfiniteScore));
-    if (score > kMateThreshold) score += ply;
-    else if (score < -kMateThreshold) score -= ply;
-    entry.score = static_cast<int16_t>(std::clamp(score, -kInfiniteScore, kInfiniteScore));
-
-    {
-        std::unique_lock lock(tt_mutex_);
-        TTEntry& slot = tt_[key & tt_mask_];
-        if (slot.depth <= entry.depth || slot.key != key) {
-            slot = entry;
-        }
-    }
+    tt_.store(key, best, depth, score, flag, ply, eval);
 }
 
 std::vector<Move> Search::order_moves(const Board& board, std::vector<Move>& moves, Move tt_move,
@@ -1122,18 +1085,8 @@ std::vector<Move> Search::extract_pv(const Board& board, Move best) const {
     states.push_back(state);
     for (int depth = 1; depth < kMaxPly; ++depth) {
         uint64_t key = current.zobrist_key();
-        TTEntry entry;
-        bool found = false;
-        {
-            std::shared_lock lock(tt_mutex_);
-            const TTEntry& slot = tt_[key & tt_mask_];
-            if (slot.key == key && slot.move != MOVE_NONE) {
-                entry = slot;
-                found = true;
-            }
-        }
-        if (!found) break;
-        Move next = entry.move;
+        Move next = tt_.probe_move(key);
+        if (next == MOVE_NONE) break;
         if (std::find(pv.begin(), pv.end(), next) != pv.end()) break;
         pv.push_back(next);
         Board::State next_state;
