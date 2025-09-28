@@ -41,6 +41,7 @@ public:
         int score = 0;
         uint64_t nodes = 0;
         int time_ms = 0;
+        uint64_t tbhits = 0;
         std::vector<Move> pv;
     };
 
@@ -150,6 +151,7 @@ private:
 
     TranspositionTable tt_;
     std::atomic<bool> stop_;
+    mutable std::atomic<uint64_t> tb_hits_{0};
     std::vector<ThreadData> thread_data_pool_;
     uint64_t thread_data_position_key_ = 0;
     size_t thread_data_thread_count_ = 0;

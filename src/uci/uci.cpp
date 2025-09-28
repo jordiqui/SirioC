@@ -387,6 +387,9 @@ void Uci::cmd_go(const std::string& s) {
             std::cout << "info depth " << lite.depth << " score " << format_score(lite.score)
                       << " nodes " << lite.nodes << " time " << lite.time_ms << " nps "
                       << lite.nps;
+            if (info.tbhits > 0) {
+                std::cout << " tbhits " << info.tbhits;
+            }
             if (!lite.pv.empty()) {
                 std::cout << " pv " << lite.pv;
             }
