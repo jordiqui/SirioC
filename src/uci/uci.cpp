@@ -77,6 +77,8 @@ struct UciLiteInfo {
     int time_ms = 0;
     int hashfull = -1;
     std::string pv;
+    bool is_progress = false;
+    uint64_t tbhits = 0;
 };
 
 void ensure_nnue_loaded() {
@@ -384,7 +386,24 @@ void Uci::cmd_go(const std::string& s) {
                            ? info.nodes * 1000ULL / static_cast<uint64_t>(info.time_ms)
                            : 0;
             lite.hashfull = info.hashfull;
+            lite.is_progress = info.is_progress;
+            lite.tbhits = info.tbhits;
             lite.pv = pv_to_string(board_copy, info.pv);
+
+            if (lite.is_progress) {
+                std::cout << "info string searching depth " << lite.depth
+                          << " score " << format_score(lite.score) << " nodes " << lite.nodes
+                          << " time " << lite.time_ms << " nps " << lite.nps;
+                if (lite.hashfull >= 0) {
+                    std::cout << " hashfull " << lite.hashfull;
+                }
+                std::cout << " tbhits " << lite.tbhits;
+                if (!lite.pv.empty()) {
+                    std::cout << " pv " << lite.pv;
+                }
+                std::cout << "\n" << std::flush;
+                return;
+            }
 
             std::cout << "info depth " << lite.depth << " score " << format_score(lite.score)
                       << " nodes " << lite.nodes << " time " << lite.time_ms << " nps "
@@ -392,9 +411,7 @@ void Uci::cmd_go(const std::string& s) {
             if (lite.hashfull >= 0) {
                 std::cout << " hashfull " << lite.hashfull;
             }
-            if (info.tbhits > 0) {
-                std::cout << " tbhits " << info.tbhits;
-            }
+            std::cout << " tbhits " << lite.tbhits;
             if (!lite.pv.empty()) {
                 std::cout << " pv " << lite.pv;
             }

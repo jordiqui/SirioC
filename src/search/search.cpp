@@ -902,8 +902,26 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
 
     bool attempted_root_tb = false;
 
+    bool unlimited_search = (target_time_ms_ < 0 && !deadline_ && nodes_limit_ < 0);
+
     for (int depth = 1; depth <= depth_limit; ++depth) {
         if (stop_.load(std::memory_order_relaxed)) break;
+
+        if (unlimited_search && info_callback_) {
+            Info progress;
+            progress.is_progress = true;
+            progress.depth = depth;
+            progress.score = result.score;
+            progress.nodes = total_nodes_relaxed();
+            progress.time_ms = static_cast<int>(
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - start)
+                    .count());
+            progress.hashfull = tt_.empty() ? -1 : tt_.hashfull();
+            progress.tbhits = tb_hits_.load(std::memory_order_relaxed);
+            progress.pv = result.pv;
+            info_callback_(progress);
+        }
 
         if (!attempted_root_tb && syzygy_config_.enabled && !syzygy_config_.path.empty() &&
             depth >= syzygy_config_.probe_depth) {
@@ -1047,6 +1065,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
                 result.depth = depth;
                 result.score = best_score;
                 result.is_mate = std::abs(best_score) >= kMateThreshold;
+                result.pv = extract_pv(board, best_move);
 
                 aspiration_delta = std::max(kAspirationWindow / 2, local_delta / 2);
                 fail_high_streak = 0;
@@ -1064,6 +1083,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
                     info.hashfull = tt_.empty() ? -1 : tt_.hashfull();
                     info.tbhits = tb_hits_.load(std::memory_order_relaxed);
                     info.pv = extract_pv(board, best_move);
+                    info.is_progress = false;
                     info_callback_(info);
                 }
                 break;
