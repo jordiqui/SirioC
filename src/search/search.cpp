@@ -13,8 +13,10 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <iostream>
 #include <limits>
 #include <mutex>
+#include <sstream>
 #include <thread>
 #include <atomic>
 #include <vector>
@@ -84,6 +86,47 @@ int static_exchange_eval(const Board& board, Move move) {
     char mover = board.piece_on(move_from(move));
     int gain = piece_value(captured) - piece_value(mover);
     return gain;
+}
+
+std::string wdl_to_string(syzygy::WdlOutcome outcome) {
+    switch (outcome) {
+    case syzygy::WdlOutcome::Win: return "win";
+    case syzygy::WdlOutcome::CursedWin: return "cursed-win";
+    case syzygy::WdlOutcome::Draw: return "draw";
+    case syzygy::WdlOutcome::BlessedLoss: return "blessed-loss";
+    case syzygy::WdlOutcome::Loss: return "loss";
+    }
+    return "unknown";
+}
+
+int tablebase_score(const syzygy::TB::ProbeResult& probe,
+                    const syzygy::TBConfig& config) {
+    auto mate_score = [](bool winning, int distance) {
+        int d = std::max(1, distance);
+        int capped = std::min(kMateValue - 1, d);
+        int score = kMateValue - capped;
+        return winning ? score : -score;
+    };
+
+    switch (probe.wdl) {
+    case syzygy::WdlOutcome::Win: {
+        int dist = probe.dtz ? std::max(1, std::abs(*probe.dtz)) : 1;
+        return mate_score(true, dist);
+    }
+    case syzygy::WdlOutcome::Loss: {
+        int dist = probe.dtz ? std::max(1, std::abs(*probe.dtz)) : 1;
+        return mate_score(false, dist);
+    }
+    case syzygy::WdlOutcome::Draw:
+        return 0;
+    case syzygy::WdlOutcome::CursedWin:
+        if (config.use_rule50) return 0;
+        return mate_score(true, probe.dtz ? std::max(1, std::abs(*probe.dtz)) : 1);
+    case syzygy::WdlOutcome::BlessedLoss:
+        if (config.use_rule50) return 0;
+        return mate_score(false, probe.dtz ? std::max(1, std::abs(*probe.dtz)) : 1);
+    }
+    return 0;
 }
 
 } // namespace
@@ -271,24 +314,12 @@ void Search::set_hash(int megabytes) {
 
 void Search::stop() { stop_.store(true, std::memory_order_relaxed); }
 
-void Search::set_use_syzygy(bool enable) {
-    use_syzygy_ = enable;
-    if (!enable) {
-        syzygy::shutdown();
-    } else if (!syzygy_path_.empty()) {
-        syzygy::init(syzygy_path_);
-    }
-}
-
-void Search::set_syzygy_path(std::string path) {
-    syzygy_path_ = std::move(path);
-    if (!use_syzygy_) {
-        return;
-    }
-    if (syzygy_path_.empty()) {
+void Search::set_syzygy_config(syzygy::TBConfig config) {
+    syzygy_config_ = std::move(config);
+    if (!syzygy_config_.enabled || syzygy_config_.path.empty()) {
         syzygy::shutdown();
     } else {
-        syzygy::init(syzygy_path_);
+        syzygy::configure(syzygy_config_);
     }
 }
 
@@ -377,8 +408,49 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
     int fail_high_streak = 0;
     int fail_low_streak = 0;
 
+    bool attempted_root_tb = false;
+
     for (int depth = 1; depth <= depth_limit; ++depth) {
         if (stop_.load(std::memory_order_relaxed)) break;
+
+        if (!attempted_root_tb && syzygy_config_.enabled && !syzygy_config_.path.empty() &&
+            depth >= syzygy_config_.probe_depth) {
+            int tb_limit = syzygy_config_.probe_limit;
+            if (tb_limit < 0 || syzygy::TB::pieceCount(board) <= tb_limit) {
+                if (auto tb = syzygy::TB::probePosition(board, syzygy_config_, true)) {
+                    int tb_score = tablebase_score(*tb, syzygy_config_);
+                    result.bestmove = tb->best_move.value_or(MOVE_NONE);
+                    result.depth = depth;
+                    result.score = tb_score;
+                    result.is_mate = std::abs(tb_score) >= kMateThreshold;
+                    result.nodes = nodes_.load(std::memory_order_relaxed);
+                    result.time_ms = static_cast<int>(
+                        std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::steady_clock::now() - start)
+                            .count());
+                    result.pv.clear();
+                    if (tb->best_move) {
+                        result.pv.push_back(*tb->best_move);
+                    }
+
+                    std::ostringstream oss;
+                    oss << "info string Syzygy hit wdl " << wdl_to_string(tb->wdl);
+                    if (tb->dtz) {
+                        oss << " dtz " << *tb->dtz;
+                    }
+                    if (tb->best_move) {
+                        oss << " move " << board.move_to_uci(*tb->best_move);
+                    }
+                    std::cout << oss.str() << '\n' << std::flush;
+
+                    deadline_.reset();
+                    target_time_ms_ = -1;
+                    nodes_limit_ = -1;
+                    return result;
+                }
+            }
+            attempted_root_tb = true;
+        }
 
         tuning_.begin_iteration(nodes_.load(std::memory_order_relaxed),
                                 std::chrono::steady_clock::now());
@@ -560,9 +632,13 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
 
     if (depth <= 0) { return quiescence(board, alpha, beta, ply, thread_data); }
 
+ codex/update-search-for-tbconfig-and-probes
+    if (auto tb = probe_syzygy(board, depth, false)) return *tb;
+
     if (use_syzygy_ && depth <= syzygy_probe_depth_) {
         if (auto tb = probe_syzygy(board)) return *tb;
     }
+ main
 
     int static_eval = evaluate(board);
 
@@ -985,6 +1061,15 @@ int Search::evaluate(const Board& board) const {
     return eval::evaluate(board);
 }
 
+ codex/update-search-for-tbconfig-and-probes
+std::optional<int> Search::probe_syzygy(const Board& board, int depth,
+                                        bool root_probe) const {
+    if (!syzygy_config_.enabled || syzygy_config_.path.empty()) {
+        return std::nullopt;
+    }
+    if (depth < syzygy_config_.probe_depth) {
+        return std::nullopt;
+
 std::optional<int> Search::probe_syzygy(const Board& board) const {
     if (!use_syzygy_ || syzygy_probe_limit_ == 0) return std::nullopt;
 
@@ -1007,8 +1092,16 @@ std::optional<int> Search::probe_syzygy(const Board& board) const {
         return syzygy_50_move_rule_ ? 0 : (kMateValue - 1);
     case syzygy::WdlOutcome::BlessedLoss:
         return syzygy_50_move_rule_ ? 0 : (-kMateValue + 1);
+main
     }
-    return std::nullopt;
+    if (syzygy_config_.probe_limit >= 0 &&
+        syzygy::TB::pieceCount(board) > syzygy_config_.probe_limit) {
+        return std::nullopt;
+    }
+
+    auto probe = syzygy::TB::probePosition(board, syzygy_config_, root_probe);
+    if (!probe) return std::nullopt;
+    return tablebase_score(*probe, syzygy_config_);
 }
 
 } // namespace engine
