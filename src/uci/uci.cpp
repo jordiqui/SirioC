@@ -375,7 +375,13 @@ void Uci::cmd_go(const std::string& s) {
         g_search.set_info_callback(nullptr);
 
         if (result.bestmove == MOVE_NONE) {
-            std::cout << "bestmove (none)\n";
+            // UCI requires engines with no legal moves to report "bestmove 0000"
+            // (or "null") so that GUIs treat the search as finished instead of
+            // assuming the engine disconnected. Emitting the literal string
+            // "(none)" caused relay servers to drop SirioC after checkmates or
+            // stalemates, producing forfeits despite the engine completing the
+            // search. Use the standard 0000 placeholder to remain compliant.
+            std::cout << "bestmove 0000\n";
         } else {
             std::cout << "bestmove " << board_copy.move_to_uci(result.bestmove) << "\n";
         }

@@ -57,9 +57,9 @@ def assert_bestmove_is_legal(engine_path, helper_path, fen, position_cmd, expect
             raise AssertionError(
                 f"Expected no legal moves but helper produced: {moves}\nPosition: {position_cmd}"
             )
-        if bestmove != "(none)":
+        if bestmove not in {"0000", "(none)"}:
             raise AssertionError(
-                f"Engine should report (none) but returned {bestmove}\nOutput:\n{output}"
+                f"Engine should report 0000 (or historical (none)) but returned {bestmove}\nOutput:\n{output}"
             )
         return
 
