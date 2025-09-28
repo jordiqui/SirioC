@@ -63,6 +63,10 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
 cmake --build build -j
 ```
 
+After configuring the project on any platform, invoking `cmake --build` without
+errors verifies that the code base is free from syntax or linkage issues in the
+current configuration.
+
 ## Run (UCI)
 
 ```bash
@@ -121,6 +125,20 @@ fast inference once the NNUE evaluator is connected. Until incremental NNUE
 updates land, the classical evaluation remains the default, but lightweight
 text-based `.nnue` networks now ship with the engine so the UCI `UseNNUE`
 option immediately loads a simple neural blend on start-up.
+
+## Testing
+
+SirioC ships with a set of regression and smoke tests that cover move
+generation, evaluation heuristics, UCI command handling, and the bench harness.
+Once the project has been configured as described above, run the suite with:
+
+```bash
+cd build
+ctest
+```
+
+All tests should report `Passed`, confirming that the previously integrated
+features continue to behave as expected.
 
 ### Engine influences
 
