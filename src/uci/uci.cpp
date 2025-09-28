@@ -389,13 +389,11 @@ void Uci::cmd_go(const std::string& s) {
             std::cout << "info depth " << lite.depth << " score " << format_score(lite.score)
                       << " nodes " << lite.nodes << " time " << lite.time_ms << " nps "
                       << lite.nps;
- codex/expand-engine-search-info-for-hashfull
             if (lite.hashfull >= 0) {
                 std::cout << " hashfull " << lite.hashfull;
-=======
+            }
             if (info.tbhits > 0) {
                 std::cout << " tbhits " << info.tbhits;
- main
             }
             if (!lite.pv.empty()) {
                 std::cout << " pv " << lite.pv;
