@@ -159,6 +159,7 @@ private:
     std::array<char, 64> squares_{};
     nnue::Accumulator accumulator_{};
     std::vector<State> history_{};
+    int ply_from_root_ = 0;
 };
 
 } // namespace engine

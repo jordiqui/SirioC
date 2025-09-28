@@ -235,6 +235,7 @@ bool Board::set_fen(const std::string& fen) {
     stm_white_ = stm_white;
     last_fen_ = fen;
     history_.clear();
+    ply_from_root_ = 0;
     accumulator_.reset(*this);
     return true;
 }
@@ -253,6 +254,7 @@ bool Board::make_move(Move m) {
             State state;
             apply_move(move, state);
             history_.push_back(state);
+            ply_from_root_ = 0;
             return true;
         }
     }
@@ -266,6 +268,7 @@ bool Board::make_move_uci(const std::string& uci) {
             State state;
             apply_move(move, state);
             history_.push_back(state);
+            ply_from_root_ = 0;
             return true;
         }
     }
@@ -294,6 +297,7 @@ Board Board::after_move(Move move) const {
     State state;
     copy.apply_move(move, state);
     copy.history_.push_back(state);
+    copy.ply_from_root_ = 0;
     return copy;
 }
 
@@ -390,7 +394,7 @@ Move Board::convertFromTbMove(TbMove move, bool enPassantHint) const {
     return ::engine::make_move(from, to, promo, capture, doublePawn, enpassant, castling);
 }
 
-int Board::plyFromRoot() const { return static_cast<int>(history_.size()); }
+int Board::plyFromRoot() const { return ply_from_root_; }
 
 bool Board::inCheck() const { return side_to_move_in_check(); }
 

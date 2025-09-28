@@ -523,6 +523,7 @@ void Board::apply_move(Move move, State& state) {
     if (stm_white_) {
         ++fullmove_number_;
     }
+    ++ply_from_root_;
 }
 
 void Board::apply_null_move(State& state) {
@@ -543,9 +544,13 @@ void Board::apply_null_move(State& state) {
     if (stm_white_) {
         ++fullmove_number_;
     }
+    ++ply_from_root_;
 }
 
 void Board::undo_move(const State& state) {
+    if (ply_from_root_ > 0) {
+        --ply_from_root_;
+    }
     if (state.was_null_move) {
         castling_rights_ = state.prev_castling_rights;
         en_passant_square_ = state.prev_en_passant_square;
