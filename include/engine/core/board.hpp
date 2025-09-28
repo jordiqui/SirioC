@@ -46,6 +46,8 @@ public:
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
     Board();
+    Board(const Board& other);
+    Board& operator=(const Board& other);
     void set_startpos();
     bool set_fen(const std::string& fen);
     bool apply_moves_uci(const std::vector<std::string>& uci_moves);

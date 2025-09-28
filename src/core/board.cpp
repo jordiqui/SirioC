@@ -185,6 +185,37 @@ bool parse_en_passant_field(const std::string& field, int& square) {
 
 Board::Board() { set_startpos(); }
 
+Board::Board(const Board& other)
+    : stm_white_(other.stm_white_),
+      piece_bitboards_(other.piece_bitboards_),
+      occupancy_(other.occupancy_),
+      castling_rights_(other.castling_rights_),
+      en_passant_square_(other.en_passant_square_),
+      halfmove_clock_(other.halfmove_clock_),
+      fullmove_number_(other.fullmove_number_),
+      last_fen_(other.last_fen_),
+      squares_(other.squares_),
+      accumulator_(other.accumulator_),
+      history_() {}
+
+Board& Board::operator=(const Board& other) {
+    if (this == &other) return *this;
+
+    stm_white_ = other.stm_white_;
+    piece_bitboards_ = other.piece_bitboards_;
+    occupancy_ = other.occupancy_;
+    castling_rights_ = other.castling_rights_;
+    en_passant_square_ = other.en_passant_square_;
+    halfmove_clock_ = other.halfmove_clock_;
+    fullmove_number_ = other.fullmove_number_;
+    last_fen_ = other.last_fen_;
+    squares_ = other.squares_;
+    accumulator_ = other.accumulator_;
+    history_.clear();
+
+    return *this;
+}
+
 void Board::set_startpos() { set_fen(std::string(kStartposFEN)); }
 
 bool Board::set_fen(const std::string& fen) {
