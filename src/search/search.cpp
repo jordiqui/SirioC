@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <bit>
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
@@ -338,6 +339,12 @@ void Search::set_nnue_evaluator(const nnue::Evaluator* evaluator) { nnue_eval_ =
 
 void Search::set_use_nnue(bool enable) { use_nnue_eval_ = enable; }
 
+void Search::set_syzygy_probe_depth(int depth) { syzygy_probe_depth_ = std::clamp(depth, 1, 100); }
+
+void Search::set_syzygy_50_move_rule(bool enable) { syzygy_50_move_rule_ = enable; }
+
+void Search::set_syzygy_probe_limit(int limit) { syzygy_probe_limit_ = std::clamp(limit, 0, 7); }
+
 Search::Result Search::find_bestmove(Board& board, const Limits& lim) {
     stop_.store(false, std::memory_order_relaxed);
     return search_position(board, lim);
@@ -625,7 +632,13 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
 
     if (depth <= 0) { return quiescence(board, alpha, beta, ply, thread_data); }
 
+ codex/update-search-for-tbconfig-and-probes
     if (auto tb = probe_syzygy(board, depth, false)) return *tb;
+
+    if (use_syzygy_ && depth <= syzygy_probe_depth_) {
+        if (auto tb = probe_syzygy(board)) return *tb;
+    }
+ main
 
     int static_eval = evaluate(board);
 
@@ -1048,6 +1061,7 @@ int Search::evaluate(const Board& board) const {
     return eval::evaluate(board);
 }
 
+ codex/update-search-for-tbconfig-and-probes
 std::optional<int> Search::probe_syzygy(const Board& board, int depth,
                                         bool root_probe) const {
     if (!syzygy_config_.enabled || syzygy_config_.path.empty()) {
@@ -1055,6 +1069,30 @@ std::optional<int> Search::probe_syzygy(const Board& board, int depth,
     }
     if (depth < syzygy_config_.probe_depth) {
         return std::nullopt;
+
+std::optional<int> Search::probe_syzygy(const Board& board) const {
+    if (!use_syzygy_ || syzygy_probe_limit_ == 0) return std::nullopt;
+
+    const auto& occupancy = board.occupancy();
+    if (std::popcount(occupancy[Board::OCC_BOTH]) > syzygy_probe_limit_) {
+        return std::nullopt;
+    }
+
+    auto result = syzygy::probe_wdl(board);
+    if (!result) return std::nullopt;
+
+    switch (result->wdl) {
+    case syzygy::WdlOutcome::Win:
+        return kMateValue - 1;
+    case syzygy::WdlOutcome::Loss:
+        return -kMateValue + 1;
+    case syzygy::WdlOutcome::Draw:
+        return 0;
+    case syzygy::WdlOutcome::CursedWin:
+        return syzygy_50_move_rule_ ? 0 : (kMateValue - 1);
+    case syzygy::WdlOutcome::BlessedLoss:
+        return syzygy_50_move_rule_ ? 0 : (-kMateValue + 1);
+main
     }
     if (syzygy_config_.probe_limit >= 0 &&
         syzygy::TB::pieceCount(board) > syzygy_config_.probe_limit) {

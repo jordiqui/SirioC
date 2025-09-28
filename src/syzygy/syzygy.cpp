@@ -1,7 +1,7 @@
 #include "engine/syzygy/syzygy.hpp"
 
 #include "engine/core/board.hpp"
-#include "engine/syzygy/tbprobe.h"
+#include "tbprobe.h"
 
 #include <atomic>
 #include <bit>

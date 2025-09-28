@@ -52,6 +52,9 @@ public:
     void set_eval_file_small(std::string path);
     void set_nnue_evaluator(const nnue::Evaluator* evaluator);
     void set_use_nnue(bool enable);
+    void set_syzygy_probe_depth(int depth);
+    void set_syzygy_50_move_rule(bool enable);
+    void set_syzygy_probe_limit(int limit);
 
 private:
     struct TTEntry {
@@ -154,6 +157,9 @@ private:
     int move_overhead_ms_ = 10;
     std::string eval_file_ = "nn-1c0000000000.nnue";
     std::string eval_file_small_ = "nn-37f18f62d772.nnue";
+    int syzygy_probe_depth_ = 1;
+    bool syzygy_50_move_rule_ = true;
+    int syzygy_probe_limit_ = 7;
     std::optional<std::chrono::steady_clock::time_point> deadline_;
     const nnue::Evaluator* nnue_eval_ = nullptr;
     bool use_nnue_eval_ = false;
