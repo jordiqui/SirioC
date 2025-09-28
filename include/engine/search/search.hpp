@@ -41,6 +41,7 @@ public:
         int score = 0;
         uint64_t nodes = 0;
         int time_ms = 0;
+        int hashfull = -1;
         std::vector<Move> pv;
     };
 
