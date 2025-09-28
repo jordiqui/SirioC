@@ -1,4 +1,5 @@
 #include "engine/search/search.hpp"
+#include "engine/search/see.hpp"
 
 #include "engine/core/board.hpp"
 #include "engine/eval/eval.hpp"
@@ -314,7 +315,7 @@ bool has_non_pawn_material(const Board& board, bool white) {
     return false;
 }
 
-int static_exchange_eval(const Board& board, Move move) {
+int static_exchange_eval_impl(const Board& board, Move move) {
     int from = move_from(move);
     int to = move_to(move);
     char moving_piece = board.piece_on(from);
@@ -504,12 +505,18 @@ int tablebase_score(const syzygy::TB::ProbeResult& probe,
 
 } // namespace
 
+int static_exchange_eval(const Board& board, Move move) {
+    return static_exchange_eval_impl(board, move);
+}
+
 Search::ThreadData::ThreadData() { reset(); }
 
 void Search::ThreadData::reset() {
     killers.assign(kMaxPly, {MOVE_NONE, MOVE_NONE});
     history.fill(0);
     countermoves.fill(MOVE_NONE);
+    quiescence_captures.clear();
+    quiescence_checks.clear();
 }
 
 void Search::AdaptiveTuning::reset() {
@@ -1360,10 +1367,58 @@ int Search::quiescence(Board& board, int alpha, int beta, int ply, ThreadData& t
     if (stand_pat > alpha) alpha = stand_pat;
 
     auto moves = board.generate_legal_moves();
+    auto& capture_entries = thread_data.quiescence_captures;
+    auto& quiet_checks = thread_data.quiescence_checks;
+    capture_entries.clear();
+    quiet_checks.clear();
+    capture_entries.reserve(moves.size());
+    quiet_checks.reserve(moves.size());
+
     for (Move move : moves) {
-        if (!move_is_capture(move) && move_promo(move) == 0) continue;
+        bool is_capture = move_is_capture(move);
+        bool is_promo = move_promo(move) != 0;
+        if (is_capture || is_promo) {
+            int see = static_exchange_eval(board, move);
+            capture_entries.push_back({move, see});
+        } else {
+            quiet_checks.push_back(move);
+        }
+    }
+
+    std::sort(capture_entries.begin(), capture_entries.end(), [](const auto& lhs, const auto& rhs) {
+        if (lhs.see != rhs.see) return lhs.see > rhs.see;
+        return lhs.move < rhs.move;
+    });
+
+    for (const auto& entry : capture_entries) {
+        Move move = entry.move;
+        int see = entry.see;
+        Board::State state;
+        bool applied = false;
+        if (see < 0) {
+            board.apply_move(move, state);
+            applied = true;
+            if (!board.side_to_move_in_check()) {
+                board.undo_move(state);
+                continue;
+            }
+        }
+        if (!applied) {
+            board.apply_move(move, state);
+        }
+        int score = -quiescence(board, -beta, -alpha, ply + 1, thread_data);
+        board.undo_move(state);
+        if (score >= beta) return score;
+        if (score > alpha) alpha = score;
+    }
+
+    for (Move move : quiet_checks) {
         Board::State state;
         board.apply_move(move, state);
+        if (!board.side_to_move_in_check()) {
+            board.undo_move(state);
+            continue;
+        }
         int score = -quiescence(board, -beta, -alpha, ply + 1, thread_data);
         board.undo_move(state);
         if (score >= beta) return score;
