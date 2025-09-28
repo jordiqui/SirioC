@@ -38,12 +38,12 @@ Board g_board;
 Search g_search;
 nnue::Evaluator g_eval;
 
-bool g_use_nnue = true;
-std::string g_eval_file = "nn-1c0000000000.nnue";
+bool g_use_nnue = false;
+std::string g_eval_file;
 std::string g_eval_file_small = "nn-37f18f62d772.nnue";
-int g_hash_mb = 64;
+int g_hash_mb = 16;
 
-constexpr int kThreadsMax = 256;
+constexpr int kThreadsMax = 2048;
 
 int detect_default_thread_count() {
     unsigned hw = std::thread::hardware_concurrency();
@@ -53,11 +53,11 @@ int detect_default_thread_count() {
 }
 
 const int g_default_threads = detect_default_thread_count();
-int g_threads = g_default_threads;
+int g_threads = 1;
 int g_numa_offset = 0;
-bool g_ponder = true;
+bool g_ponder = false;
 int g_multi_pv = 1;
-int g_move_overhead = 10;
+int g_move_overhead = 50;
 time::TimeConfig g_time_config;
 
 bool g_use_syzygy = false;
@@ -65,6 +65,9 @@ std::string g_syzygy_path;
 int g_syzygy_probe_depth = 1;
 int g_syzygy_probe_limit = 7;
 bool g_syzygy_rule50 = true;
+bool g_show_wdl = true;
+bool g_chess960 = false;
+int g_contempt = 0;
 
 struct UciLiteInfo {
     int depth = 0;
@@ -76,7 +79,7 @@ struct UciLiteInfo {
 };
 
 void ensure_nnue_loaded() {
-    if (!g_use_nnue) return;
+    if (!g_use_nnue || g_eval_file.empty()) return;
     if (!g_eval.loaded() || g_eval.loaded_path() != g_eval_file) {
         if (!g_eval.load_network(g_eval_file)) {
             std::cout << "info string Failed to load NNUE network '" << g_eval_file
@@ -100,17 +103,22 @@ void sync_search_options() {
     g_search.set_time_config(g_time_config);
     g_search.set_eval_file(g_eval_file);
     g_search.set_eval_file_small(g_eval_file_small);
+    g_search.set_show_wdl(g_show_wdl);
+    g_search.set_chess960(g_chess960);
+    g_search.set_contempt(g_contempt);
 
     syzygy::TBConfig tb_config;
-    tb_config.enabled = g_use_syzygy;
+    bool syzygy_enabled = g_use_syzygy && !g_syzygy_path.empty();
+    tb_config.enabled = syzygy_enabled;
     tb_config.path = g_syzygy_path;
     tb_config.probe_depth = g_syzygy_probe_depth;
     tb_config.probe_limit = g_syzygy_probe_limit;
     tb_config.use_rule50 = g_syzygy_rule50;
     g_search.set_syzygy_config(std::move(tb_config));
 
-    g_search.set_use_nnue(g_use_nnue);
-    g_search.set_nnue_evaluator(g_use_nnue ? &g_eval : nullptr);
+    bool use_nnue_eval = g_use_nnue && !g_eval_file.empty();
+    g_search.set_use_nnue(use_nnue_eval);
+    g_search.set_nnue_evaluator(use_nnue_eval ? &g_eval : nullptr);
 }
 
 std::vector<std::string> split(const std::string& s) {
@@ -223,39 +231,16 @@ void Uci::handle_line(const std::string& line) {
 void Uci::cmd_uci() {
     std::cout << "id name " << engine::kEngineName << " " << engine::kEngineVersion << "\n";
     std::cout << "id author Jorge Ruiz creditos Codex OpenAi\n";
-    std::cout << "option name Hash type spin default 64 min 1 max 4096\n";
-    std::cout << "option name Threads type spin default " << g_default_threads
-              << " min 1 max " << kThreadsMax << "\n";
-    std::cout << "option name NUMA Offset type spin default 0 min -1 max 32\n";
-    std::cout << "option name Ponder type check default true\n";
-    std::cout << "option name MultiPV type spin default 1 min 1 max 218\n";
-    std::cout << "option name UseNNUE type check default true\n";
-    std::cout << "option name EvalFile type string default nn-1c0000000000.nnue\n";
-    std::cout << "option name EvalFileSmall type string default nn-37f18f62d772.nnue\n";
-    std::cout << "option name Move Overhead type spin default 10 min 0 max 5000\n";
-    std::cout << "option name Time ExpectedFullMoves type spin default "
-              << g_time_config.expected_full_moves << " min 20 max 200\n";
-    std::cout << "option name Time MinMovesToGo type spin default "
-              << g_time_config.min_moves_to_go << " min 1 max 60\n";
-    std::cout << "option name Time MaxMovesToGo type spin default "
-              << g_time_config.max_moves_to_go << " min 20 max 160\n";
-    std::cout << "option name Time HealthyTimeThresholdMs type spin default "
-              << g_time_config.healthy_time_threshold_ms << " min 1000 max 600000\n";
-    std::cout << "option name Time HealthyBonusPercent type spin default "
-              << g_time_config.healthy_time_bonus_percent << " min 0 max 200\n";
-    std::cout << "option name Time PanicTimeMs type spin default " << g_time_config.panic_time_ms
-              << " min 1000 max 600000\n";
-    std::cout << "option name Time PanicSpendPercent type spin default "
-              << g_time_config.panic_spend_percent << " min 10 max 100\n";
-    std::cout << "option name Time IncrementReservePercent type spin default "
-              << g_time_config.increment_reserve_percent << " min 0 max 100\n";
-    std::cout << "option name Time MaxStretchPercent type spin default "
-              << g_time_config.max_stretch_percent << " min 100 max 600\n";
-    std::cout << "option name UseSyzygy type check default false\n";
+    std::cout << "option name Hash type spin default 16 min 2 max 33554432\n";
+    std::cout << "option name Threads type spin default 1 min 1 max 2048\n";
     std::cout << "option name SyzygyPath type string default \"\"\n";
-    std::cout << "option name SyzygyProbeDepth type spin default 1 min 0 max 128\n";
-    std::cout << "option name SyzygyProbeLimit type spin default 7 min 0 max 7\n";
-    std::cout << "option name Syzygy50MoveRule type check default true\n";
+    std::cout << "option name MultiPV type spin default 1 min 1 max 256\n";
+    std::cout << "option name Ponder type check default false\n";
+    std::cout << "option name UCI_ShowWDL type check default true\n";
+    std::cout << "option name UCI_Chess960 type check default false\n";
+    std::cout << "option name MoveOverhead type spin default 50 min 0 max 10000\n";
+    std::cout << "option name Contempt type spin default 0 min -100 max 100\n";
+    std::cout << "option name EvalFile type string default <empty>\n";
     std::cout << "uciok\n" << std::flush;
 }
 
@@ -295,78 +280,56 @@ void Uci::cmd_setoption(const std::string& s) {
 
             std::string value;
             if (value_pos < tokens.size() && value_pos + 1 < tokens.size()) {
-                value = tokens[value_pos + 1];
+                for (size_t j = value_pos + 1; j < tokens.size(); ++j) {
+                    if (!value.empty()) value.push_back(' ');
+                    value += tokens[j];
+                }
             }
 
             auto parse_bool = [](const std::string& v) {
                 return v.empty() || v == "true" || v == "1" || v == "on";
             };
 
-            if (name == "Hash" && !value.empty()) g_hash_mb = std::stoi(value);
+            if (name == "Hash" && !value.empty()) {
+                int parsed = std::stoi(value);
+                g_hash_mb = std::clamp(parsed, 2, 33554432);
+            }
             else if (name == "Threads" && !value.empty()) {
                 int parsed = std::stoi(value);
-                g_threads = std::clamp(parsed, 1, kThreadsMax);
+                g_threads = std::clamp(parsed, 1, 2048);
             }
-            else if (name == "NUMA Offset" && !value.empty()) g_numa_offset = std::stoi(value);
-            else if (name == "Ponder") g_ponder = parse_bool(value);
-            else if (name == "MultiPV" && !value.empty()) g_multi_pv = std::stoi(value);
-            else if (name == "UseNNUE") g_use_nnue = parse_bool(value);
-            else if (name == "EvalFile" && !value.empty()) g_eval_file = value;
-            else if (name == "EvalFileSmall" && !value.empty()) g_eval_file_small = value;
-            else if (name == "Move Overhead" && !value.empty()) g_move_overhead = std::stoi(value);
-            else if (name == "Time ExpectedFullMoves" && !value.empty()) {
+            else if (name == "SyzygyPath") {
+                g_syzygy_path = value;
+                g_use_syzygy = !g_syzygy_path.empty();
+            }
+            else if (name == "MultiPV" && !value.empty()) {
                 int parsed = std::stoi(value);
-                g_time_config.expected_full_moves = std::clamp(parsed, 20, 200);
+                g_multi_pv = std::clamp(parsed, 1, 256);
             }
-            else if (name == "Time MinMovesToGo" && !value.empty()) {
+            else if (name == "Ponder") {
+                g_ponder = parse_bool(value);
+            }
+            else if (name == "UCI_ShowWDL") {
+                g_show_wdl = parse_bool(value);
+            }
+            else if (name == "UCI_Chess960") {
+                g_chess960 = parse_bool(value);
+            }
+            else if (name == "MoveOverhead" && !value.empty()) {
                 int parsed = std::stoi(value);
-                g_time_config.min_moves_to_go = std::clamp(parsed, 1, 60);
+                g_move_overhead = std::clamp(parsed, 0, 10000);
             }
-            else if (name == "Time MaxMovesToGo" && !value.empty()) {
+            else if (name == "Contempt" && !value.empty()) {
                 int parsed = std::stoi(value);
-                g_time_config.max_moves_to_go = std::clamp(parsed, 20, 160);
+                g_contempt = std::clamp(parsed, -100, 100);
             }
-            else if (name == "Time HealthyTimeThresholdMs" && !value.empty()) {
-                int parsed = std::stoi(value);
-                g_time_config.healthy_time_threshold_ms = std::clamp(parsed, 1000, 600000);
+            else if (name == "EvalFile") {
+                g_eval_file = value;
+                g_use_nnue = !g_eval_file.empty();
             }
-            else if (name == "Time HealthyBonusPercent" && !value.empty()) {
-                int parsed = std::stoi(value);
-                g_time_config.healthy_time_bonus_percent = std::clamp(parsed, 0, 200);
-            }
-            else if (name == "Time PanicTimeMs" && !value.empty()) {
-                int parsed = std::stoi(value);
-                g_time_config.panic_time_ms = std::clamp(parsed, 1000, 600000);
-            }
-            else if (name == "Time PanicSpendPercent" && !value.empty()) {
-                int parsed = std::stoi(value);
-                g_time_config.panic_spend_percent = std::clamp(parsed, 10, 100);
-            }
-            else if (name == "Time IncrementReservePercent" && !value.empty()) {
-                int parsed = std::stoi(value);
-                g_time_config.increment_reserve_percent = std::clamp(parsed, 0, 100);
-            }
-            else if (name == "Time MaxStretchPercent" && !value.empty()) {
-                int parsed = std::stoi(value);
-                g_time_config.max_stretch_percent = std::clamp(parsed, 100, 600);
-            }
-            else if (name == "UseSyzygy") g_use_syzygy = parse_bool(value);
-            else if (name == "SyzygyPath" && !value.empty()) g_syzygy_path = value;
-            else if (name == "SyzygyProbeDepth" && !value.empty()) {
-                int parsed = std::stoi(value);
-                g_syzygy_probe_depth = std::clamp(parsed, 0, 128);
-            }
-            else if (name == "SyzygyProbeLimit" && !value.empty()) {
-                int parsed = std::stoi(value);
-                g_syzygy_probe_limit = std::clamp(parsed, 0, 7);
-            }
-            else if (name == "Syzygy50MoveRule") g_syzygy_rule50 = parse_bool(value);
 
             break;
         }
-    }
-    if (g_time_config.min_moves_to_go > g_time_config.max_moves_to_go) {
-        g_time_config.max_moves_to_go = g_time_config.min_moves_to_go;
     }
     sync_search_options();
 }

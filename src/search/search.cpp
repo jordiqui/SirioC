@@ -804,6 +804,12 @@ void Search::set_nnue_evaluator(const nnue::Evaluator* evaluator) { nnue_eval_ =
 
 void Search::set_use_nnue(bool enable) { use_nnue_eval_ = enable; }
 
+void Search::set_show_wdl(bool enable) { show_wdl_ = enable; }
+
+void Search::set_chess960(bool enable) { chess960_ = enable; }
+
+void Search::set_contempt(int value) { contempt_ = value; }
+
 Search::Result Search::find_bestmove(Board& board, const Limits& lim) {
     stop_.store(false, std::memory_order_relaxed);
     return search_position(board, lim);

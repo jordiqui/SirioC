@@ -60,6 +60,9 @@ public:
     void set_eval_file_small(std::string path);
     void set_nnue_evaluator(const nnue::Evaluator* evaluator);
     void set_use_nnue(bool enable);
+    void set_show_wdl(bool enable);
+    void set_chess960(bool enable);
+    void set_contempt(int value);
 
 private:
     struct ThreadData {
@@ -167,9 +170,9 @@ private:
     std::atomic<size_t> pending_tasks_{0};
     syzygy::TBConfig syzygy_config_{};
     int numa_offset_ = 0;
-    bool ponder_ = true;
+    bool ponder_ = false;
     int multi_pv_ = 1;
-    int move_overhead_ms_ = 10;
+    int move_overhead_ms_ = 50;
     time::TimeConfig time_config_{};
     std::string eval_file_ = "nn-1c0000000000.nnue";
     std::string eval_file_small_ = "nn-37f18f62d772.nnue";
@@ -181,6 +184,9 @@ private:
     std::chrono::steady_clock::time_point search_start_;
     std::function<void(const Info&)> info_callback_;
     AdaptiveTuning tuning_;
+    bool show_wdl_ = true;
+    bool chess960_ = false;
+    int contempt_ = 0;
 };
 
 } // namespace engine
