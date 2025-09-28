@@ -43,6 +43,9 @@ static int g_move_overhead = 10;
 static bool g_stop = false;
 static bool g_use_syzygy = false;
 static std::string g_syzygy_path;
+static int g_syzygy_probe_depth = 1;
+static bool g_syzygy_50_move_rule = true;
+static int g_syzygy_probe_limit = 7;
 
 static void ensure_nnue_loaded() {
     if (!g_use_nnue) return;
@@ -70,6 +73,9 @@ static void sync_search_options() {
     g_search.set_eval_file_small(g_eval_file_small);
     g_search.set_use_syzygy(g_use_syzygy);
     g_search.set_syzygy_path(g_syzygy_path);
+    g_search.set_syzygy_probe_depth(g_syzygy_probe_depth);
+    g_search.set_syzygy_50_move_rule(g_syzygy_50_move_rule);
+    g_search.set_syzygy_probe_limit(g_syzygy_probe_limit);
     g_search.set_use_nnue(g_use_nnue);
     g_search.set_nnue_evaluator(g_use_nnue ? &g_eval : nullptr);
 }
@@ -111,10 +117,15 @@ void Uci::cmd_uci() {
     std::cout << "option name Move Overhead type spin default 10 min 0 max 5000\n";
     std::cout << "option name UseSyzygy type check default false\n";
     std::cout << "option name SyzygyPath type string default \"\"\n";
+    std::cout << "option name SyzygyProbeDepth type spin default 1 min 1 max 100\n";
+    std::cout << "option name Syzygy50MoveRule type check default true\n";
+    std::cout << "option name SyzygyProbeLimit type spin default 7 min 0 max 7\n";
     std::cout << "uciok\n" << std::flush;
 }
 
 void Uci::cmd_isready() {
+    ensure_nnue_loaded();
+    sync_search_options();
     std::cout << "readyok\n" << std::flush;
 }
 
@@ -177,6 +188,15 @@ void Uci::cmd_setoption(const std::string& s) {
             else if (name == "Move Overhead" && !value.empty()) g_move_overhead = std::stoi(value);
             else if (name == "UseSyzygy") g_use_syzygy = parse_bool(value);
             else if (name == "SyzygyPath" && !value.empty()) g_syzygy_path = value;
+            else if (name == "SyzygyProbeDepth" && !value.empty()) {
+                int parsed = std::stoi(value);
+                g_syzygy_probe_depth = std::clamp(parsed, 1, 100);
+            }
+            else if (name == "Syzygy50MoveRule") g_syzygy_50_move_rule = parse_bool(value);
+            else if (name == "SyzygyProbeLimit" && !value.empty()) {
+                int parsed = std::stoi(value);
+                g_syzygy_probe_limit = std::clamp(parsed, 0, 7);
+            }
             break;
         }
     }
