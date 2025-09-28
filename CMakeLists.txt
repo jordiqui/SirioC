@@ -154,3 +154,7 @@ add_test(NAME go_command_responds_with_legal_move
                  $<TARGET_FILE:SirioC>
                  $<TARGET_FILE:legal_moves_cli>)
 add_test(NAME board_fen_tests COMMAND SirioCTests)
+add_test(NAME bench_smoke_test
+         COMMAND Python3::Interpreter
+                 ${CMAKE_SOURCE_DIR}/tests/test_bench.py
+                 $<TARGET_FILE:SirioC>)

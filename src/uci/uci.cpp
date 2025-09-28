@@ -12,6 +12,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <cstdint>
 #include <iostream>
 #include <sstream>
 #include <thread>
@@ -271,8 +272,14 @@ void Uci::cmd_go(const std::string& s) {
     sync_search_options();
 
     g_search.set_info_callback([&](const Search::Info& info) {
+        uint64_t nps = 0;
+        if (info.time_ms > 0) {
+            nps = info.nodes * 1000ULL / static_cast<uint64_t>(info.time_ms);
+        }
+
         std::cout << "info depth " << info.depth << " score " << format_score(info.score)
-                  << " nodes " << info.nodes << " time " << info.time_ms << " pv";
+                  << " nodes " << info.nodes << " time " << info.time_ms << " nps " << nps
+                  << " pv";
         Board pv_board = g_board;
         std::vector<Board::State> pv_states;
         pv_states.reserve(info.pv.size());
