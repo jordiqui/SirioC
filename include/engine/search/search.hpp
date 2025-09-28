@@ -44,6 +44,7 @@ public:
         int hashfull = -1;
         uint64_t tbhits = 0;
         std::vector<Move> pv;
+        bool is_progress = false;
     };
 
     Search();
