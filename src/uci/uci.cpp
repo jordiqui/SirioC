@@ -44,7 +44,19 @@ static bool g_stop = false;
 static bool g_use_syzygy = false;
 static std::string g_syzygy_path;
 
+static void ensure_nnue_loaded() {
+    if (!g_use_nnue) return;
+    if (!g_eval.loaded() || g_eval.loaded_path() != g_eval_file) {
+        if (!g_eval.load_network(g_eval_file)) {
+            std::cout << "info string Failed to load NNUE network '" << g_eval_file
+                      << "', disabling UseNNUE\n" << std::flush;
+            g_use_nnue = false;
+        }
+    }
+}
+
 static void sync_search_options() {
+    ensure_nnue_loaded();
     g_search.set_hash(g_hash_mb);
     g_search.set_threads(g_threads);
     g_search.set_numa_offset(g_numa_offset);
@@ -106,8 +118,7 @@ void Uci::cmd_isready() {
 void Uci::cmd_ucinewgame() {
     g_stop = false;
     g_board.set_startpos();
-    // (Re)load network optionally
-    if (g_use_nnue) g_eval.load_network(g_eval_file);
+    ensure_nnue_loaded();
     sync_search_options();
 }
 

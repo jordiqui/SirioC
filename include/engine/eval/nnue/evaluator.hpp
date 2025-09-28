@@ -13,10 +13,12 @@ public:
     bool load_network(const std::string& path);
     int eval_cp(const engine::Board& board) const;
     bool loaded() const noexcept { return loaded_; }
+    const std::string& loaded_path() const noexcept { return loaded_path_; }
 
 private:
     bool loaded_ = false;
     std::vector<std::uint8_t> raw_network_;
+    std::string loaded_path_{};
 };
 
 } // namespace engine::nnue
