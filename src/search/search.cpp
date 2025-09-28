@@ -819,6 +819,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
     Result result;
     auto start = std::chrono::steady_clock::now();
     search_start_ = start;
+    tb_hits_.store(0, std::memory_order_relaxed);
 
     size_t thread_count = static_cast<size_t>(std::max(1, threads_));
     bool thread_count_changed = thread_data_thread_count_ != thread_count;
@@ -1060,7 +1061,11 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
                         std::chrono::duration_cast<std::chrono::milliseconds>(
                             std::chrono::steady_clock::now() - start)
                             .count());
+codex/expand-engine-search-info-for-hashfull
                     info.hashfull = tt_.empty() ? -1 : tt_.hashfull();
+
+                    info.tbhits = tb_hits_.load(std::memory_order_relaxed);
+ main
                     info.pv = extract_pv(board, best_move);
                     info_callback_(info);
                 }
@@ -1570,6 +1575,7 @@ std::optional<int> Search::probe_syzygy(const Board& board, int depth,
 
     auto probe = syzygy::TB::probePosition(board, syzygy_config_, root_probe);
     if (!probe) return std::nullopt;
+    tb_hits_.fetch_add(1, std::memory_order_relaxed);
     return tablebase_score(*probe, syzygy_config_);
 }
 
