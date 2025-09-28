@@ -1,7 +1,10 @@
 #pragma once
 
+#include "engine/types.hpp"
+
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace engine {
 
@@ -9,22 +12,65 @@ class Board;
 
 namespace syzygy {
 
-enum class WdlOutcome : int {
-    Loss = 0,
-    BlessedLoss = 1,
-    Draw = 2,
-    CursedWin = 3,
-    Win = 4
+enum class TBProbe : uint8_t {
+    None = 0,
+    Wdl = 1 << 0,
+    Root = 1 << 1
 };
 
-struct ProbeResult {
-    WdlOutcome wdl = WdlOutcome::Draw;
+inline TBProbe operator|(TBProbe lhs, TBProbe rhs) {
+    return static_cast<TBProbe>(static_cast<uint8_t>(lhs) |
+                                static_cast<uint8_t>(rhs));
+}
+
+inline TBProbe operator&(TBProbe lhs, TBProbe rhs) {
+    return static_cast<TBProbe>(static_cast<uint8_t>(lhs) &
+                                static_cast<uint8_t>(rhs));
+}
+
+inline TBProbe& operator|=(TBProbe& lhs, TBProbe rhs) {
+    lhs = lhs | rhs;
+    return lhs;
+}
+
+inline bool any(TBProbe value, TBProbe mask) {
+    return static_cast<uint8_t>(value & mask) != 0;
+}
+
+struct TBConfig {
+    bool enabled = false;
+    std::string path;
+    int probeDepth = 0;
+    int probeLimit = 0;
+    bool useRule50 = true;
 };
 
-bool init(const std::string& path);
-void shutdown();
-bool is_available();
-std::optional<ProbeResult> probe_wdl(const Board& board);
+struct TBMoveInfo {
+    Move move = MOVE_NONE;
+    int score = 0;
+    int rank = 0;
+    int wdl = 0;
+    int dtz = 0;
+};
+
+struct TBResult {
+    TBProbe probe = TBProbe::None;
+    int wdl = 0;
+    int dtz = 0;
+    Move bestMove = MOVE_NONE;
+    int tbScore = 0;
+    std::vector<TBMoveInfo> moves;
+};
+
+namespace TB {
+
+bool init(const TBConfig& config);
+void release();
+int pieceCount();
+std::optional<TBResult> probePosition(const Board& board, TBProbe probeType,
+                                      int searchDepth);
+
+} // namespace TB
 
 } // namespace syzygy
 

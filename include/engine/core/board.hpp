@@ -4,8 +4,9 @@
 #include <string>
 #include <string_view>
 #include <vector>
-#include "engine/types.hpp"
 #include "engine/eval/nnue/accumulator.hpp"
+#include "engine/syzygy/tbprobe.h"
+#include "engine/types.hpp"
 
 namespace engine {
 
@@ -81,6 +82,26 @@ public:
     std::vector<Move> generate_legal_moves();
     std::string move_to_uci(Move move) const;
     Board after_move(Move move) const;
+    int countPiecesTotal() const;
+
+    struct FathomState {
+        uint64_t white = 0ULL;
+        uint64_t black = 0ULL;
+        uint64_t kings = 0ULL;
+        uint64_t queens = 0ULL;
+        uint64_t rooks = 0ULL;
+        uint64_t bishops = 0ULL;
+        uint64_t knights = 0ULL;
+        uint64_t pawns = 0ULL;
+        unsigned rule50 = 0;
+        unsigned castling = 0;
+        unsigned ep = 0;
+        bool whiteToMove = true;
+    };
+    FathomState exportToFathom() const;
+    Move convertFromTbMove(TbMove move, bool enPassantHint = false) const;
+    int plyFromRoot() const;
+    bool inCheck() const;
 
     // Accessors
     bool white_to_move() const { return stm_white_; }

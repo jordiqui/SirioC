@@ -44,6 +44,9 @@ public:
     void stop();
     void set_use_syzygy(bool enable);
     void set_syzygy_path(std::string path);
+    void set_syzygy_probe_depth(int depth);
+    void set_syzygy_probe_limit(int limit);
+    void set_syzygy_use_rule50(bool enable);
     void set_numa_offset(int offset);
     void set_ponder(bool enable);
     void set_multi_pv(int multi_pv);
@@ -134,7 +137,8 @@ private:
     void update_history(ThreadData& thread_data, Move move, int delta);
     std::vector<Move> extract_pv(const Board& board, Move best) const;
     int evaluate(const Board& board) const;
-    std::optional<int> probe_syzygy(const Board& board) const;
+    std::optional<int> probe_syzygy(const Board& board, int depth) const;
+    void update_syzygy();
 
     std::vector<TTEntry> tt_;
     size_t tt_mask_ = 0;
@@ -148,6 +152,9 @@ private:
     int threads_ = 1;
     bool use_syzygy_ = false;
     std::string syzygy_path_;
+    int syzygy_probe_depth_ = 0;
+    int syzygy_probe_limit_ = 0;
+    bool syzygy_use_rule50_ = true;
     int numa_offset_ = 0;
     bool ponder_ = true;
     int multi_pv_ = 1;

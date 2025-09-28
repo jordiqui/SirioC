@@ -4,6 +4,7 @@
 #include "engine/eval/eval.hpp"
 #include "engine/eval/nnue/evaluator.hpp"
 #include "engine/syzygy/syzygy.hpp"
+#include "engine/syzygy/tbprobe.h"
 #include "engine/util/time.hpp"
 
 #include <algorithm>
@@ -272,23 +273,27 @@ void Search::stop() { stop_.store(true, std::memory_order_relaxed); }
 
 void Search::set_use_syzygy(bool enable) {
     use_syzygy_ = enable;
-    if (!enable) {
-        syzygy::shutdown();
-    } else if (!syzygy_path_.empty()) {
-        syzygy::init(syzygy_path_);
-    }
+    update_syzygy();
 }
 
 void Search::set_syzygy_path(std::string path) {
     syzygy_path_ = std::move(path);
-    if (!use_syzygy_) {
-        return;
-    }
-    if (syzygy_path_.empty()) {
-        syzygy::shutdown();
-    } else {
-        syzygy::init(syzygy_path_);
-    }
+    update_syzygy();
+}
+
+void Search::set_syzygy_probe_depth(int depth) {
+    syzygy_probe_depth_ = std::max(0, depth);
+    update_syzygy();
+}
+
+void Search::set_syzygy_probe_limit(int limit) {
+    syzygy_probe_limit_ = std::max(0, limit);
+    update_syzygy();
+}
+
+void Search::set_syzygy_use_rule50(bool enable) {
+    syzygy_use_rule50_ = enable;
+    update_syzygy();
 }
 
 void Search::set_numa_offset(int offset) { numa_offset_ = offset; }
@@ -554,7 +559,7 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
     if (depth <= 0) { return quiescence(board, alpha, beta, ply, thread_data); }
 
     if (use_syzygy_) {
-        if (auto tb = probe_syzygy(board)) return *tb;
+        if (auto tb = probe_syzygy(board, depth)) return *tb;
     }
 
     int static_eval = evaluate(board);
@@ -978,24 +983,43 @@ int Search::evaluate(const Board& board) const {
     return eval::evaluate(board);
 }
 
-std::optional<int> Search::probe_syzygy(const Board& board) const {
+std::optional<int> Search::probe_syzygy(const Board& board, int depth) const {
     if (!use_syzygy_) return std::nullopt;
-    auto result = syzygy::probe_wdl(board);
+
+    auto result = syzygy::TB::probePosition(board, syzygy::TBProbe::Wdl, depth);
     if (!result) return std::nullopt;
 
     switch (result->wdl) {
-    case syzygy::WdlOutcome::Win:
+    case TB_WIN:
         return kMateValue - 1;
-    case syzygy::WdlOutcome::Loss:
+    case TB_LOSS:
         return -kMateValue + 1;
-    case syzygy::WdlOutcome::Draw:
+    case TB_DRAW:
         return 0;
-    case syzygy::WdlOutcome::CursedWin:
+    case TB_CURSED_WIN:
         return 200;
-    case syzygy::WdlOutcome::BlessedLoss:
+    case TB_BLESSED_LOSS:
         return -200;
+    default:
+        break;
     }
+
     return std::nullopt;
+}
+
+void Search::update_syzygy() {
+    syzygy::TBConfig config;
+    config.enabled = use_syzygy_ && !syzygy_path_.empty();
+    config.path = syzygy_path_;
+    config.probeDepth = syzygy_probe_depth_;
+    config.probeLimit = syzygy_probe_limit_;
+    config.useRule50 = syzygy_use_rule50_;
+
+    if (config.enabled) {
+        syzygy::TB::init(config);
+    } else {
+        syzygy::TB::release();
+    }
 }
 
 } // namespace engine

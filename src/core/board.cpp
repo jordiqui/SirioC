@@ -4,8 +4,10 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cctype>
 #include <charconv>
+#include <cstdlib>
 #include <random>
 #include <sstream>
 #include <string>
@@ -17,6 +19,9 @@ namespace engine {
 namespace {
 
 constexpr uint64_t kSquareMask(int square) { return 1ULL << square; }
+
+constexpr uint64_t kFileA = 0x0101010101010101ULL;
+constexpr uint64_t kFileH = 0x8080808080808080ULL;
 
 const std::array<uint64_t, 12 * 64>& piece_keys() {
     static std::array<uint64_t, 12 * 64> keys{};
@@ -291,6 +296,103 @@ Board Board::after_move(Move move) const {
     copy.history_.push_back(state);
     return copy;
 }
+
+int Board::countPiecesTotal() const {
+    return static_cast<int>(std::popcount(occupancy_[OCC_BOTH]));
+}
+
+Board::FathomState Board::exportToFathom() const {
+    FathomState state;
+    state.white = occupancy_[OCC_WHITE];
+    state.black = occupancy_[OCC_BLACK];
+    state.kings = piece_bitboards_[WHITE_KING] | piece_bitboards_[BLACK_KING];
+    state.queens = piece_bitboards_[WHITE_QUEEN] | piece_bitboards_[BLACK_QUEEN];
+    state.rooks = piece_bitboards_[WHITE_ROOK] | piece_bitboards_[BLACK_ROOK];
+    state.bishops = piece_bitboards_[WHITE_BISHOP] | piece_bitboards_[BLACK_BISHOP];
+    state.knights = piece_bitboards_[WHITE_KNIGHT] | piece_bitboards_[BLACK_KNIGHT];
+    state.pawns = piece_bitboards_[WHITE_PAWN] | piece_bitboards_[BLACK_PAWN];
+    state.rule50 = static_cast<unsigned>(halfmove_clock_);
+    state.castling = castling_rights_;
+    state.whiteToMove = stm_white_;
+    state.ep = 0U;
+
+    if (en_passant_square_ != INVALID_SQUARE) {
+        uint64_t ep_mask = 1ULL << en_passant_square_;
+        bool has_ep = false;
+        if (stm_white_) {
+            uint64_t pawns = piece_bitboards_[WHITE_PAWN];
+            uint64_t left = (ep_mask & ~kFileH) >> 7;
+            uint64_t right = (ep_mask & ~kFileA) >> 9;
+            has_ep = (pawns & (left | right)) != 0;
+        } else {
+            uint64_t pawns = piece_bitboards_[BLACK_PAWN];
+            uint64_t left = (ep_mask & ~kFileA) << 7;
+            uint64_t right = (ep_mask & ~kFileH) << 9;
+            has_ep = (pawns & (left | right)) != 0;
+        }
+        if (has_ep) {
+            state.ep = static_cast<unsigned>(en_passant_square_);
+        }
+    }
+
+    return state;
+}
+
+namespace {
+
+int convert_promotion_from_tb(int tb_code) {
+    switch (tb_code) {
+    case TB_PROMOTES_QUEEN: return 4;
+    case TB_PROMOTES_ROOK: return 3;
+    case TB_PROMOTES_BISHOP: return 2;
+    case TB_PROMOTES_KNIGHT: return 1;
+    default: return 0;
+    }
+}
+
+} // namespace
+
+Move Board::convertFromTbMove(TbMove move, bool enPassantHint) const {
+    int from = static_cast<int>(TB_MOVE_FROM(move));
+    int to = static_cast<int>(TB_MOVE_TO(move));
+    int promo = convert_promotion_from_tb(TB_MOVE_PROMOTES(move));
+
+    if (from < 0 || from >= 64 || to < 0 || to >= 64) return MOVE_NONE;
+
+    char moving = squares_[from];
+    if (moving == '.') return MOVE_NONE;
+    char target = squares_[to];
+
+    bool isPawn = moving == 'P' || moving == 'p';
+    bool capture = false;
+    bool enpassant = false;
+    bool doublePawn = false;
+    bool castling = false;
+
+    if (isPawn) {
+        int diff = std::abs(to - from);
+        if (diff == 16) doublePawn = true;
+        int fromFile = file_of(from);
+        int toFile = file_of(to);
+        if (enPassantHint || (std::abs(fromFile - toFile) == 1 && target == '.' &&
+                              en_passant_square_ == to)) {
+            enpassant = true;
+            capture = true;
+        }
+    }
+
+    if (!enpassant && target != '.') capture = true;
+
+    if ((moving == 'K' || moving == 'k') && std::abs(from - to) == 2) {
+        castling = true;
+    }
+
+    return ::engine::make_move(from, to, promo, capture, doublePawn, enpassant, castling);
+}
+
+int Board::plyFromRoot() const { return static_cast<int>(history_.size()); }
+
+bool Board::inCheck() const { return side_to_move_in_check(); }
 
 bool Board::is_white_piece(char piece) { return piece >= 'A' && piece <= 'Z'; }
 
