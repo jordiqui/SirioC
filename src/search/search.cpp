@@ -296,6 +296,98 @@ Search::Search() : nodes_(0), stop_(false) {
     tuning_.reset();
 }
 
+void Search::start_worker_threads(size_t thread_count) {
+    stop_worker_threads();
+    if (thread_count <= 1) {
+        pool_stop_.store(false, std::memory_order_relaxed);
+        pending_tasks_.store(0, std::memory_order_relaxed);
+        return;
+    }
+    pool_stop_.store(false, std::memory_order_relaxed);
+    pending_tasks_.store(0, std::memory_order_relaxed);
+    worker_threads_.reserve(thread_count - 1);
+    for (size_t i = 1; i < thread_count; ++i) {
+        worker_threads_.emplace_back(&Search::worker_loop, this, i);
+    }
+}
+
+void Search::stop_worker_threads() {
+    {
+        std::lock_guard<std::mutex> lock(task_mutex_);
+        pool_stop_.store(true, std::memory_order_relaxed);
+    }
+    task_cv_.notify_all();
+    for (auto& th : worker_threads_) {
+        if (th.joinable()) th.join();
+    }
+    worker_threads_.clear();
+    {
+        std::lock_guard<std::mutex> lock(task_mutex_);
+        task_queue_.clear();
+    }
+    pending_tasks_.store(0, std::memory_order_relaxed);
+    pool_stop_.store(false, std::memory_order_relaxed);
+}
+
+void Search::submit_task(std::function<void(ThreadData&)> task) {
+    if (worker_threads_.empty()) { return; }
+    {
+        std::lock_guard<std::mutex> lock(task_mutex_);
+        task_queue_.emplace_back(std::move(task));
+        pending_tasks_.fetch_add(1, std::memory_order_relaxed);
+    }
+    task_cv_.notify_one();
+}
+
+bool Search::run_available_task(Search::ThreadData& main_td) {
+    std::function<void(Search::ThreadData&)> task;
+    {
+        std::lock_guard<std::mutex> lock(task_mutex_);
+        if (task_queue_.empty()) return false;
+        task = std::move(task_queue_.front());
+        task_queue_.pop_front();
+    }
+    task(main_td);
+    if (pending_tasks_.fetch_sub(1, std::memory_order_relaxed) == 1) {
+        task_done_cv_.notify_all();
+    }
+    return true;
+}
+
+void Search::wait_for_all_tasks(Search::ThreadData& main_td) {
+    while (true) {
+        if (pending_tasks_.load(std::memory_order_acquire) == 0) break;
+        if (!run_available_task(main_td)) {
+            std::unique_lock<std::mutex> lock(task_mutex_);
+            task_done_cv_.wait(lock, [&] {
+                return pending_tasks_.load(std::memory_order_acquire) == 0 || !task_queue_.empty() ||
+                       pool_stop_.load(std::memory_order_relaxed);
+            });
+            if (pool_stop_.load(std::memory_order_relaxed)) break;
+        }
+    }
+}
+
+void Search::worker_loop(size_t index) {
+    Search::ThreadData& td = thread_data_pool_[index];
+    while (true) {
+        std::function<void(Search::ThreadData&)> task;
+        {
+            std::unique_lock<std::mutex> lock(task_mutex_);
+            task_cv_.wait(lock, [&] {
+                return pool_stop_.load(std::memory_order_relaxed) || !task_queue_.empty();
+            });
+            if (pool_stop_.load(std::memory_order_relaxed) && task_queue_.empty()) { return; }
+            task = std::move(task_queue_.front());
+            task_queue_.pop_front();
+        }
+        task(td);
+        if (pending_tasks_.fetch_sub(1, std::memory_order_relaxed) == 1) {
+            task_done_cv_.notify_all();
+        }
+    }
+}
+
 void Search::set_info_callback(std::function<void(const Info&)> cb) {
     info_callback_ = std::move(cb);
 }
@@ -364,6 +456,13 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
     thread_data_thread_count_ = thread_count;
     thread_data_position_key_ = position_key;
     thread_data_initialized_ = true;
+
+    start_worker_threads(thread_count);
+    struct ThreadPoolGuard {
+        Search& search;
+        ~ThreadPoolGuard() { search.stop_worker_threads(); }
+    };
+    [[maybe_unused]] ThreadPoolGuard pool_guard{*this};
 
     auto alloc = time::compute_allocation(lim, board.white_to_move(), move_overhead_ms_);
     target_time_ms_ = alloc.optimal_ms;
@@ -484,13 +583,15 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
                 }
             };
 
-            std::vector<std::thread> workers;
-            workers.reserve(thread_count > 0 ? thread_count - 1 : 0);
-            for (size_t t = 1; t < thread_count; ++t) {
-                workers.emplace_back(worker, std::ref(thread_data_pool_[t]));
+            if (thread_count > 1) {
+                for (size_t t = 1; t < thread_count; ++t) {
+                    submit_task(worker);
+                }
             }
             worker(thread_data_pool_[0]);
-            for (auto& th : workers) th.join();
+            if (thread_count > 1) {
+                wait_for_all_tasks(thread_data_pool_[0]);
+            }
 
             if (stop_.load(std::memory_order_relaxed)) break;
 
