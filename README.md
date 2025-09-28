@@ -173,8 +173,10 @@ text when redistributing the engine or derivative works.
 ## Bench command
 
 SirioC exposes a `bench` command that solves a small suite of tactical
-positions at a fixed depth. The output now appears immediately so it can be
-captured by GUIs and scripts without issuing an extra command. Example usage:
+positions at a fixed depth. While searching the engine now reports the standard
+UCI `nps` field so graphical interfaces display the correct throughput, and the
+bench output can be captured by GUIs and scripts without issuing an extra
+command. Example usage:
 
 ```bash
 bench depth 8
@@ -185,3 +187,8 @@ If no explicit thread count is supplied, the command uses the current `Threads`
 UCI setting. When the option is still at its default value of 1, the engine
 automatically expands to the detected hardware concurrency so that bench runs
 exercise every core and hyper-thread.
+
+A lightweight regression test named `bench_smoke_test` is wired into the CTest
+suite. It runs `bench depth 4 threads 1` against the freshly built binary and
+verifies that the reported nodes-per-second value is positive, helping catch
+toolchain or configuration issues during compilation.
