@@ -289,7 +289,7 @@ void Search::AdaptiveTuning::apply_scaling() {
     razoring_margin_ = std::max(200, static_cast<int>(std::round(kRazoringMargin * margin_scale)));
 }
 
-Search::Search() : nodes_(0), stop_(false) {
+Search::Search() : stop_(false) {
     set_hash(16);
     target_time_ms_ = -1;
     nodes_limit_ = -1;
@@ -440,7 +440,6 @@ Search::Result Search::find_bestmove(Board& board, const Limits& lim) {
 Search::Result Search::search_position(Board& board, const Limits& lim) {
     Result result;
     auto start = std::chrono::steady_clock::now();
-    nodes_.store(0, std::memory_order_relaxed);
     search_start_ = start;
 
     size_t thread_count = static_cast<size_t>(std::max(1, threads_));
@@ -448,11 +447,15 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
     uint64_t position_key = board.zobrist_key();
     bool new_position = !thread_data_initialized_ || thread_data_position_key_ != position_key;
     thread_data_pool_.resize(thread_count);
+    for (size_t i = 0; i < thread_count; ++i) {
+        thread_data_pool_[i].id = i;
+    }
     if (thread_count_changed || new_position) {
         for (auto& td : thread_data_pool_) {
             td.reset();
         }
     }
+    nodes_.configure(thread_count);
     thread_data_thread_count_ = thread_count;
     thread_data_position_key_ = position_key;
     thread_data_initialized_ = true;
@@ -517,7 +520,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
                     result.depth = depth;
                     result.score = tb_score;
                     result.is_mate = std::abs(tb_score) >= kMateThreshold;
-                    result.nodes = nodes_.load(std::memory_order_relaxed);
+                    result.nodes = nodes_.total_nodes();
                     result.time_ms = static_cast<int>(
                         std::chrono::duration_cast<std::chrono::milliseconds>(
                             std::chrono::steady_clock::now() - start)
@@ -546,8 +549,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
             attempted_root_tb = true;
         }
 
-        tuning_.begin_iteration(nodes_.load(std::memory_order_relaxed),
-                                std::chrono::steady_clock::now());
+        tuning_.begin_iteration(nodes_.total_nodes(), std::chrono::steady_clock::now());
 
         int alpha_window = -kInfiniteScore;
         int beta_window = kInfiniteScore;
@@ -659,7 +661,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
                     Info info;
                     info.depth = depth;
                     info.score = best_score;
-                    info.nodes = nodes_.load(std::memory_order_relaxed);
+                    info.nodes = nodes_.total_nodes();
                     info.time_ms = static_cast<int>(
                         std::chrono::duration_cast<std::chrono::milliseconds>(
                             std::chrono::steady_clock::now() - start)
@@ -679,7 +681,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
         }
 
         auto now = std::chrono::steady_clock::now();
-        tuning_.end_iteration(nodes_.load(std::memory_order_relaxed), now);
+        tuning_.end_iteration(nodes_.total_nodes(), now);
         if (deadline_ && now >= *deadline_) {
             stop_.store(true, std::memory_order_relaxed);
             break;
@@ -692,7 +694,7 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
         }
     }
 
-    result.nodes = nodes_.load(std::memory_order_relaxed);
+    result.nodes = nodes_.total_nodes();
     result.time_ms = static_cast<int>(
         std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - start)
@@ -713,7 +715,7 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
         return evaluate(board);
     }
 
-    uint64_t visited = nodes_.fetch_add(1, std::memory_order_relaxed) + 1;
+    uint64_t visited = nodes_.increment(thread_data.id);
     if (nodes_limit_ >= 0 && visited >= static_cast<uint64_t>(nodes_limit_)) {
         stop_.store(true, std::memory_order_relaxed);
         return evaluate(board);
@@ -967,7 +969,7 @@ int Search::quiescence(Board& board, int alpha, int beta, int ply, ThreadData& t
         return evaluate(board);
     }
 
-    uint64_t visited = nodes_.fetch_add(1, std::memory_order_relaxed) + 1;
+    uint64_t visited = nodes_.increment(thread_data.id);
     if (nodes_limit_ >= 0 && visited >= static_cast<uint64_t>(nodes_limit_)) {
         stop_.store(true, std::memory_order_relaxed);
         return evaluate(board);

@@ -15,6 +15,8 @@
 #include <vector>
 #include <mutex>
 
+#include "engine/util/nodes.hpp"
+
 namespace engine {
 class Board;
 namespace nnue {
@@ -75,6 +77,7 @@ private:
         std::vector<std::array<Move, 2>> killers;
         std::array<int, 64 * 64> history{};
         std::array<Move, 64 * 64> countermoves{};
+        size_t id = 0;
     };
     struct AdaptiveTuning {
         void reset();
@@ -144,7 +147,7 @@ private:
     std::vector<TTEntry> tt_;
     size_t tt_mask_ = 0;
     mutable std::shared_mutex tt_mutex_;
-    std::atomic<uint64_t> nodes_;
+    NodesCounter nodes_;
     std::atomic<bool> stop_;
     std::vector<ThreadData> thread_data_pool_;
     uint64_t thread_data_position_key_ = 0;
