@@ -136,6 +136,8 @@ private:
     int quiescence(Board& board, int alpha, int beta, int ply, ThreadData& thread_data);
     void store_tt(uint64_t key, Move best, int depth, int score, int flag, int ply,
                   int eval);
+    int reduction(int depth, Move move, bool in_pv, bool gives_check, int history_score,
+                  int move_number) const;
     bool probe_tt(const Board& board, int depth, int alpha, int beta, Move& tt_move,
                   int& score, int ply, int& tt_depth, int& tt_flag, int& tt_eval) const;
     std::vector<Move> order_moves(const Board& board, std::vector<Move>& moves,

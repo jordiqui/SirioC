@@ -1232,8 +1232,9 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
         bool is_promo = move_promo(move) != 0;
         bool quiet = !is_capture && !is_promo;
         int history_score = thread_data.history[static_cast<size_t>(history_index(move))];
+        int see = (is_capture || is_promo) ? static_exchange_eval(board, move) : -1;
 
-        if (!pv_node && is_capture && depth <= 1 && static_exchange_eval(board, move) < 0) {
+        if (!pv_node && is_capture && depth <= 1 && see < 0) {
             continue;
         }
 
@@ -1293,20 +1294,18 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
             first = false;
         } else {
             int new_depth = child_depth;
-            bool apply_lmr = new_depth > 0 && depth >= 3 && move_count > 3 && quiet &&
-                             !gives_check && !pv_node;
-            if (apply_lmr) {
-                double reduction_value = 1.0 + (depth > 4) + (move_count > 4) + (move_count > 8);
-                if (history_score < 0) {
-                    reduction_value += 1.0;
-                }
-                reduction_value *= tuning_.lmr_scale();
-                reduction_value += (move_overhead_ms_ / 60.0) * tuning_.lmr_scale();
-                int reduction = std::min(new_depth, std::max(1, static_cast<int>(std::round(reduction_value))));
-                int reduced_depth = std::max(1, new_depth - reduction);
+            int reduction_amount = 0;
+            if (new_depth > 0 && see < 0) {
+                reduction_amount = reduction(depth, move, pv_node, gives_check, history_score, move_count);
+            }
+            if (reduction_amount > 0) {
+                int reduced_depth = std::max(1, new_depth - reduction_amount);
                 score = -negamax(board, reduced_depth, -alpha - 1, -alpha, false, ply + 1,
                                   thread_data, move, false);
-                if (score > alpha) {
+                if (score >= beta) {
+                    score = -negamax(board, new_depth, -beta, -alpha, false, ply + 1, thread_data,
+                                      move, false);
+                } else if (score > alpha) {
                     score = -negamax(board, new_depth, -alpha - 1, -alpha, false, ply + 1,
                                       thread_data, move, false);
                 }
@@ -1431,6 +1430,29 @@ int Search::quiescence(Board& board, int alpha, int beta, int ply, ThreadData& t
         if (score > alpha) alpha = score;
     }
     return alpha;
+}
+
+int Search::reduction(int depth, Move move, bool in_pv, bool gives_check, int history_score,
+                      int move_number) const {
+    if (in_pv || gives_check || depth < 3) return 0;
+    if (move_number <= 3) return 0;
+
+    double reduction = 1.0;
+    if (depth > 4) reduction += 1.0;
+    if (move_number > 4) reduction += 1.0;
+    if (move_number > 8) reduction += 1.0;
+    if (history_score < 0) reduction += 1.0;
+
+    if (move_is_capture(move) || move_promo(move) != 0) {
+        reduction *= 0.75;
+    }
+
+    reduction *= tuning_.lmr_scale();
+    reduction += (move_overhead_ms_ / 60.0) * tuning_.lmr_scale();
+
+    int rounded = static_cast<int>(std::round(reduction));
+    if (rounded <= 0) return 0;
+    return std::min(rounded, depth - 1);
 }
 
 bool Search::probe_tt(const Board& board, int depth, int alpha, int beta, Move& tt_move,
