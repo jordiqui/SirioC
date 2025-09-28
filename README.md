@@ -1,10 +1,12 @@
 # SirioC
 
-SirioC is a modular, buildable UCI chess engine skeleton with NNUE scaffolding
-and a focus on competitive default play. The current search integrates
-heuristics inspired by the open-source Stockfish and Berserk projects, giving
-the engine a strong baseline while leaving room for experimentation with new
-ideas.
+SirioC is an original UCI chess engine created by Jorge Ruiz with
+implementation support from OpenAI Codex. The code base is not a derivative of
+Stockfish or any other UCI engine. Instead, SirioC blends ideas from the latest
+stable releases of Berserk and Stockfish, and reuses the freely available NNUE
+networks provided by the Stockfish project. The result is a clean, modern
+baseline that stays true to our own architecture while benefiting from
+well-tested heuristics.
 
 ## Highlights
 
@@ -14,6 +16,7 @@ ideas.
   so neural networks can be attached without reworking the move generator.
 * Bench command and instrumentation hooks that make it easy to validate search
   changes or gather tuning data.
+* MIT-licensed code with clear attribution to the original authors.
 
 ## Build
 
@@ -147,6 +150,25 @@ refine the selectivity that now powers SirioC's search:
   testing flags so risky selectivity can be evaluated safely.
 * Expand the regression/bench suite with mixed tactical and quiet positions so
   new heuristics can be sanity-checked automatically.
+
+## Syzygy tablebase support
+
+SirioC can probe Syzygy tablebases directly during search. Use the following
+UCI options to control the integration:
+
+* `UseSyzygy` – enable or disable tablebase probing.
+* `SyzygyPath` – folder containing the 5-7 man tablebase files.
+* `SyzygyProbeDepth` – minimum search depth (in plies) before probing.
+* `SyzygyProbeLimit` – maximum number of pieces for which probing is allowed.
+* `Syzygy50MoveRule` – honour the 50-move rule (disable for WDL-perfect play).
+
+When a root probe succeeds the engine reports the WDL result, DTZ information,
+and the suggested move via the standard UCI info stream.
+
+## License
+
+SirioC is released under the [MIT License](LICENSE). Please retain the license
+text when redistributing the engine or derivative works.
 
 ## Bench command
 
