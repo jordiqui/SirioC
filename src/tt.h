@@ -20,6 +20,7 @@ public:
                int& stored_depth, int& flag, int& eval) const;
     void store(uint64_t key, Move move, int depth, int score, int flag, int ply, int eval);
     Move probe_move(uint64_t key) const;
+    int hashfull() const;
 
     bool empty() const { return entry_count_ == 0 || !entries_; }
 

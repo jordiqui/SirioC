@@ -208,5 +208,34 @@ Move TranspositionTable::probe_move(uint64_t key) const {
     return MOVE_NONE;
 }
 
+int TranspositionTable::hashfull() const {
+    if (entry_count_ == 0 || !entries_) return 0;
+
+    constexpr std::size_t kSampleTarget = 1000;
+    std::size_t sample = std::min<std::size_t>(entry_count_, kSampleTarget);
+    if (sample == 0) return 0;
+
+    uint8_t current_generation = generation_.load(std::memory_order_relaxed);
+    std::size_t filled = 0;
+
+    for (std::size_t i = 0; i < sample; ++i) {
+        std::size_t index = (i * entry_count_) / sample;
+        if (index >= entry_count_) index = entry_count_ - 1;
+
+        uint64_t data = entries_[index].data.load(std::memory_order_relaxed);
+        if (data == 0) continue;
+
+        uint8_t stored_generation = static_cast<uint8_t>((data >> 50) & kGenerationMask);
+        uint8_t age = static_cast<uint8_t>((current_generation - stored_generation) & 0xFF);
+        if (age <= 2) {
+            ++filled;
+        }
+    }
+
+    int result = static_cast<int>((filled * 1000 + sample / 2) / sample);
+    if (result > 1000) result = 1000;
+    return result;
+}
+
 } // namespace engine
 
