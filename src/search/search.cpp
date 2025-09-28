@@ -1061,11 +1061,8 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
                         std::chrono::duration_cast<std::chrono::milliseconds>(
                             std::chrono::steady_clock::now() - start)
                             .count());
-codex/expand-engine-search-info-for-hashfull
                     info.hashfull = tt_.empty() ? -1 : tt_.hashfull();
-
                     info.tbhits = tb_hits_.load(std::memory_order_relaxed);
- main
                     info.pv = extract_pv(board, best_move);
                     info_callback_(info);
                 }

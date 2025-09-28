@@ -41,11 +41,8 @@ public:
         int score = 0;
         uint64_t nodes = 0;
         int time_ms = 0;
- codex/expand-engine-search-info-for-hashfull
         int hashfull = -1;
-
         uint64_t tbhits = 0;
- main
         std::vector<Move> pv;
     };
 
