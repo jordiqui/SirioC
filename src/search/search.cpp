@@ -4,7 +4,7 @@
 #include "engine/eval/eval.hpp"
 #include "engine/eval/nnue/evaluator.hpp"
 #include "engine/syzygy/syzygy.hpp"
-#include "engine/syzygy/tbprobe.h"
+#include "tbprobe.h"
 #include "engine/util/time.hpp"
 
 #include <algorithm>
@@ -315,31 +315,6 @@ void Search::set_hash(int megabytes) {
 
 void Search::stop() { stop_.store(true, std::memory_order_relaxed); }
 
- codex/replace-engine-syzygy-with-tbconfig-functions
-void Search::set_use_syzygy(bool enable) {
-    use_syzygy_ = enable;
-    update_syzygy();
-}
-
-void Search::set_syzygy_path(std::string path) {
-    syzygy_path_ = std::move(path);
-    update_syzygy();
-}
-
-void Search::set_syzygy_probe_depth(int depth) {
-    syzygy_probe_depth_ = std::max(0, depth);
-    update_syzygy();
-}
-
-void Search::set_syzygy_probe_limit(int limit) {
-    syzygy_probe_limit_ = std::max(0, limit);
-    update_syzygy();
-}
-
-void Search::set_syzygy_use_rule50(bool enable) {
-    syzygy_use_rule50_ = enable;
-    update_syzygy();
-=======
 void Search::set_syzygy_config(syzygy::TBConfig config) {
     syzygy_config_ = std::move(config);
     if (!syzygy_config_.enabled || syzygy_config_.path.empty()) {
@@ -347,7 +322,6 @@ void Search::set_syzygy_config(syzygy::TBConfig config) {
     } else {
         syzygy::configure(syzygy_config_);
     }
- main
 }
 
 void Search::set_numa_offset(int offset) { numa_offset_ = offset; }
@@ -365,12 +339,6 @@ void Search::set_eval_file_small(std::string path) { eval_file_small_ = std::mov
 void Search::set_nnue_evaluator(const nnue::Evaluator* evaluator) { nnue_eval_ = evaluator; }
 
 void Search::set_use_nnue(bool enable) { use_nnue_eval_ = enable; }
-
-void Search::set_syzygy_probe_depth(int depth) { syzygy_probe_depth_ = std::clamp(depth, 1, 100); }
-
-void Search::set_syzygy_50_move_rule(bool enable) { syzygy_50_move_rule_ = enable; }
-
-void Search::set_syzygy_probe_limit(int limit) { syzygy_probe_limit_ = std::clamp(limit, 0, 7); }
 
 Search::Result Search::find_bestmove(Board& board, const Limits& lim) {
     stop_.store(false, std::memory_order_relaxed);
@@ -659,18 +627,7 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
 
     if (depth <= 0) { return quiescence(board, alpha, beta, ply, thread_data); }
 
-codex/replace-engine-syzygy-with-tbconfig-functions
-    if (use_syzygy_) {
-        if (auto tb = probe_syzygy(board, depth)) return *tb;
-=======
- codex/update-search-for-tbconfig-and-probes
     if (auto tb = probe_syzygy(board, depth, false)) return *tb;
-
-    if (use_syzygy_ && depth <= syzygy_probe_depth_) {
-        if (auto tb = probe_syzygy(board)) return *tb;
- main
-    }
- main
 
     int static_eval = evaluate(board);
 
@@ -1093,56 +1050,13 @@ int Search::evaluate(const Board& board) const {
     return eval::evaluate(board);
 }
 
- codex/replace-engine-syzygy-with-tbconfig-functions
-std::optional<int> Search::probe_syzygy(const Board& board, int depth) const {
-    if (!use_syzygy_) return std::nullopt;
-
-    auto result = syzygy::TB::probePosition(board, syzygy::TBProbe::Wdl, depth);
-=======
- codex/update-search-for-tbconfig-and-probes
 std::optional<int> Search::probe_syzygy(const Board& board, int depth,
                                         bool root_probe) const {
     if (!syzygy_config_.enabled || syzygy_config_.path.empty()) {
         return std::nullopt;
     }
-    if (depth < syzygy_config_.probe_depth) {
+    if (!root_probe && depth < syzygy_config_.probe_depth) {
         return std::nullopt;
-
-std::optional<int> Search::probe_syzygy(const Board& board) const {
-    if (!use_syzygy_ || syzygy_probe_limit_ == 0) return std::nullopt;
-
-    const auto& occupancy = board.occupancy();
-    if (std::popcount(occupancy[Board::OCC_BOTH]) > syzygy_probe_limit_) {
-        return std::nullopt;
-    }
-
-    auto result = syzygy::probe_wdl(board);
- main
-    if (!result) return std::nullopt;
-
-    switch (result->wdl) {
-    case TB_WIN:
-        return kMateValue - 1;
-    case TB_LOSS:
-        return -kMateValue + 1;
-    case TB_DRAW:
-        return 0;
- codex/replace-engine-syzygy-with-tbconfig-functions
-    case TB_CURSED_WIN:
-        return 200;
-    case TB_BLESSED_LOSS:
-        return -200;
-    default:
-        break;
-    }
-
-    return std::nullopt;
-=======
-    case syzygy::WdlOutcome::CursedWin:
-        return syzygy_50_move_rule_ ? 0 : (kMateValue - 1);
-    case syzygy::WdlOutcome::BlessedLoss:
-        return syzygy_50_move_rule_ ? 0 : (-kMateValue + 1);
-main
     }
     if (syzygy_config_.probe_limit >= 0 &&
         syzygy::TB::pieceCount(board) > syzygy_config_.probe_limit) {
@@ -1152,22 +1066,6 @@ main
     auto probe = syzygy::TB::probePosition(board, syzygy_config_, root_probe);
     if (!probe) return std::nullopt;
     return tablebase_score(*probe, syzygy_config_);
- main
-}
-
-void Search::update_syzygy() {
-    syzygy::TBConfig config;
-    config.enabled = use_syzygy_ && !syzygy_path_.empty();
-    config.path = syzygy_path_;
-    config.probeDepth = syzygy_probe_depth_;
-    config.probeLimit = syzygy_probe_limit_;
-    config.useRule50 = syzygy_use_rule50_;
-
-    if (config.enabled) {
-        syzygy::TB::init(config);
-    } else {
-        syzygy::TB::release();
-    }
 }
 
 } // namespace engine

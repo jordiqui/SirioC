@@ -41,11 +41,10 @@ struct ProbeResult {
 
 int pieceCount(const Board& board);
 std::optional<ProbeResult> probePosition(const Board& board, const TBConfig& config,
-                                         bool root);
+                                         bool root_probe);
 
 } // namespace TB
 
 } // namespace syzygy
 
 } // namespace engine
-

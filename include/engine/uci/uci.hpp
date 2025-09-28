@@ -3,15 +3,12 @@
 
 namespace engine {
 
-class Engine; // forward
-
 class Uci {
 public:
-    explicit Uci(Engine& engine) : engine_(engine) {}
+    Uci() = default;
     void loop();
 
 private:
-    Engine& engine_;
     void handle_line(const std::string& line);
     void cmd_uci();
     void cmd_isready();
