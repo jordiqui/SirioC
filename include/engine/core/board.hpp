@@ -72,6 +72,7 @@ public:
         int prev_mg = 0;
         int prev_eg = 0;
         int prev_phase = 0;
+        uint64_t prev_zobrist_key = 0ULL;
     };
 
     bool make_move(Move m);
@@ -128,6 +129,11 @@ private:
     static int to_index(int file, int rank);
     std::string square_to_string(int sq) const;
     char promotion_from_code(int code, bool white) const;
+    uint64_t compute_zobrist_key() const;
+    static const std::array<uint64_t, 12 * 64>& zobrist_piece_keys();
+    static const std::array<uint64_t, 16>& zobrist_castling_keys();
+    static const std::array<uint64_t, 8>& zobrist_enpassant_keys();
+    static uint64_t zobrist_side_key();
 
     bool stm_white_ = true;
     std::array<uint64_t, PIECE_NB> piece_bitboards_{};
@@ -140,6 +146,7 @@ private:
     std::array<char, 64> squares_{};
     nnue::Accumulator accumulator_{};
     std::vector<State> history_{};
+    uint64_t zobrist_key_ = 0ULL;
 };
 
 } // namespace engine
