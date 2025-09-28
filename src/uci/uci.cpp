@@ -19,6 +19,8 @@
 #include <sstream>
 #include <thread>
 #include <vector>
+#include <future>
+#include <memory>
 #if defined(_WIN32)
 #    include <io.h>
 #else
@@ -194,6 +196,7 @@ void Uci::loop() {
         handle_line(line);
         if (line == "quit") break;
     }
+    stop_search_thread();
     if (!processed_command) {
         wait_for_enter_if_interactive();
     }
@@ -235,18 +238,21 @@ void Uci::cmd_uci() {
 }
 
 void Uci::cmd_isready() {
+    stop_search_thread();
     ensure_nnue_loaded();
     sync_search_options();
     std::cout << "readyok\n" << std::flush;
 }
 
 void Uci::cmd_ucinewgame() {
+    stop_search_thread();
     g_board.set_startpos();
     ensure_nnue_loaded();
     sync_search_options();
 }
 
 void Uci::cmd_setoption(const std::string& s) {
+    stop_search_thread();
     auto tokens = split(s);
     for (size_t i = 0; i < tokens.size(); ++i) {
         if (tokens[i] == "name" && i + 1 < tokens.size()) {
@@ -305,6 +311,7 @@ void Uci::cmd_setoption(const std::string& s) {
 }
 
 void Uci::cmd_position(const std::string& s) {
+    stop_search_thread();
     std::string rest = s.substr(8);
     auto tokens = split(rest);
     size_t idx = 0;
@@ -332,44 +339,58 @@ void Uci::cmd_position(const std::string& s) {
 }
 
 void Uci::cmd_go(const std::string& s) {
+    stop_search_thread();
     auto tokens = split(s);
     Limits lim = parse_go_tokens(tokens);
     sync_search_options();
+    Board board_copy = g_board;
 
-    g_search.set_info_callback([&](const Search::Info& info) {
-        UciLiteInfo lite;
-        lite.depth = info.depth;
-        lite.score = info.score;
-        lite.nodes = info.nodes;
-        lite.time_ms = info.time_ms;
-        lite.nps = info.time_ms > 0 ? info.nodes * 1000ULL / static_cast<uint64_t>(info.time_ms) : 0;
-        lite.pv = pv_to_string(g_board, info.pv);
+    auto ready = std::make_shared<std::promise<void>>();
+    auto ready_future = ready->get_future();
 
-        std::cout << "info depth " << lite.depth << " score " << format_score(lite.score)
-                  << " nodes " << lite.nodes << " time " << lite.time_ms << " nps "
-                  << lite.nps;
-        if (!lite.pv.empty()) {
-            std::cout << " pv " << lite.pv;
+    search_thread_ = std::thread([this, lim, board_copy = std::move(board_copy), ready]() mutable {
+        g_search.set_info_callback([&](const Search::Info& info) {
+            UciLiteInfo lite;
+            lite.depth = info.depth;
+            lite.score = info.score;
+            lite.nodes = info.nodes;
+            lite.time_ms = info.time_ms;
+            lite.nps = info.time_ms > 0
+                           ? info.nodes * 1000ULL / static_cast<uint64_t>(info.time_ms)
+                           : 0;
+            lite.pv = pv_to_string(board_copy, info.pv);
+
+            std::cout << "info depth " << lite.depth << " score " << format_score(lite.score)
+                      << " nodes " << lite.nodes << " time " << lite.time_ms << " nps "
+                      << lite.nps;
+            if (!lite.pv.empty()) {
+                std::cout << " pv " << lite.pv;
+            }
+            std::cout << "\n" << std::flush;
+        });
+
+        ready->set_value();
+
+        auto result = g_search.find_bestmove(board_copy, lim);
+        g_search.set_info_callback(nullptr);
+
+        if (result.bestmove == MOVE_NONE) {
+            std::cout << "bestmove (none)\n";
+        } else {
+            std::cout << "bestmove " << board_copy.move_to_uci(result.bestmove) << "\n";
         }
-        std::cout << "\n" << std::flush;
+        std::cout << std::flush;
     });
 
-    auto result = g_search.find_bestmove(g_board, lim);
-    g_search.set_info_callback(nullptr);
-
-    if (result.bestmove == MOVE_NONE) {
-        std::cout << "bestmove (none)\n";
-    } else {
-        std::cout << "bestmove " << g_board.move_to_uci(result.bestmove) << "\n";
-    }
-    std::cout << std::flush;
+    ready_future.wait();
 }
 
 void Uci::cmd_stop() {
-    g_search.stop();
+    stop_search_thread();
 }
 
 void Uci::cmd_perft(const std::string& s) {
+    stop_search_thread();
     auto tokens = split(s);
     int depth = 1;
     bool divide = false;
@@ -420,6 +441,7 @@ void Uci::cmd_perft(const std::string& s) {
 }
 
 void Uci::cmd_bench(const std::string& s) {
+    stop_search_thread();
     auto tokens = split(s);
     int depth = 8;
     int threads = g_threads;
@@ -466,6 +488,14 @@ void Uci::cmd_bench(const std::string& s) {
 
     g_threads = previous_threads;
     sync_search_options();
+}
+
+void Uci::stop_search_thread() {
+    if (search_thread_.joinable()) {
+        g_search.stop();
+        search_thread_.join();
+        g_search.set_info_callback(nullptr);
+    }
 }
 
 } // namespace engine
