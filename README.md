@@ -34,6 +34,9 @@ flags are available to squeeze more performance out of modern CPUs:
 * `-DENABLE_NATIVE=ON` adds `-march=native` when supported, letting the compiler
   use every instruction available on the build host.
 * `-DENABLE_VNNI=ON` enables AVX-512 VNNI (on compilers/CPUs that support it).
+* `-DENABLE_SSSE3=ON` emits SSSE3 instructions on capable CPUs.
+* `-DENABLE_SSE41_POPCNT=ON` emits SSE4.1 and POPCNT instructions, matching an
+  Ivy Bridge-era baseline.
 
 ### Linux
 
@@ -48,6 +51,15 @@ the AVX2 and BMI2 instruction sets. The default build avoids these flags so
 that the resulting binary runs on older processors that only provide SSE4.1
 and POPCNT. `-DENABLE_NATIVE=ON` and `-DENABLE_VNNI=ON` follow the same rule:
 enable them only when the target CPUs actually support those instruction sets.
+To explicitly target SSSE3 and SSE4.1+POPCNT with Clang, configure the build
+like this:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_CXX_COMPILER=clang++ \
+      -DENABLE_SSSE3=ON -DENABLE_SSE41_POPCNT=ON
+cmake --build build -j
+```
 
 ## Run (UCI)
 
