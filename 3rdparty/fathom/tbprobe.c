@@ -1,7 +1,6 @@
 /*
-Copyright (c) 2013-2018 Ronald de Man
 Copyright (c) 2015 basil00
-Modifications Copyright (c) 2016-2024 by Jon Dart
+Modifications Copyright (c) 2016-2019 by Jon Dart
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -37,7 +36,11 @@ SOFTWARE.
 #else
 #include <stdbool.h>
 #endif
-#include "engine/syzygy/tbprobe.h"
+#include "tbprobe.h"
+
+#ifdef __cplusplus
+using namespace std;
+#endif
 
 #define TB_PIECES 7
 #define TB_HASHBITS  (TB_PIECES < 7 ?  11 : 12)
@@ -64,13 +67,6 @@ typedef size_t map_t;
 #define FD HANDLE
 #define FD_ERR INVALID_HANDLE_VALUE
 typedef HANDLE map_t;
-#endif
-
-// This must be after the inclusion of Windows headers, because otherwise
-// std::byte conflicts with "byte" in rpcndr.h . The error occurs if C++
-// standard is at lest 17, as std::byte was introduced in C++17.
-#ifdef __cplusplus
-using namespace std;
 #endif
 
 #define DECOMP64
@@ -119,27 +115,18 @@ using namespace std;
 #define TB_SOFTWARE_POP_COUNT
 #elif defined (__GNUC__) && defined(__x86_64__) && defined(__SSE4_2__)
 #include <popcntintrin.h>
-#define popcount(x)             (int)_mm_popcnt_u64((x))
+#define popcount(x)             _mm_popcnt_u64((x))
 #elif defined(_MSC_VER) && (_MSC_VER >= 1500) && defined(_M_AMD64)
 #include <nmmintrin.h>
-#define popcount(x)             (int)_mm_popcnt_u64((x))
-#else
-// try to use a builtin
-#if defined (__has_builtin)
-#if __has_builtin(__builtin_popcountll)
-#define popcount(x) __builtin_popcountll((x))
+#define popcount(x)             _mm_popcnt_u64((x))
 #else
 #define TB_SOFTWARE_POP_COUNT
-#endif
-#else
-#define TB_SOFTWARE_POP_COUNT
-#endif
 #endif
 
 #ifdef TB_SOFTWARE_POP_COUNT
-// Not a recognized compiler/architecture that has popcount, and
-// no builtin available: fall back to a software popcount. This one
-// is still reasonably fast.
+// Not a recognized compiler/architecture that has popcount:
+// fall back to a software popcount. This one is still reasonably
+// fast.
 static inline unsigned tb_software_popcount(uint64_t x)
 {
     x = x - ((x >> 1) & 0x5555555555555555ull);
@@ -147,6 +134,7 @@ static inline unsigned tb_software_popcount(uint64_t x)
     x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0full;
     return (x * 0x0101010101010101ull) >> 56;
 }
+
 #define popcount(x) tb_software_popcount(x)
 #endif
 
@@ -196,7 +184,7 @@ static unsigned lsb(uint64_t b) {
 #define max(a,b) a > b ? a : b
 #define min(a,b) a < b ? a : b
 
-#include "engine/syzygy/stdendian.h"
+#include "stdendian.h"
 
 #if _BYTE_ORDER == _BIG_ENDIAN
 
@@ -314,19 +302,8 @@ static FD open_tb(const char *str, const char *suffix)
 #ifndef _WIN32
     fd = open(file, O_RDONLY);
 #else
-#ifdef _UNICODE
-    wchar_t ucode_name[4096];
-    size_t len;
-    mbstowcs_s(&len, ucode_name, 4096, file, _TRUNCATE);
-    /* use FILE_FLAG_RANDOM_ACCESS because we are likely to access this file
-       randomly, so prefetch is not helpful. See
-       https://github.com/official-stockfish/Stockfish/pull/1829 */
-    fd = CreateFile(ucode_name, GENERIC_READ, FILE_SHARE_READ, NULL,
-			  OPEN_EXISTING, FILE_FLAG_RANDOM_ACCESS, NULL);
-#else
     fd = CreateFile(file, GENERIC_READ, FILE_SHARE_READ, NULL,
-			  OPEN_EXISTING, FILE_FLAG_RANDOM_ACCESS, NULL);
-#endif
+			  OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 #endif
     free(file);
     if (fd != FD_ERR) {
@@ -361,12 +338,6 @@ static void *map_file(FD fd, map_t *mapping)
     perror("mmap");
     return NULL;
   }
-#ifdef POSIX_MADV_RANDOM
-  /* Advise the kernel that we are likely to access this data
-     region randomly, so prefetch is not helpful. See
-     https://github.com/official-stockfish/Stockfish/pull/1829 */
-  posix_madvise(data, statbuf.st_size, POSIX_MADV_RANDOM);
-#endif
 #else
   DWORD size_low, size_high;
   size_low = GetFileSize(fd, &size_high);
@@ -389,8 +360,8 @@ static void *map_file(FD fd, map_t *mapping)
 static void unmap_file(void *data, map_t size)
 {
   if (!data) return;
-  if (munmap(data, size) != 0) {
-      perror("munmap");
+  if (!munmap(data, size)) {
+	  perror("munmap");
   }
 }
 #else
@@ -447,11 +418,7 @@ struct BaseEntry {
   uint8_t *data[3];
   map_t mapping[3];
 #ifdef __cplusplus
-#if __cplusplus >= 202002L
-  atomic<bool> ready[3]{false, false, false};
-#else
   atomic<bool> ready[3];
-#endif
 #else
   atomic_bool ready[3];
 #endif
@@ -488,11 +455,6 @@ struct PawnEntry {
 struct TbHashEntry {
   uint64_t key;
   struct BaseEntry *ptr;
-#ifdef __cplusplus
-  atomic<bool> error;
-#else
-  atomic_bool error;
-#endif
 };
 
 static int tbNumPiece, tbNumPawn;
@@ -730,7 +692,6 @@ static void add_to_hash(struct BaseEntry *ptr, uint64_t key)
 
   tbHash[idx].key = key;
   tbHash[idx].ptr = ptr;
-  atomic_store_explicit(&tbHash[idx].error, false, memory_order_relaxed);
 }
 
 #define pchr(i) piece_to_char[QUEEN - (i)]
@@ -782,10 +743,8 @@ static void init_tb(char *str)
       TB_MaxCardinalityDTM = be->num;
     }
 
-#if !defined(__cplusplus) || (__cplusplus < 202002L)
   for (int type = 0; type < 3; type++)
     atomic_init(&be->ready[type], false);
-#endif
 
   if (!be->hasPawns) {
     int j = 0;
@@ -864,13 +823,9 @@ bool tb_init(const char *path)
     numWdl = numDtm = numDtz = 0;
   }
 
-  TB_LARGEST = 0;
-
   // if path is an empty string or equals "<empty>", we are done.
   const char *p = path;
-  if (strlen(p) == 0 || !strcmp(p, "<empty>")) {
-    return true;
-  }
+  if (strlen(p) == 0 || !strcmp(p, "<empty>")) return true;
 
   pathString = (char*)malloc(strlen(p) + 1);
   strcpy(pathString, p);
@@ -894,6 +849,7 @@ bool tb_init(const char *path)
 
   tbNumPiece = tbNumPawn = 0;
   TB_MaxCardinality = TB_MaxCardinalityDTM = 0;
+  TB_LARGEST = 0;
 
   if (!pieceEntry) {
     pieceEntry = (struct PieceEntry*)malloc(TB_MAX_PIECE * sizeof(*pieceEntry));
@@ -913,33 +869,33 @@ bool tb_init(const char *path)
   int i, j, k, l, m;
 
   for (i = 0; i < 5; i++) {
-    snprintf(str, 16, "K%cvK", pchr(i));
+    sprintf(str, "K%cvK", pchr(i));
     init_tb(str);
   }
 
   for (i = 0; i < 5; i++)
     for (j = i; j < 5; j++) {
-      snprintf(str, 16, "K%cvK%c", pchr(i), pchr(j));
+      sprintf(str, "K%cvK%c", pchr(i), pchr(j));
       init_tb(str);
     }
 
   for (i = 0; i < 5; i++)
     for (j = i; j < 5; j++) {
-      snprintf(str, 16, "K%c%cvK", pchr(i), pchr(j));
+      sprintf(str, "K%c%cvK", pchr(i), pchr(j));
       init_tb(str);
     }
 
   for (i = 0; i < 5; i++)
     for (j = i; j < 5; j++)
       for (k = 0; k < 5; k++) {
-        snprintf(str, 16, "K%c%cvK%c", pchr(i), pchr(j), pchr(k));
+        sprintf(str, "K%c%cvK%c", pchr(i), pchr(j), pchr(k));
         init_tb(str);
       }
 
   for (i = 0; i < 5; i++)
     for (j = i; j < 5; j++)
       for (k = j; k < 5; k++) {
-        snprintf(str, 16, "K%c%c%cvK", pchr(i), pchr(j), pchr(k));
+        sprintf(str, "K%c%c%cvK", pchr(i), pchr(j), pchr(k));
         init_tb(str);
       }
 
@@ -951,7 +907,7 @@ bool tb_init(const char *path)
     for (j = i; j < 5; j++)
       for (k = i; k < 5; k++)
         for (l = (i == k) ? j : k; l < 5; l++) {
-          snprintf(str, 16, "K%c%cvK%c%c", pchr(i), pchr(j), pchr(k), pchr(l));
+          sprintf(str, "K%c%cvK%c%c", pchr(i), pchr(j), pchr(k), pchr(l));
           init_tb(str);
         }
 
@@ -959,7 +915,7 @@ bool tb_init(const char *path)
     for (j = i; j < 5; j++)
       for (k = j; k < 5; k++)
         for (l = 0; l < 5; l++) {
-          snprintf(str, 16, "K%c%c%cvK%c", pchr(i), pchr(j), pchr(k), pchr(l));
+          sprintf(str, "K%c%c%cvK%c", pchr(i), pchr(j), pchr(k), pchr(l));
           init_tb(str);
         }
 
@@ -967,7 +923,7 @@ bool tb_init(const char *path)
     for (j = i; j < 5; j++)
       for (k = j; k < 5; k++)
         for (l = k; l < 5; l++) {
-          snprintf(str, 16, "K%c%c%c%cvK", pchr(i), pchr(j), pchr(k), pchr(l));
+          sprintf(str, "K%c%c%c%cvK", pchr(i), pchr(j), pchr(k), pchr(l));
           init_tb(str);
         }
 
@@ -979,7 +935,7 @@ bool tb_init(const char *path)
       for (k = j; k < 5; k++)
         for (l = k; l < 5; l++)
           for (m = l; m < 5; m++) {
-            snprintf(str, 16, "K%c%c%c%c%cvK", pchr(i), pchr(j), pchr(k), pchr(l), pchr(m));
+            sprintf(str, "K%c%c%c%c%cvK", pchr(i), pchr(j), pchr(k), pchr(l), pchr(m));
             init_tb(str);
           }
 
@@ -988,7 +944,7 @@ bool tb_init(const char *path)
       for (k = j; k < 5; k++)
         for (l = k; l < 5; l++)
           for (m = 0; m < 5; m++) {
-            snprintf(str, 16, "K%c%c%c%cvK%c", pchr(i), pchr(j), pchr(k), pchr(l), pchr(m));
+            sprintf(str, "K%c%c%c%cvK%c", pchr(i), pchr(j), pchr(k), pchr(l), pchr(m));
             init_tb(str);
           }
 
@@ -997,7 +953,7 @@ bool tb_init(const char *path)
       for (k = j; k < 5; k++)
         for (l = 0; l < 5; l++)
           for (m = l; m < 5; m++) {
-            snprintf(str, 16, "K%c%c%cvK%c%c", pchr(i), pchr(j), pchr(k), pchr(l), pchr(m));
+            sprintf(str, "K%c%c%cvK%c%c", pchr(i), pchr(j), pchr(k), pchr(l), pchr(m));
             init_tb(str);
           }
 
@@ -1019,9 +975,7 @@ void tb_free(void)
 {
   tb_init("");
   free(pieceEntry);
-  pieceEntry = NULL;
   free(pawnEntry);
-  pawnEntry = NULL;
 }
 
 static const int8_t OffDiag[] = {
@@ -1588,7 +1542,7 @@ static bool init_table(struct BaseEntry *be, const char *str, int type)
         } else {
           data += (uintptr_t)data & 0x01;
           for (int i = 0; i < 4; i++) {
-            mapIdx[t][i] = (uint16_t)((uint16_t*)data + 1 - (uint16_t *)map);
+            mapIdx[t][i] = (uint16_t)(data + 1 - (uint8_t *)map);
             data += 2 + 2 * read_le_u16(data);
           }
         }
@@ -1742,7 +1696,7 @@ inline static int fill_squares(const Pos *pos, uint8_t *pc, bool flip, int mirro
   return i;
 }
 
-static int probe_table(const Pos *pos, int s, int *success, const int type)
+int probe_table(const Pos *pos, int s, int *success, const int type)
 {
   // Obtain the position's material-signature key
   uint64_t key = calc_key(pos,false);
@@ -1755,7 +1709,7 @@ static int probe_table(const Pos *pos, int s, int *success, const int type)
   int hashIdx = key >> (64 - TB_HASHBITS);
   while (tbHash[hashIdx].key && tbHash[hashIdx].key != key)
     hashIdx = (hashIdx + 1) & ((1 << TB_HASHBITS) - 1);
-  if (!tbHash[hashIdx].ptr || atomic_load_explicit(&tbHash[hashIdx].error, memory_order_relaxed)) {
+  if (!tbHash[hashIdx].ptr) {
     *success = 0;
     return 0;
   }
@@ -1769,16 +1723,11 @@ static int probe_table(const Pos *pos, int s, int *success, const int type)
   // Use double-checked locking to reduce locking overhead
   if (!atomic_load_explicit(&be->ready[type], memory_order_acquire)) {
     LOCK(tbMutex);
-    if (atomic_load_explicit(&tbHash[hashIdx].error, memory_order_relaxed)) {
-      *success = 0;
-      UNLOCK(tbMutex);
-      return 0;
-    }
     if (!atomic_load_explicit(&be->ready[type], memory_order_relaxed)) {
       char str[16];
       prt_str(pos, str, be->key != key);
       if (!init_table(be, str, type)) {
-        atomic_store_explicit(&tbHash[hashIdx].error, true, memory_order_relaxed);
+        tbHash[hashIdx].ptr = NULL; // mark as deleted
         *success = 0;
         UNLOCK(tbMutex);
         return 0;
@@ -1993,12 +1942,12 @@ int probe_wdl(Pos *pos, int *success)
   // Now handle the stalemate case.
   if (bestEp > -3 && v == 0) {
     TbMove moves[TB_MAX_MOVES];
-    TbMove *end2 = gen_moves(pos, moves);
+    TbMove *end = gen_moves(pos, moves);
     // Check for stalemate in the position with ep captures.
-    for (m = moves; m < end2; m++) {
+    for (m = moves; m < end; m++) {
       if (!is_en_passant(pos,*m) && legal_move(pos, *m)) break;
     }
-    if (m == end2 && !is_check(pos)) {
+    if (m == end && !is_check(pos)) {
       // stalemate score from tb (w/o e.p.), but an en-passant capture
       // is possible.
       *success = 2;
@@ -2407,9 +2356,6 @@ int root_probe_wdl(const Pos *pos, bool useRule50, struct TbRootMoves *rm)
 // Use the DTM tables to find mate scores.
 // Either DTZ or WDL must have been probed successfully earlier.
 // A return value of 0 means that not all probes were successful.
-#if defined(__cplusplus) && __cplusplus >= 201703L
-[[maybe_unused]]
-#endif
 int root_probe_dtm(const Pos *pos, struct TbRootMoves *rm)
 {
   int success;
@@ -2453,9 +2399,6 @@ int root_probe_dtm(const Pos *pos, struct TbRootMoves *rm)
 }
 
 // Use the DTM tables to complete a PV with mate score.
-#if defined(__cplusplus) && __cplusplus >= 201703L
-[[maybe_unused]]
-#endif
 void tb_expand_mate(Pos *pos, struct TbRootMove *move, Value moveScore, unsigned cardinalityDTM)
 {
   int success = 1, chk = 0;
