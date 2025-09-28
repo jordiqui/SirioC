@@ -9,6 +9,7 @@
 #include "engine/eval/nnue/evaluator.hpp"
 #include "engine/search/search.hpp"
 #include "engine/syzygy/syzygy.hpp"
+#include "engine/util/time.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -57,6 +58,7 @@ int g_numa_offset = 0;
 bool g_ponder = true;
 int g_multi_pv = 1;
 int g_move_overhead = 10;
+time::TimeConfig g_time_config;
 
 bool g_use_syzygy = false;
 std::string g_syzygy_path;
@@ -95,6 +97,7 @@ void sync_search_options() {
     g_search.set_ponder(g_ponder);
     g_search.set_multi_pv(g_multi_pv);
     g_search.set_move_overhead(g_move_overhead);
+    g_search.set_time_config(g_time_config);
     g_search.set_eval_file(g_eval_file);
     g_search.set_eval_file_small(g_eval_file_small);
 
@@ -127,6 +130,7 @@ Limits parse_go_tokens(const std::vector<std::string>& t) {
         else if (t[i] == "btime" && i + 1 < t.size()) lim.btime_ms = std::stoll(t[i + 1]);
         else if (t[i] == "winc" && i + 1 < t.size()) lim.winc_ms = std::stoll(t[i + 1]);
         else if (t[i] == "binc" && i + 1 < t.size()) lim.binc_ms = std::stoll(t[i + 1]);
+        else if (t[i] == "movestogo" && i + 1 < t.size()) lim.movestogo = std::stoi(t[i + 1]);
         else if (t[i] == "nodes" && i + 1 < t.size()) lim.nodes = std::stoll(t[i + 1]);
     }
     return lim;
@@ -229,6 +233,24 @@ void Uci::cmd_uci() {
     std::cout << "option name EvalFile type string default nn-1c0000000000.nnue\n";
     std::cout << "option name EvalFileSmall type string default nn-37f18f62d772.nnue\n";
     std::cout << "option name Move Overhead type spin default 10 min 0 max 5000\n";
+    std::cout << "option name Time ExpectedFullMoves type spin default "
+              << g_time_config.expected_full_moves << " min 20 max 200\n";
+    std::cout << "option name Time MinMovesToGo type spin default "
+              << g_time_config.min_moves_to_go << " min 1 max 60\n";
+    std::cout << "option name Time MaxMovesToGo type spin default "
+              << g_time_config.max_moves_to_go << " min 20 max 160\n";
+    std::cout << "option name Time HealthyTimeThresholdMs type spin default "
+              << g_time_config.healthy_time_threshold_ms << " min 1000 max 600000\n";
+    std::cout << "option name Time HealthyBonusPercent type spin default "
+              << g_time_config.healthy_time_bonus_percent << " min 0 max 200\n";
+    std::cout << "option name Time PanicTimeMs type spin default " << g_time_config.panic_time_ms
+              << " min 1000 max 600000\n";
+    std::cout << "option name Time PanicSpendPercent type spin default "
+              << g_time_config.panic_spend_percent << " min 10 max 100\n";
+    std::cout << "option name Time IncrementReservePercent type spin default "
+              << g_time_config.increment_reserve_percent << " min 0 max 100\n";
+    std::cout << "option name Time MaxStretchPercent type spin default "
+              << g_time_config.max_stretch_percent << " min 100 max 600\n";
     std::cout << "option name UseSyzygy type check default false\n";
     std::cout << "option name SyzygyPath type string default \"\"\n";
     std::cout << "option name SyzygyProbeDepth type spin default 1 min 0 max 128\n";
@@ -292,6 +314,42 @@ void Uci::cmd_setoption(const std::string& s) {
             else if (name == "EvalFile" && !value.empty()) g_eval_file = value;
             else if (name == "EvalFileSmall" && !value.empty()) g_eval_file_small = value;
             else if (name == "Move Overhead" && !value.empty()) g_move_overhead = std::stoi(value);
+            else if (name == "Time ExpectedFullMoves" && !value.empty()) {
+                int parsed = std::stoi(value);
+                g_time_config.expected_full_moves = std::clamp(parsed, 20, 200);
+            }
+            else if (name == "Time MinMovesToGo" && !value.empty()) {
+                int parsed = std::stoi(value);
+                g_time_config.min_moves_to_go = std::clamp(parsed, 1, 60);
+            }
+            else if (name == "Time MaxMovesToGo" && !value.empty()) {
+                int parsed = std::stoi(value);
+                g_time_config.max_moves_to_go = std::clamp(parsed, 20, 160);
+            }
+            else if (name == "Time HealthyTimeThresholdMs" && !value.empty()) {
+                int parsed = std::stoi(value);
+                g_time_config.healthy_time_threshold_ms = std::clamp(parsed, 1000, 600000);
+            }
+            else if (name == "Time HealthyBonusPercent" && !value.empty()) {
+                int parsed = std::stoi(value);
+                g_time_config.healthy_time_bonus_percent = std::clamp(parsed, 0, 200);
+            }
+            else if (name == "Time PanicTimeMs" && !value.empty()) {
+                int parsed = std::stoi(value);
+                g_time_config.panic_time_ms = std::clamp(parsed, 1000, 600000);
+            }
+            else if (name == "Time PanicSpendPercent" && !value.empty()) {
+                int parsed = std::stoi(value);
+                g_time_config.panic_spend_percent = std::clamp(parsed, 10, 100);
+            }
+            else if (name == "Time IncrementReservePercent" && !value.empty()) {
+                int parsed = std::stoi(value);
+                g_time_config.increment_reserve_percent = std::clamp(parsed, 0, 100);
+            }
+            else if (name == "Time MaxStretchPercent" && !value.empty()) {
+                int parsed = std::stoi(value);
+                g_time_config.max_stretch_percent = std::clamp(parsed, 100, 600);
+            }
             else if (name == "UseSyzygy") g_use_syzygy = parse_bool(value);
             else if (name == "SyzygyPath" && !value.empty()) g_syzygy_path = value;
             else if (name == "SyzygyProbeDepth" && !value.empty()) {
@@ -306,6 +364,9 @@ void Uci::cmd_setoption(const std::string& s) {
 
             break;
         }
+    }
+    if (g_time_config.min_moves_to_go > g_time_config.max_moves_to_go) {
+        g_time_config.max_moves_to_go = g_time_config.min_moves_to_go;
     }
     sync_search_options();
 }

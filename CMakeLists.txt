@@ -162,6 +162,9 @@ target_link_libraries(movegen_tests PRIVATE sirio_core)
 add_executable(perft_tests tests/perft_tests.cpp)
 target_link_libraries(perft_tests PRIVATE sirio_core)
 
+add_executable(time_tests tests/time_tests.cpp)
+target_link_libraries(time_tests PRIVATE sirio_core)
+
 if (MINGW)
   foreach(target SirioC legal_moves_cli movegen_tests perft_tests)
     target_link_libraries(${target} PRIVATE stdc++)
@@ -182,6 +185,7 @@ target_link_libraries(SirioCTests PRIVATE sirio_core)
 
 add_test(NAME movegen_unit_tests COMMAND movegen_tests)
 add_test(NAME perft_regression_tests COMMAND perft_tests)
+add_test(NAME time_management_tests COMMAND time_tests)
 add_test(NAME go_command_responds_with_legal_move
          COMMAND Python3::Interpreter
                  ${CMAKE_SOURCE_DIR}/tests/test_go.py
