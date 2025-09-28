@@ -84,6 +84,7 @@ if (ENABLE_LTO)
 endif()
 
 set(SIRIOC_SOURCES
+  ${CMAKE_SOURCE_DIR}/src/bench.cpp
   ${CMAKE_SOURCE_DIR}/src/core/board.cpp
   ${CMAKE_SOURCE_DIR}/src/core/fen.cpp
   ${CMAKE_SOURCE_DIR}/src/core/movegen.cpp
