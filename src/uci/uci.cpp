@@ -1,5 +1,7 @@
 #include "engine/uci/uci.hpp"
 
+#include "engine/bench/bench.hpp"
+
 #include "engine/config.hpp"
 #include "engine/core/board.hpp"
 #include "engine/core/fen.hpp"
@@ -393,6 +395,7 @@ void Uci::cmd_bench(const std::string& s) {
     auto tokens = split(s);
     int depth = 8;
     int threads = g_threads;
+codex/apply-performance-patch-for-sirioc
     bool explicit_threads = false;
     for (size_t i = 1; i < tokens.size(); ++i) {
         if (tokens[i] == "depth" && i + 1 < tokens.size()) depth = std::stoi(tokens[i + 1]);
@@ -404,12 +407,20 @@ void Uci::cmd_bench(const std::string& s) {
 
     if (!explicit_threads && g_threads == 1) {
         threads = std::max(1, g_default_threads);
+=======
+    bool perft_mode = false;
+    for (size_t i = 1; i < tokens.size(); ++i) {
+        if (tokens[i] == "depth" && i + 1 < tokens.size()) depth = std::stoi(tokens[i + 1]);
+        else if (tokens[i] == "threads" && i + 1 < tokens.size()) threads = std::stoi(tokens[i + 1]);
+        else if (tokens[i] == "perft") perft_mode = true;
+main
     }
 
     int previous_threads = g_threads;
     g_threads = std::clamp(threads, 1, kThreadsMax);
     sync_search_options();
 
+ codex/apply-performance-patch-for-sirioc
     Limits lim;
     lim.depth = depth;
 
@@ -431,6 +442,25 @@ void Uci::cmd_bench(const std::string& s) {
 
     std::cout << "bench depth " << depth << " nodes " << total_nodes << " time " << elapsed_ms
               << " nps " << nps << "\n";
+=======
+    if (perft_mode) {
+        auto result = bench::run_perft_suite(depth);
+        uint64_t nps = result.time_ms > 0
+                            ? result.nodes * 1000ULL / static_cast<uint64_t>(result.time_ms)
+                            : 0;
+        std::cout << "bench perft depth " << depth << " nodes " << result.nodes << " time "
+                  << result.time_ms << " nps " << nps << " positions " << result.positions
+                  << " verified " << (result.verified ? "true" : "false") << "\n";
+    } else {
+        auto result = bench::run(g_search, depth);
+        uint64_t nps = result.time_ms > 0
+                            ? result.nodes * 1000ULL / static_cast<uint64_t>(result.time_ms)
+                            : 0;
+        std::cout << "bench depth " << depth << " nodes " << result.nodes << " time "
+                  << result.time_ms << " nps " << nps << " positions " << result.positions
+                  << "\n";
+    }
+ main
 
     g_threads = previous_threads;
     sync_search_options();
