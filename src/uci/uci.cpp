@@ -51,6 +51,9 @@ static void ensure_nnue_loaded() {
             std::cout << "info string Failed to load NNUE network '" << g_eval_file
                       << "', disabling UseNNUE\n" << std::flush;
             g_use_nnue = false;
+        } else {
+            std::cout << "info string Loaded NNUE network '" << g_eval_file << "'\n"
+                      << std::flush;
         }
     }
 }
