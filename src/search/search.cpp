@@ -1580,7 +1580,11 @@ std::vector<Move> Search::extract_pv(const Board& board, Move best) const {
         uint64_t key = current.zobrist_key();
         Move next = tt_.probe_move(key);
         if (next == MOVE_NONE) break;
+
+        auto legal_moves = current.generate_legal_moves();
+        if (std::find(legal_moves.begin(), legal_moves.end(), next) == legal_moves.end()) break;
         if (std::find(pv.begin(), pv.end(), next) != pv.end()) break;
+
         pv.push_back(next);
         Board::State next_state;
         current.apply_move(next, next_state);
