@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <bit>
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
@@ -307,6 +308,12 @@ void Search::set_nnue_evaluator(const nnue::Evaluator* evaluator) { nnue_eval_ =
 
 void Search::set_use_nnue(bool enable) { use_nnue_eval_ = enable; }
 
+void Search::set_syzygy_probe_depth(int depth) { syzygy_probe_depth_ = std::clamp(depth, 1, 100); }
+
+void Search::set_syzygy_50_move_rule(bool enable) { syzygy_50_move_rule_ = enable; }
+
+void Search::set_syzygy_probe_limit(int limit) { syzygy_probe_limit_ = std::clamp(limit, 0, 7); }
+
 Search::Result Search::find_bestmove(Board& board, const Limits& lim) {
     stop_.store(false, std::memory_order_relaxed);
     return search_position(board, lim);
@@ -553,7 +560,7 @@ int Search::negamax(Board& board, int depth, int alpha, int beta, bool pv_node, 
 
     if (depth <= 0) { return quiescence(board, alpha, beta, ply, thread_data); }
 
-    if (use_syzygy_) {
+    if (use_syzygy_ && depth <= syzygy_probe_depth_) {
         if (auto tb = probe_syzygy(board)) return *tb;
     }
 
@@ -979,7 +986,13 @@ int Search::evaluate(const Board& board) const {
 }
 
 std::optional<int> Search::probe_syzygy(const Board& board) const {
-    if (!use_syzygy_) return std::nullopt;
+    if (!use_syzygy_ || syzygy_probe_limit_ == 0) return std::nullopt;
+
+    const auto& occupancy = board.occupancy();
+    if (std::popcount(occupancy[Board::OCC_BOTH]) > syzygy_probe_limit_) {
+        return std::nullopt;
+    }
+
     auto result = syzygy::probe_wdl(board);
     if (!result) return std::nullopt;
 
@@ -991,9 +1004,9 @@ std::optional<int> Search::probe_syzygy(const Board& board) const {
     case syzygy::WdlOutcome::Draw:
         return 0;
     case syzygy::WdlOutcome::CursedWin:
-        return 200;
+        return syzygy_50_move_rule_ ? 0 : (kMateValue - 1);
     case syzygy::WdlOutcome::BlessedLoss:
-        return -200;
+        return syzygy_50_move_rule_ ? 0 : (-kMateValue + 1);
     }
     return std::nullopt;
 }
