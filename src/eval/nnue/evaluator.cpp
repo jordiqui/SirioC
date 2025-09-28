@@ -12,10 +12,12 @@ bool Evaluator::load_network(const std::string& path) {
     if (!file) {
         loaded_ = false;
         raw_network_.clear();
+        loaded_path_.clear();
         return false;
     }
     raw_network_.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
     loaded_ = !raw_network_.empty();
+    loaded_path_ = loaded_ ? path : std::string{};
     return loaded_;
 }
 
