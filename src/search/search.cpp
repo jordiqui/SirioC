@@ -397,49 +397,53 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
     int depth_limit = lim.depth > 0 ? lim.depth : 64;
     depth_limit = std::min(depth_limit, 64);
 
-    int tb_limit = syzygy_config_.probe_limit;
-    if (syzygy_config_.enabled && !syzygy_config_.path.empty() &&
-        depth_limit >= syzygy_config_.probe_depth &&
-        (tb_limit < 0 || syzygy::TB::pieceCount(board) <= tb_limit)) {
-        if (auto tb = syzygy::TB::probePosition(board, syzygy_config_, true)) {
-            int tb_score = tablebase_score(*tb, syzygy_config_);
-            result.bestmove = tb->best_move.value_or(MOVE_NONE);
-            result.depth = depth_limit;
-            result.score = tb_score;
-            result.is_mate = std::abs(tb_score) >= kMateThreshold;
-            result.nodes = nodes_.load(std::memory_order_relaxed);
-            result.time_ms = static_cast<int>(
-                std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::steady_clock::now() - start)
-                    .count());
-            result.pv.clear();
-            if (tb->best_move) {
-                result.pv.push_back(*tb->best_move);
-            }
-
-            std::ostringstream oss;
-            oss << "info string Syzygy hit wdl " << wdl_to_string(tb->wdl);
-            if (tb->dtz) {
-                oss << " dtz " << *tb->dtz;
-            }
-            if (tb->best_move) {
-                oss << " move " << board.move_to_uci(*tb->best_move);
-            }
-            std::cout << oss.str() << '\n' << std::flush;
-
-            deadline_.reset();
-            target_time_ms_ = -1;
-            nodes_limit_ = -1;
-            return result;
-        }
-    }
-
     int aspiration_delta = kAspirationWindow;
     int fail_high_streak = 0;
     int fail_low_streak = 0;
 
+    bool attempted_root_tb = false;
+
     for (int depth = 1; depth <= depth_limit; ++depth) {
         if (stop_.load(std::memory_order_relaxed)) break;
+
+        if (!attempted_root_tb && syzygy_config_.enabled && !syzygy_config_.path.empty() &&
+            depth >= syzygy_config_.probe_depth) {
+            int tb_limit = syzygy_config_.probe_limit;
+            if (tb_limit < 0 || syzygy::TB::pieceCount(board) <= tb_limit) {
+                if (auto tb = syzygy::TB::probePosition(board, syzygy_config_, true)) {
+                    int tb_score = tablebase_score(*tb, syzygy_config_);
+                    result.bestmove = tb->best_move.value_or(MOVE_NONE);
+                    result.depth = depth;
+                    result.score = tb_score;
+                    result.is_mate = std::abs(tb_score) >= kMateThreshold;
+                    result.nodes = nodes_.load(std::memory_order_relaxed);
+                    result.time_ms = static_cast<int>(
+                        std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::steady_clock::now() - start)
+                            .count());
+                    result.pv.clear();
+                    if (tb->best_move) {
+                        result.pv.push_back(*tb->best_move);
+                    }
+
+                    std::ostringstream oss;
+                    oss << "info string Syzygy hit wdl " << wdl_to_string(tb->wdl);
+                    if (tb->dtz) {
+                        oss << " dtz " << *tb->dtz;
+                    }
+                    if (tb->best_move) {
+                        oss << " move " << board.move_to_uci(*tb->best_move);
+                    }
+                    std::cout << oss.str() << '\n' << std::flush;
+
+                    deadline_.reset();
+                    target_time_ms_ = -1;
+                    nodes_limit_ = -1;
+                    return result;
+                }
+            }
+            attempted_root_tb = true;
+        }
 
         tuning_.begin_iteration(nodes_.load(std::memory_order_relaxed),
                                 std::chrono::steady_clock::now());
