@@ -68,9 +68,16 @@ private:
 
         static constexpr int kMaxPly = 128;
 
+        struct QuiescenceCapture {
+            Move move = MOVE_NONE;
+            int see = 0;
+        };
+
         std::vector<std::array<Move, 2>> killers;
         std::array<int, 64 * 64> history{};
         std::array<Move, 64 * 64> countermoves{};
+        std::vector<QuiescenceCapture> quiescence_captures;
+        std::vector<Move> quiescence_checks;
         size_t id = 0;
     };
     struct AdaptiveTuning {
