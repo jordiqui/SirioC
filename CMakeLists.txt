@@ -162,12 +162,17 @@ target_link_libraries(movegen_tests PRIVATE sirio_core)
 add_executable(perft_tests tests/perft_tests.cpp)
 target_link_libraries(perft_tests PRIVATE sirio_core)
 
+ codex/refactor-static_exchange_eval-for-see
+add_executable(see_regression_tests tests/see_regression_tests.cpp)
+target_link_libraries(see_regression_tests PRIVATE sirio_core)
+=======
  codex/enhance-time-allocation-strategy-in-compute_allocation
 add_executable(time_tests tests/time_tests.cpp)
 target_link_libraries(time_tests PRIVATE sirio_core)
 =======
 add_executable(eval_tests tests/eval_tests.cpp)
 target_link_libraries(eval_tests PRIVATE sirio_core)
+ main
  main
 
 if (MINGW)
@@ -190,10 +195,14 @@ target_link_libraries(SirioCTests PRIVATE sirio_core)
 
 add_test(NAME movegen_unit_tests COMMAND movegen_tests)
 add_test(NAME perft_regression_tests COMMAND perft_tests)
+ codex/refactor-static_exchange_eval-for-see
+add_test(NAME see_regression_tests COMMAND see_regression_tests)
+
  codex/enhance-time-allocation-strategy-in-compute_allocation
 add_test(NAME time_management_tests COMMAND time_tests)
 =======
 add_test(NAME evaluation_heuristics_tests COMMAND eval_tests)
+ main
  main
 add_test(NAME go_command_responds_with_legal_move
          COMMAND Python3::Interpreter
