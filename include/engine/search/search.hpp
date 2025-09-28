@@ -1,4 +1,5 @@
 #pragma once
+#include "engine/syzygy/syzygy.hpp"
 #include "engine/types.hpp"
 #include <array>
 #include <atomic>
@@ -42,8 +43,7 @@ public:
     void set_threads(int threads);
     void set_hash(int megabytes);
     void stop();
-    void set_use_syzygy(bool enable);
-    void set_syzygy_path(std::string path);
+    void set_syzygy_config(syzygy::TBConfig config);
     void set_numa_offset(int offset);
     void set_ponder(bool enable);
     void set_multi_pv(int multi_pv);
@@ -134,7 +134,8 @@ private:
     void update_history(ThreadData& thread_data, Move move, int delta);
     std::vector<Move> extract_pv(const Board& board, Move best) const;
     int evaluate(const Board& board) const;
-    std::optional<int> probe_syzygy(const Board& board) const;
+    std::optional<int> probe_syzygy(const Board& board, int depth,
+                                    bool root_probe) const;
 
     std::vector<TTEntry> tt_;
     size_t tt_mask_ = 0;
@@ -146,8 +147,7 @@ private:
     size_t thread_data_thread_count_ = 0;
     bool thread_data_initialized_ = false;
     int threads_ = 1;
-    bool use_syzygy_ = false;
-    std::string syzygy_path_;
+    syzygy::TBConfig syzygy_config_{};
     int numa_offset_ = 0;
     bool ponder_ = true;
     int multi_pv_ = 1;

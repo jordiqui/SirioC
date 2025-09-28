@@ -5,6 +5,8 @@
 
 #include <atomic>
 #include <bit>
+#include <cctype>
+#include <cstdlib>
 #include <mutex>
 #include <string>
 
@@ -15,6 +17,7 @@ namespace {
 std::mutex g_mutex;
 std::atomic<bool> g_ready{false};
 std::string g_current_path;
+TBConfig g_active_config{};
 
 constexpr uint64_t kFileA = 0x0101010101010101ULL;
 constexpr uint64_t kFileH = 0x8080808080808080ULL;
@@ -36,11 +39,28 @@ bool has_en_passant_capture(const Board& board, int ep_square) {
     }
 }
 
-} // namespace
+int convert_tb_promotion(int tb_code) {
+    switch (tb_code) {
+    case TB_PROMOTES_QUEEN: return 4;
+    case TB_PROMOTES_ROOK: return 3;
+    case TB_PROMOTES_BISHOP: return 2;
+    case TB_PROMOTES_KNIGHT: return 1;
+    default: return 0;
+    }
+}
 
-bool init(const std::string& path) {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    if (path.empty()) {
+Move build_move_from_tb(const Board& board, int from, int to, int promo_code, bool is_ep) {
+    const auto& squares = board.squares();
+    char moving = squares[static_cast<size_t>(from)];
+    bool capture = board.piece_on(to) != '.' || is_ep;
+    bool pawn = std::tolower(static_cast<unsigned char>(moving)) == 'p';
+    bool double_push = pawn && std::abs(to - from) == 16;
+    int promo = convert_tb_promotion(promo_code);
+    return make_move(from, to, promo, capture, double_push, is_ep, false);
+}
+
+bool ensure_initialized_locked(const TBConfig& config) {
+    if (!config.enabled || config.path.empty()) {
         if (g_ready.exchange(false, std::memory_order_acq_rel)) {
             tb_free();
         }
@@ -48,7 +68,7 @@ bool init(const std::string& path) {
         return false;
     }
 
-    if (g_ready.load(std::memory_order_acquire) && path == g_current_path) {
+    if (g_ready.load(std::memory_order_acquire) && config.path == g_current_path) {
         return TB_LARGEST > 0;
     }
 
@@ -56,20 +76,29 @@ bool init(const std::string& path) {
         tb_free();
     }
 
-    if (tb_init(path.c_str())) {
-        g_current_path = path;
+    if (tb_init(config.path.c_str())) {
+        g_current_path = config.path;
         bool available = TB_LARGEST > 0;
         g_ready.store(available, std::memory_order_release);
         return available;
     }
 
-    g_current_path = path;
+    g_current_path = config.path;
     g_ready.store(false, std::memory_order_release);
     return false;
 }
 
+} // namespace
+
+bool configure(const TBConfig& config) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_active_config = config;
+    return ensure_initialized_locked(config);
+}
+
 void shutdown() {
     std::lock_guard<std::mutex> lock(g_mutex);
+    g_active_config = TBConfig{};
     if (g_ready.exchange(false, std::memory_order_acq_rel)) {
         tb_free();
     }
@@ -77,17 +106,27 @@ void shutdown() {
 }
 
 bool is_available() {
-    return g_ready.load(std::memory_order_acquire) && TB_LARGEST > 0;
+    return g_active_config.enabled &&
+           g_ready.load(std::memory_order_acquire) && TB_LARGEST > 0;
 }
 
-std::optional<ProbeResult> probe_wdl(const Board& board) {
+namespace TB {
+
+int pieceCount(const Board& board) {
+    const auto& occupancy = board.occupancy();
+    return static_cast<int>(std::popcount(occupancy[Board::OCC_BOTH]));
+}
+
+std::optional<ProbeResult> probePosition(const Board& board, const TBConfig& config,
+                                         bool root) {
+    if (!config.enabled || config.path.empty()) return std::nullopt;
     if (!is_available()) return std::nullopt;
+    if (board.castling_rights() != 0) return std::nullopt;
 
     const auto& occupancy = board.occupancy();
-    uint64_t all = occupancy[Board::OCC_BOTH];
-    if (std::popcount(all) > TB_LARGEST) return std::nullopt;
-
-    if (board.castling_rights() != 0) return std::nullopt;
+    if (static_cast<int>(std::popcount(occupancy[Board::OCC_BOTH])) > TB_LARGEST) {
+        return std::nullopt;
+    }
 
     unsigned ep = 0;
     int ep_square = board.en_passant_square();
@@ -104,25 +143,53 @@ std::optional<ProbeResult> probe_wdl(const Board& board) {
     uint64_t bishops = pieces[Board::WHITE_BISHOP] | pieces[Board::BLACK_BISHOP];
     uint64_t knights = pieces[Board::WHITE_KNIGHT] | pieces[Board::BLACK_KNIGHT];
     uint64_t pawns = pieces[Board::WHITE_PAWN] | pieces[Board::BLACK_PAWN];
+    bool turn = board.white_to_move();
 
-    unsigned result = tb_probe_wdl_impl(
-        white,
-        black,
-        kings,
-        queens,
-        rooks,
-        bishops,
-        knights,
-        pawns,
-        ep,
-        board.white_to_move());
+    if (root) {
+        unsigned result = tb_probe_root_impl(white, black, kings, queens, rooks, bishops,
+                                             knights, pawns,
+                                             static_cast<unsigned>(board.halfmove_clock()),
+                                             ep, turn, nullptr);
+        if (result == TB_RESULT_FAILED) return std::nullopt;
 
+        ProbeResult out;
+        if (result == TB_RESULT_CHECKMATE) {
+            out.wdl = WdlOutcome::Loss;
+            out.dtz = -1;
+            return out;
+        }
+        if (result == TB_RESULT_STALEMATE) {
+            out.wdl = WdlOutcome::Draw;
+            out.dtz = 0;
+            return out;
+        }
+
+        out.wdl = static_cast<WdlOutcome>(TB_GET_WDL(result));
+        int dtz = static_cast<int>(TB_GET_DTZ(result));
+        if (dtz != 0 &&
+            (out.wdl == WdlOutcome::Loss || out.wdl == WdlOutcome::BlessedLoss)) {
+            dtz = -dtz;
+        }
+        out.dtz = dtz;
+
+        int from = TB_GET_FROM(result);
+        int to = TB_GET_TO(result);
+        int promo = TB_GET_PROMOTES(result);
+        bool is_ep = TB_GET_EP(result) != 0;
+        out.best_move = build_move_from_tb(board, from, to, promo, is_ep);
+        return out;
+    }
+
+    unsigned result = tb_probe_wdl_impl(white, black, kings, queens, rooks, bishops,
+                                        knights, pawns, ep, turn);
     if (result == TB_RESULT_FAILED) return std::nullopt;
 
     ProbeResult out;
     out.wdl = static_cast<WdlOutcome>(result);
     return out;
 }
+
+} // namespace TB
 
 } // namespace engine::syzygy
 
