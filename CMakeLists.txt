@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(SirioC LANGUAGES CXX)
+project(SirioC LANGUAGES C CXX)
 
 option(ENABLE_LTO "Enable link-time optimization" ON)
 option(ENABLE_AVX2 "Enable AVX2/BMI2 where available" OFF)
@@ -19,7 +19,9 @@ endif()
 if (MSVC)
   add_compile_options(/O2 /DNOMINMAX /D_CRT_SECURE_NO_WARNINGS)
 else()
-  add_compile_options(-O3 -fno-exceptions -fno-rtti -DNDEBUG)
+  add_compile_options(-O3 -DNDEBUG)
+  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
+                      $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>)
   include(CheckCXXCompilerFlag)
 
   set(SIRIOC_FEATURE_FLAGS "")
@@ -81,15 +83,34 @@ if (ENABLE_LTO)
   endif()
 endif()
 
-file(GLOB_RECURSE SRC_FILES
-  src/*.cpp
+set(SIRIOC_SOURCES
+  ${CMAKE_SOURCE_DIR}/src/core/board.cpp
+  ${CMAKE_SOURCE_DIR}/src/core/fen.cpp
+  ${CMAKE_SOURCE_DIR}/src/core/movegen.cpp
+  ${CMAKE_SOURCE_DIR}/src/core/perft.cpp
+  ${CMAKE_SOURCE_DIR}/src/eval/eval.cpp
+  ${CMAKE_SOURCE_DIR}/src/eval/nnue/accumulator.cpp
+  ${CMAKE_SOURCE_DIR}/src/eval/nnue/evaluator.cpp
+  ${CMAKE_SOURCE_DIR}/src/search/search.cpp
+  ${CMAKE_SOURCE_DIR}/src/syzygy/syzygy.cpp
+  ${CMAKE_SOURCE_DIR}/src/uci/uci.cpp
+  ${CMAKE_SOURCE_DIR}/src/util/log.cpp
+  ${CMAKE_SOURCE_DIR}/src/util/time.cpp
+  ${CMAKE_SOURCE_DIR}/3rdparty/fathom/tbprobe.c
 )
 
 set(MAIN_SOURCE ${CMAKE_SOURCE_DIR}/src/main.cpp)
-list(REMOVE_ITEM SRC_FILES ${MAIN_SOURCE})
 
-add_library(sirio_core ${SRC_FILES})
-target_include_directories(sirio_core PUBLIC ${CMAKE_SOURCE_DIR}/include)
+add_library(sirio_core ${SIRIOC_SOURCES})
+target_include_directories(sirio_core PUBLIC
+  ${CMAKE_SOURCE_DIR}/include
+  ${CMAKE_SOURCE_DIR}/include/engine/syzygy
+  ${CMAKE_SOURCE_DIR}/3rdparty/fathom
+)
+set_source_files_properties(${CMAKE_SOURCE_DIR}/3rdparty/fathom/tbprobe.c
+  PROPERTIES
+    LANGUAGE C
+)
 target_compile_definitions(sirio_core PUBLIC
   ENGINE_NAME="SirioC"
   ENGINE_VERSION="0.1.0"
