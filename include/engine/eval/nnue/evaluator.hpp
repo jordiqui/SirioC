@@ -1,8 +1,8 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <string>
-#include <vector>
 
 namespace engine { class Board; }
 
@@ -16,8 +16,17 @@ public:
     const std::string& loaded_path() const noexcept { return loaded_path_; }
 
 private:
+    struct Network {
+        static constexpr std::size_t kFeatureCount = 7;
+        double bias = 0.0;
+        std::array<double, kFeatureCount> weights{};
+    };
+
+    std::array<double, Network::kFeatureCount>
+    compute_features(const engine::Board& board) const;
+
     bool loaded_ = false;
-    std::vector<std::uint8_t> raw_network_;
+    Network network_{};
     std::string loaded_path_{};
 };
 
