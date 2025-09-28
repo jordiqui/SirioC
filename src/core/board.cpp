@@ -18,50 +18,6 @@ namespace {
 
 constexpr uint64_t kSquareMask(int square) { return 1ULL << square; }
 
-const std::array<uint64_t, 12 * 64>& piece_keys() {
-    static std::array<uint64_t, 12 * 64> keys{};
-    static bool initialized = false;
-    if (!initialized) {
-        std::mt19937_64 rng(0xC0FFEE123456789ULL);
-        for (auto& k : keys) k = rng();
-        initialized = true;
-    }
-    return keys;
-}
-
-const std::array<uint64_t, 16>& castling_keys() {
-    static std::array<uint64_t, 16> keys{};
-    static bool initialized = false;
-    if (!initialized) {
-        std::mt19937_64 rng(0xABCDEF9876543210ULL);
-        for (auto& k : keys) k = rng();
-        initialized = true;
-    }
-    return keys;
-}
-
-const std::array<uint64_t, 8>& enpassant_keys() {
-    static std::array<uint64_t, 8> keys{};
-    static bool initialized = false;
-    if (!initialized) {
-        std::mt19937_64 rng(0x13579BDF2468ACE0ULL);
-        for (auto& k : keys) k = rng();
-        initialized = true;
-    }
-    return keys;
-}
-
-uint64_t side_key() {
-    static uint64_t key = 0;
-    static bool initialized = false;
-    if (!initialized) {
-        std::mt19937_64 rng(0x1122334455667788ULL);
-        key = rng();
-        initialized = true;
-    }
-    return key;
-}
-
 int piece_index_from_char(char c) {
     switch (c) {
     case 'P': return Board::WHITE_PAWN;
@@ -183,6 +139,50 @@ bool parse_en_passant_field(const std::string& field, int& square) {
 
 } // namespace
 
+const std::array<uint64_t, 12 * 64>& Board::zobrist_piece_keys() {
+    static std::array<uint64_t, 12 * 64> keys{};
+    static bool initialized = false;
+    if (!initialized) {
+        std::mt19937_64 rng(0xC0FFEE123456789ULL);
+        for (auto& k : keys) k = rng();
+        initialized = true;
+    }
+    return keys;
+}
+
+const std::array<uint64_t, 16>& Board::zobrist_castling_keys() {
+    static std::array<uint64_t, 16> keys{};
+    static bool initialized = false;
+    if (!initialized) {
+        std::mt19937_64 rng(0xABCDEF9876543210ULL);
+        for (auto& k : keys) k = rng();
+        initialized = true;
+    }
+    return keys;
+}
+
+const std::array<uint64_t, 8>& Board::zobrist_enpassant_keys() {
+    static std::array<uint64_t, 8> keys{};
+    static bool initialized = false;
+    if (!initialized) {
+        std::mt19937_64 rng(0x13579BDF2468ACE0ULL);
+        for (auto& k : keys) k = rng();
+        initialized = true;
+    }
+    return keys;
+}
+
+uint64_t Board::zobrist_side_key() {
+    static uint64_t key = 0;
+    static bool initialized = false;
+    if (!initialized) {
+        std::mt19937_64 rng(0x1122334455667788ULL);
+        key = rng();
+        initialized = true;
+    }
+    return key;
+}
+
 Board::Board() { set_startpos(); }
 
 Board::Board(const Board& other)
@@ -196,6 +196,7 @@ Board::Board(const Board& other)
       last_fen_(other.last_fen_),
       squares_(other.squares_),
       accumulator_(other.accumulator_),
+      zobrist_key_(other.zobrist_key_),
       history_() {}
 
 Board& Board::operator=(const Board& other) {
@@ -211,6 +212,7 @@ Board& Board::operator=(const Board& other) {
     last_fen_ = other.last_fen_;
     squares_ = other.squares_;
     accumulator_ = other.accumulator_;
+    zobrist_key_ = other.zobrist_key_;
     history_.clear();
 
     return *this;
@@ -262,6 +264,7 @@ bool Board::set_fen(const std::string& fen) {
     last_fen_ = fen;
     history_.clear();
     accumulator_.reset(*this);
+    zobrist_key_ = compute_zobrist_key();
     return true;
 }
 
@@ -352,21 +355,23 @@ char Board::promotion_from_code(int code, bool white) const {
     }
 }
 
-uint64_t Board::zobrist_key() const {
+uint64_t Board::compute_zobrist_key() const {
     uint64_t key = 0;
-    const auto& pk = piece_keys();
+    const auto& pk = zobrist_piece_keys();
     for (int sq = 0; sq < 64; ++sq) {
         char piece = squares_[sq];
-        int idx = piece_index_from_char(piece);
+        int idx = piece_index(piece);
         if (idx == -1) continue;
         key ^= pk[static_cast<size_t>(idx) * 64 + static_cast<size_t>(sq)];
     }
-    if (stm_white_) key ^= side_key();
-    key ^= castling_keys()[castling_rights_ & 0xF];
+    if (stm_white_) key ^= zobrist_side_key();
+    key ^= zobrist_castling_keys()[static_cast<size_t>(castling_rights_ & 0xF)];
     if (en_passant_square_ != INVALID_SQUARE) {
-        key ^= enpassant_keys()[file_of(en_passant_square_)];
+        key ^= zobrist_enpassant_keys()[static_cast<size_t>(file_of(en_passant_square_))];
     }
     return key;
 }
+
+uint64_t Board::zobrist_key() const { return zobrist_key_; }
 
 } // namespace engine

@@ -426,6 +426,17 @@ void Board::apply_move(Move move, State& state) {
     state.prev_mg = accumulator_.mg();
     state.prev_eg = accumulator_.eg();
     state.prev_phase = accumulator_.phase();
+    state.prev_zobrist_key = zobrist_key_;
+
+    uint64_t key = zobrist_key_;
+    const auto& pk = zobrist_piece_keys();
+    const auto& ck = zobrist_castling_keys();
+    const auto& ep_keys = zobrist_enpassant_keys();
+
+    key ^= ck[static_cast<size_t>(castling_rights_ & 0xF)];
+    if (en_passant_square_ != INVALID_SQUARE) {
+        key ^= ep_keys[static_cast<size_t>(file_of(en_passant_square_))];
+    }
 
     int capture_sq = to;
     char captured = squares_[to];
@@ -437,10 +448,19 @@ void Board::apply_move(Move move, State& state) {
     state.capture_square = capture_sq;
     state.captured_piece = captured;
 
+    int moving_idx = piece_index(moving_piece);
+    if (moving_idx != -1) {
+        key ^= pk[static_cast<size_t>(moving_idx) * 64 + static_cast<size_t>(from)];
+    }
     remove_piece(moving_piece, from);
     squares_[from] = '.';
 
     if (captured != '.') {
+        int captured_idx = piece_index(captured);
+        if (captured_idx != -1) {
+            key ^= pk[static_cast<size_t>(captured_idx) * 64 +
+                     static_cast<size_t>(capture_sq)];
+        }
         remove_piece(captured, capture_sq);
         if (state.was_enpassant) {
             squares_[capture_sq] = '.';
@@ -470,6 +490,11 @@ void Board::apply_move(Move move, State& state) {
             state.rook_piece = rook;
             state.rook_from = rook_from;
             state.rook_to = rook_to;
+            int rook_idx = piece_index(rook);
+            if (rook_idx != -1) {
+                key ^= pk[static_cast<size_t>(rook_idx) * 64 + static_cast<size_t>(rook_from)];
+                key ^= pk[static_cast<size_t>(rook_idx) * 64 + static_cast<size_t>(rook_to)];
+            }
             remove_piece(rook, rook_from);
             squares_[rook_from] = '.';
             squares_[rook_to] = rook;
@@ -484,6 +509,10 @@ void Board::apply_move(Move move, State& state) {
         state.promoted_piece = placed_piece;
     }
 
+    int placed_idx = piece_index(placed_piece);
+    if (placed_idx != -1) {
+        key ^= pk[static_cast<size_t>(placed_idx) * 64 + static_cast<size_t>(to)];
+    }
     squares_[to] = placed_piece;
     add_piece(placed_piece, to);
 
@@ -506,9 +535,15 @@ void Board::apply_move(Move move, State& state) {
         castling_rights_ &= ~CASTLE_BLACK_K;
     }
 
+    key ^= ck[static_cast<size_t>(castling_rights_ & 0xF)];
+
     en_passant_square_ = INVALID_SQUARE;
     if (std::tolower(static_cast<unsigned char>(moving_piece)) == 'p' && move_is_double_pawn(move)) {
         en_passant_square_ = white ? to - 8 : to + 8;
+    }
+
+    if (en_passant_square_ != INVALID_SQUARE) {
+        key ^= ep_keys[static_cast<size_t>(file_of(en_passant_square_))];
     }
 
     bool capture_happened = captured != '.';
@@ -519,10 +554,13 @@ void Board::apply_move(Move move, State& state) {
         ++halfmove_clock_;
     }
 
+    key ^= zobrist_side_key();
     stm_white_ = !stm_white_;
     if (stm_white_) {
         ++fullmove_number_;
     }
+
+    zobrist_key_ = key;
 }
 
 void Board::apply_null_move(State& state) {
@@ -536,13 +574,22 @@ void Board::apply_null_move(State& state) {
     state.prev_mg = accumulator_.mg();
     state.prev_eg = accumulator_.eg();
     state.prev_phase = accumulator_.phase();
+    state.prev_zobrist_key = zobrist_key_;
+
+    uint64_t key = zobrist_key_;
+    if (en_passant_square_ != INVALID_SQUARE) {
+        key ^= zobrist_enpassant_keys()[static_cast<size_t>(file_of(en_passant_square_))];
+    }
 
     en_passant_square_ = INVALID_SQUARE;
     ++halfmove_clock_;
+    key ^= zobrist_side_key();
     stm_white_ = !stm_white_;
     if (stm_white_) {
         ++fullmove_number_;
     }
+
+    zobrist_key_ = key;
 }
 
 void Board::undo_move(const State& state) {
@@ -553,6 +600,7 @@ void Board::undo_move(const State& state) {
         fullmove_number_ = state.prev_fullmove_number;
         stm_white_ = state.prev_stm_white;
         accumulator_.restore(state.prev_mg, state.prev_eg, state.prev_phase);
+        zobrist_key_ = state.prev_zobrist_key;
         return;
     }
 
@@ -589,6 +637,7 @@ void Board::undo_move(const State& state) {
     add_piece(moving_piece, from, false);
 
     accumulator_.restore(state.prev_mg, state.prev_eg, state.prev_phase);
+    zobrist_key_ = state.prev_zobrist_key;
 }
 
 void Board::undo_move() {
