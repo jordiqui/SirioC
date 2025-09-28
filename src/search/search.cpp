@@ -23,6 +23,7 @@
 #include <atomic>
 #include <vector>
 #include <optional>
+#include <utility>
 
 namespace engine {
 namespace {
@@ -786,6 +787,8 @@ void Search::set_multi_pv(int multi_pv) { multi_pv_ = std::max(1, multi_pv); }
 
 void Search::set_move_overhead(int overhead_ms) { move_overhead_ms_ = std::max(0, overhead_ms); }
 
+void Search::set_time_config(time::TimeConfig config) { time_config_ = std::move(config); }
+
 void Search::set_eval_file(std::string path) { eval_file_ = std::move(path); }
 
 void Search::set_eval_file_small(std::string path) { eval_file_small_ = std::move(path); }
@@ -831,7 +834,8 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
     };
     [[maybe_unused]] ThreadPoolGuard pool_guard{*this};
 
-    auto alloc = time::compute_allocation(lim, board.white_to_move(), move_overhead_ms_);
+    auto alloc = time::compute_allocation(lim, board.white_to_move(), move_overhead_ms_,
+                                          board.fullmove_number(), time_config_);
     target_time_ms_ = alloc.optimal_ms;
     if (alloc.maximum_ms > 0) {
         deadline_ = start + std::chrono::milliseconds(alloc.maximum_ms);
@@ -839,6 +843,19 @@ Search::Result Search::search_position(Board& board, const Limits& lim) {
         deadline_.reset();
     }
     nodes_limit_ = lim.nodes >= 0 ? lim.nodes : -1;
+
+    if (alloc.optimal_ms > 0) {
+        std::ostringstream oss;
+        oss << "info string tm alloc optimal " << alloc.optimal_ms << "ms max " << alloc.maximum_ms
+            << "ms movesToGo " << alloc.moves_to_go;
+        if (alloc.base_ms > 0) oss << " base " << alloc.base_ms << "ms";
+        if (alloc.time_left_ms >= 0) oss << " tl " << alloc.time_left_ms << "ms";
+        if (alloc.increment_ms > 0) oss << " inc " << alloc.increment_ms << "ms";
+        if (alloc.usable_increment_ms > 0) oss << " incReserve " << alloc.usable_increment_ms << "ms";
+        if (alloc.severe_time_pressure) oss << " severe";
+        if (alloc.panic_mode) oss << " panic";
+        std::cout << oss.str() << '\n' << std::flush;
+    }
 
     tuning_.prepare(threads_, target_time_ms_);
 

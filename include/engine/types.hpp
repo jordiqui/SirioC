@@ -48,6 +48,7 @@ struct Limits {
     int32_t depth = 64;
     int64_t movetime_ms = -1;
     int64_t wtime_ms = -1, btime_ms = -1, winc_ms = 0, binc_ms = 0;
+    int32_t movestogo = -1;
     int64_t nodes = -1;
 };
 
