@@ -121,6 +121,7 @@ set(SIRIOC_SOURCES
   ${CMAKE_SOURCE_DIR}/src/core/perft.cpp
   ${CMAKE_SOURCE_DIR}/src/bench.cpp
   ${CMAKE_SOURCE_DIR}/src/eval/eval.cpp
+  ${CMAKE_SOURCE_DIR}/src/eval/see.cpp
   ${CMAKE_SOURCE_DIR}/src/eval/nnue/accumulator.cpp
   ${CMAKE_SOURCE_DIR}/src/eval/nnue/evaluator.cpp
   ${CMAKE_SOURCE_DIR}/src/tt.cpp
