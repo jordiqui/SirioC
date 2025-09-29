@@ -140,6 +140,7 @@ target_include_directories(sirio_core PUBLIC
   ${CMAKE_SOURCE_DIR}/include
   ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_SOURCE_DIR}/include/engine/syzygy
+  ${CMAKE_SOURCE_DIR}/3rdparty/jdart_nnue
   ${CMAKE_SOURCE_DIR}/3rdparty/fathom
 )
 set_source_files_properties(${CMAKE_SOURCE_DIR}/3rdparty/fathom/tbprobe.c
