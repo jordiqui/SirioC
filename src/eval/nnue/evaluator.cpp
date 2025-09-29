@@ -1,122 +1,118 @@
 #include "engine/eval/nnue/evaluator.hpp"
 
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <fstream>
-
 #include "engine/core/board.hpp"
 #include "engine/eval/nnue/accumulator.hpp"
 
+#include "3rdparty/jdart_nnue/nnue.h"
+
+#include <array>
+#include <fstream>
+#include <utility>
+#include <vector>
+
 namespace engine::nnue {
 
-bool Evaluator::load_network(const std::string& path) {
-    std::ifstream file(path);
-    if (!file) {
-        loaded_ = false;
-        loaded_path_.clear();
-        return false;
-    }
-    std::string header;
-    if (!std::getline(file, header)) {
-        loaded_ = false;
-        loaded_path_.clear();
-        return false;
-    }
-    if (!header.empty() && header.back() == '\r') header.pop_back();
-    if (header != "SirioC SimpleNNUE v1") {
-        loaded_ = false;
-        loaded_path_.clear();
-        return false;
-    }
+namespace {
 
-    std::string bias_label;
-    double bias_value = 0.0;
-    if (!(file >> bias_label >> bias_value) || bias_label != "bias") {
-        loaded_ = false;
-        loaded_path_.clear();
-        return false;
+::nnue::Piece to_nnue_piece(char piece) {
+    switch (piece) {
+    case 'P': return ::nnue::WhitePawn;
+    case 'N': return ::nnue::WhiteKnight;
+    case 'B': return ::nnue::WhiteBishop;
+    case 'R': return ::nnue::WhiteRook;
+    case 'Q': return ::nnue::WhiteQueen;
+    case 'K': return ::nnue::WhiteKing;
+    case 'p': return ::nnue::BlackPawn;
+    case 'n': return ::nnue::BlackKnight;
+    case 'b': return ::nnue::BlackBishop;
+    case 'r': return ::nnue::BlackRook;
+    case 'q': return ::nnue::BlackQueen;
+    case 'k': return ::nnue::BlackKing;
+    default: return ::nnue::EmptyPiece;
     }
+}
 
-    std::string weights_label;
-    if (!(file >> weights_label) || weights_label != "weights") {
-        loaded_ = false;
-        loaded_path_.clear();
-        return false;
-    }
-
-    Network network{};
-    network.bias = bias_value;
-    for (double& weight : network.weights) {
-        if (!(file >> weight)) {
-            loaded_ = false;
-            loaded_path_.clear();
-            return false;
+class SirioNNUEInterface {
+public:
+    explicit SirioNNUEInterface(const engine::Board& board)
+        : side_to_move_(board.white_to_move() ? ::nnue::White : ::nnue::Black) {
+        const auto& squares = board.squares();
+        for (int sq = 0; sq < 64; ++sq) {
+            const char piece = squares[static_cast<size_t>(sq)];
+            if (piece == '.') continue;
+            ::nnue::Piece mapped = to_nnue_piece(piece);
+            if (mapped == ::nnue::EmptyPiece) continue;
+            if (mapped == ::nnue::WhiteKing) king_squares_[0] = static_cast<::nnue::Square>(sq);
+            if (mapped == ::nnue::BlackKing) king_squares_[1] = static_cast<::nnue::Square>(sq);
+            pieces_.emplace_back(static_cast<::nnue::Square>(sq), mapped);
         }
+        accumulator_.setEmpty();
     }
 
-    loaded_ = true;
-    network_ = network;
+    ::nnue::Color sideToMove() const noexcept { return side_to_move_; }
+    ::nnue::Square kingSquare(::nnue::Color color) const noexcept {
+        return king_squares_[static_cast<size_t>(color)];
+    }
+
+    ::nnue::Network::AccumulatorType& getAccumulator() noexcept { return accumulator_; }
+    const ::nnue::Network::AccumulatorType& getAccumulator() const noexcept { return accumulator_; }
+
+    auto begin() const noexcept { return pieces_.begin(); }
+    auto end() const noexcept { return pieces_.end(); }
+
+    unsigned pieceCount() const noexcept { return static_cast<unsigned>(pieces_.size()); }
+
+    unsigned getDirtyNum() const noexcept { return 0; }
+
+    void getDirtyState(size_t, ::nnue::Square& from, ::nnue::Square& to, ::nnue::Piece& piece) const noexcept {
+        from = to = ::nnue::InvalidSquare;
+        piece = ::nnue::EmptyPiece;
+    }
+
+    bool previous() noexcept { return false; }
+    bool hasPrevious() const noexcept { return false; }
+
+private:
+    ::nnue::Color side_to_move_;
+    std::array<::nnue::Square, 2> king_squares_{::nnue::InvalidSquare, ::nnue::InvalidSquare};
+    std::vector<std::pair<::nnue::Square, ::nnue::Piece>> pieces_{};
+    mutable ::nnue::Network::AccumulatorType accumulator_{};
+};
+
+} // namespace
+
+Evaluator::Evaluator() = default;
+
+bool Evaluator::load_network(const std::string& path) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        network_.reset();
+        loaded_path_.clear();
+        return false;
+    }
+
+    auto network = std::make_unique<::nnue::Network>();
+    if (!(file >> *network) || !file) {
+        network_.reset();
+        loaded_path_.clear();
+        return false;
+    }
+
+    network_ = std::move(network);
     loaded_path_ = path;
     return true;
 }
 
 int Evaluator::eval_cp(const engine::Board& board) const {
-    if (!loaded_) {
-        return board.nnue_accumulator().evaluate(board.white_to_move());
+    int classical = board.nnue_accumulator().evaluate(board.white_to_move());
+    if (!network_) return classical;
+
+    SirioNNUEInterface adapter(board);
+    int nn_score = ::nnue::Evaluator<SirioNNUEInterface>::fullEvaluate(*network_, adapter);
+    if (nn_score != 0) {
+        return nn_score;
     }
-
-    auto features = compute_features(board);
-    double score = network_.bias;
-    for (std::size_t i = 0; i < Network::kFeatureCount; ++i) {
-        score += network_.weights[i] * features[i];
-    }
-    score = std::clamp(score, -30000.0, 30000.0);
-    int rounded = static_cast<int>(std::round(score));
-    return board.white_to_move() ? rounded : -rounded;
-}
-
-std::array<double, Evaluator::Network::kFeatureCount>
-Evaluator::compute_features(const engine::Board& board) const {
-    std::array<double, Network::kFeatureCount> features{};
-
-    features[0] = static_cast<double>(board.nnue_accumulator().evaluate(true));
-
-    std::array<int, 6> white_counts{};
-    std::array<int, 6> black_counts{};
-
-    const auto& squares = board.squares();
-    for (char piece : squares) {
-        switch (piece) {
-        case 'P': white_counts[0]++; break;
-        case 'N': white_counts[1]++; break;
-        case 'B': white_counts[2]++; break;
-        case 'R': white_counts[3]++; break;
-        case 'Q': white_counts[4]++; break;
-        case 'K': white_counts[5]++; break;
-        case 'p': black_counts[0]++; break;
-        case 'n': black_counts[1]++; break;
-        case 'b': black_counts[2]++; break;
-        case 'r': black_counts[3]++; break;
-        case 'q': black_counts[4]++; break;
-        case 'k': black_counts[5]++; break;
-        default: break;
-        }
-    }
-
-    auto diff = [&](int idx) {
-        return static_cast<double>(white_counts[idx] - black_counts[idx]);
-    };
-
-    features[1] = diff(0);
-    features[2] = diff(1);
-    features[3] = diff(2);
-    features[4] = diff(3);
-    features[5] = diff(4);
-    features[6] = static_cast<double>((white_counts[2] >= 2 ? 1 : 0) - (black_counts[2] >= 2 ? 1 : 0));
-
-    return features;
+    return classical;
 }
 
 } // namespace engine::nnue
-

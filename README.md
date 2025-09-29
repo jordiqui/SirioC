@@ -122,9 +122,24 @@ NNUE training material. Material and positional terms are blended between
 middlegame and endgame phases, and a small tempo bonus favors the side to move.
 The NNUE accumulator infrastructure is wired through the board state, enabling
 fast inference once the NNUE evaluator is connected. Until incremental NNUE
-updates land, the classical evaluation remains the default, but lightweight
-text-based `.nnue` networks now ship with the engine so the UCI `UseNNUE`
-option immediately loads a simple neural blend on start-up.
+updates land, the classical evaluation remains the default.
+
+### NNUE networks
+
+The Stockfish-derived NNUE networks are no longer checked into the repository
+because binary assets over 1&nbsp;MB cannot be attached to pull requests. Use the
+convenience script in `scripts/download_nnue.py` to fetch the recommended
+weights before enabling the `UseNNUE` option:
+
+```bash
+python3 scripts/download_nnue.py
+```
+
+By default the script downloads `nn-1c0000000000.nnue` and
+`nn-37f18f62d772.nnue` into the project root so the existing defaults continue
+to work. Pass `--output-dir` to store the files elsewhere, or `--force` to
+overwrite an existing download. The engine falls back to the classical
+evaluation when the NNUE files are missing.
 
 ## Testing
 

@@ -1,7 +1,5 @@
 /build/
 *.nnue
-!nn-1c0000000000.nnue
-!nn-37f18f62d772.nnue
 *.exe
 *.pdb
 *.obj
