@@ -6,10 +6,11 @@
 #include "engine/core/board.hpp"
 #include "engine/core/fen.hpp"
 #include "engine/core/perft.hpp"
-#include "engine/eval/nnue/evaluator.hpp"
+#include "engine/eval/nnue/nnue.hpp"
 #include "engine/search/search.hpp"
 #include "engine/syzygy/syzygy.hpp"
 #include "engine/util/time.hpp"
+#include "engine/uci/options.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -36,12 +37,6 @@ namespace {
 
 Board g_board;
 Search g_search;
-nnue::Evaluator g_eval;
-
-bool g_use_nnue = false;
-std::string g_eval_file;
-std::string g_eval_file_small = "nn-37f18f62d772.nnue";
-int g_hash_mb = 16;
 
 constexpr int kThreadsMax = 2048;
 
@@ -53,21 +48,12 @@ int detect_default_thread_count() {
 }
 
 const int g_default_threads = detect_default_thread_count();
-int g_threads = 1;
 int g_numa_offset = 0;
-bool g_ponder = false;
-int g_multi_pv = 1;
-int g_move_overhead = 50;
 time::TimeConfig g_time_config;
 
-bool g_use_syzygy = false;
-std::string g_syzygy_path;
 int g_syzygy_probe_depth = 1;
 int g_syzygy_probe_limit = 7;
 bool g_syzygy_rule50 = true;
-bool g_show_wdl = true;
-bool g_chess960 = false;
-int g_contempt = 0;
 
 struct UciLiteInfo {
     int depth = 0;
@@ -81,47 +67,26 @@ struct UciLiteInfo {
     uint64_t tbhits = 0;
 };
 
-void ensure_nnue_loaded() {
-    if (!g_use_nnue || g_eval_file.empty()) return;
-    if (!g_eval.loaded() || g_eval.loaded_path() != g_eval_file) {
-        if (!g_eval.load_network(g_eval_file)) {
-            std::cout << "info string Failed to load NNUE network '" << g_eval_file
-                      << "', disabling UseNNUE\n" << std::flush;
-            g_use_nnue = false;
-        } else {
-            std::cout << "info string Loaded NNUE network '" << g_eval_file << "'\n"
-                      << std::flush;
-        }
-    }
-}
-
 void sync_search_options() {
-    ensure_nnue_loaded();
-    g_search.set_hash(g_hash_mb);
-    g_search.set_threads(g_threads);
+    g_search.set_hash(Options.Hash);
+    g_search.set_threads(Options.Threads);
     g_search.set_numa_offset(g_numa_offset);
-    g_search.set_ponder(g_ponder);
-    g_search.set_multi_pv(g_multi_pv);
-    g_search.set_move_overhead(g_move_overhead);
+    g_search.set_ponder(Options.Ponder);
+    g_search.set_multi_pv(Options.MultiPV);
+    g_search.set_move_overhead(Options.MoveOverhead);
     g_search.set_time_config(g_time_config);
-    g_search.set_eval_file(g_eval_file);
-    g_search.set_eval_file_small(g_eval_file_small);
-    g_search.set_show_wdl(g_show_wdl);
-    g_search.set_chess960(g_chess960);
-    g_search.set_contempt(g_contempt);
+    g_search.set_show_wdl(Options.UCI_ShowWDL);
+    g_search.set_chess960(Options.UCI_Chess960);
+    g_search.set_contempt(Options.Contempt);
 
     syzygy::TBConfig tb_config;
-    bool syzygy_enabled = g_use_syzygy && !g_syzygy_path.empty();
+    bool syzygy_enabled = !Options.SyzygyPath.empty();
     tb_config.enabled = syzygy_enabled;
-    tb_config.path = g_syzygy_path;
+    tb_config.path = Options.SyzygyPath;
     tb_config.probe_depth = g_syzygy_probe_depth;
     tb_config.probe_limit = g_syzygy_probe_limit;
     tb_config.use_rule50 = g_syzygy_rule50;
     g_search.set_syzygy_config(std::move(tb_config));
-
-    bool use_nnue_eval = g_use_nnue && !g_eval_file.empty();
-    g_search.set_use_nnue(use_nnue_eval);
-    g_search.set_nnue_evaluator(use_nnue_eval ? &g_eval : nullptr);
 }
 
 std::vector<std::string> split(const std::string& s) {
@@ -243,13 +208,18 @@ void Uci::cmd_uci() {
     std::cout << "option name UCI_Chess960 type check default false\n";
     std::cout << "option name MoveOverhead type spin default 50 min 0 max 10000\n";
     std::cout << "option name Contempt type spin default 0 min -100 max 100\n";
-    std::cout << "option name EvalFile type string default <empty>\n";
+    std::cout << "option name UseNNUE type check default "
+              << (Options.UseNNUE ? "true" : "false") << "\n";
+    std::cout << "option name EvalFile type string default "
+              << (Options.EvalFile.empty() ? "<empty>" : Options.EvalFile) << "\n";
+    std::cout << "option name EvalFileSmall type string default "
+              << (Options.EvalFileSmall.empty() ? "<empty>" : Options.EvalFileSmall) << "\n";
     std::cout << "uciok\n" << std::flush;
 }
 
 void Uci::cmd_isready() {
     stop_search_thread();
-    ensure_nnue_loaded();
+    NNUE::try_reload_if_requested();
     sync_search_options();
     std::cout << "readyok\n" << std::flush;
 }
@@ -257,8 +227,9 @@ void Uci::cmd_isready() {
 void Uci::cmd_ucinewgame() {
     stop_search_thread();
     g_board.set_startpos();
-    ensure_nnue_loaded();
     sync_search_options();
+    NNUE::try_reload_if_requested();
+    NNUE::on_new_game();
 }
 
 void Uci::cmd_setoption(const std::string& s) {
@@ -295,40 +266,47 @@ void Uci::cmd_setoption(const std::string& s) {
 
             if (name == "Hash" && !value.empty()) {
                 int parsed = std::stoi(value);
-                g_hash_mb = std::clamp(parsed, 2, 33554432);
+                Options.Hash = std::clamp(parsed, 2, 33554432);
             }
             else if (name == "Threads" && !value.empty()) {
                 int parsed = std::stoi(value);
-                g_threads = std::clamp(parsed, 1, 2048);
+                Options.Threads = std::clamp(parsed, 1, 2048);
             }
             else if (name == "SyzygyPath") {
-                g_syzygy_path = value;
-                g_use_syzygy = !g_syzygy_path.empty();
+                Options.SyzygyPath = value;
             }
             else if (name == "MultiPV" && !value.empty()) {
                 int parsed = std::stoi(value);
-                g_multi_pv = std::clamp(parsed, 1, 256);
+                Options.MultiPV = std::clamp(parsed, 1, 256);
             }
             else if (name == "Ponder") {
-                g_ponder = parse_bool(value);
+                Options.Ponder = parse_bool(value);
             }
             else if (name == "UCI_ShowWDL") {
-                g_show_wdl = parse_bool(value);
+                Options.UCI_ShowWDL = parse_bool(value);
             }
             else if (name == "UCI_Chess960") {
-                g_chess960 = parse_bool(value);
+                Options.UCI_Chess960 = parse_bool(value);
             }
             else if (name == "MoveOverhead" && !value.empty()) {
                 int parsed = std::stoi(value);
-                g_move_overhead = std::clamp(parsed, 0, 10000);
+                Options.MoveOverhead = std::clamp(parsed, 0, 10000);
             }
             else if (name == "Contempt" && !value.empty()) {
                 int parsed = std::stoi(value);
-                g_contempt = std::clamp(parsed, -100, 100);
+                Options.Contempt = std::clamp(parsed, -100, 100);
+            }
+            else if (name == "UseNNUE") {
+                Options.UseNNUE = parse_bool(value);
+                NNUE::request_reload();
             }
             else if (name == "EvalFile") {
-                g_eval_file = value;
-                g_use_nnue = !g_eval_file.empty();
+                Options.EvalFile = value;
+                NNUE::request_reload();
+            }
+            else if (name == "EvalFileSmall") {
+                Options.EvalFileSmall = value;
+                NNUE::request_reload();
             }
 
             break;
@@ -370,6 +348,7 @@ void Uci::cmd_go(const std::string& s) {
     auto tokens = split(s);
     Limits lim = parse_go_tokens(tokens);
     sync_search_options();
+    NNUE::try_reload_if_requested();
     Board board_copy = g_board;
 
     auto ready = std::make_shared<std::promise<void>>();
@@ -499,7 +478,7 @@ void Uci::cmd_bench(const std::string& s) {
     stop_search_thread();
     auto tokens = split(s);
     int depth = 8;
-    int threads = g_threads;
+    int threads = Options.Threads;
     bool explicit_threads = false;
     bool perft_mode = false;
     for (size_t i = 1; i < tokens.size(); ++i) {
@@ -515,13 +494,14 @@ void Uci::cmd_bench(const std::string& s) {
         }
     }
 
-    if (!explicit_threads && g_threads == 1) {
+    if (!explicit_threads && Options.Threads == 1) {
         threads = std::max(1, g_default_threads);
     }
 
-    int previous_threads = g_threads;
-    g_threads = std::clamp(threads, 1, kThreadsMax);
+    int previous_threads = Options.Threads;
+    Options.Threads = std::clamp(threads, 1, kThreadsMax);
     sync_search_options();
+    NNUE::try_reload_if_requested();
 
     if (perft_mode) {
         auto result = bench::run_perft_suite(depth);
@@ -541,7 +521,7 @@ void Uci::cmd_bench(const std::string& s) {
                   << "\n";
     }
 
-    g_threads = previous_threads;
+    Options.Threads = previous_threads;
     sync_search_options();
 }
 

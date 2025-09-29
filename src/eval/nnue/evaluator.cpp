@@ -4,9 +4,13 @@
 #include "engine/eval/nnue/accumulator.hpp"
 
 #include "nnue.h"
+#include "util.h"
 
 #include <array>
+#include <cstdint>
+#include <filesystem>
 #include <fstream>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -90,6 +94,63 @@ bool Evaluator::load_network(const std::string& path) {
     if (!file) {
         network_.reset();
         loaded_path_.clear();
+        architecture_.clear();
+        network_bytes_ = 0;
+        return false;
+    }
+
+    // Extract header metadata (architecture string) before delegating to the loader.
+    file.clear();
+    file.seekg(0, std::ios::beg);
+    if (!file) {
+        network_.reset();
+        loaded_path_.clear();
+        architecture_.clear();
+        network_bytes_ = 0;
+        return false;
+    }
+
+    std::string architecture;
+    std::uint32_t version = 0;
+    std::uint32_t checksum = 0;
+    std::uint32_t arch_len = 0;
+
+    version = ::nnue::read_little_endian<std::uint32_t>(file);
+    checksum = ::nnue::read_little_endian<std::uint32_t>(file);
+    arch_len = ::nnue::read_little_endian<std::uint32_t>(file);
+    if (!file) {
+        network_.reset();
+        loaded_path_.clear();
+        architecture_.clear();
+        network_bytes_ = 0;
+        return false;
+    }
+
+    (void)version;
+    (void)checksum;
+
+    if (arch_len > 0) {
+        architecture.resize(static_cast<size_t>(arch_len));
+        if (!file.read(architecture.data(), static_cast<std::streamsize>(arch_len))) {
+            network_.reset();
+            loaded_path_.clear();
+            architecture_.clear();
+            network_bytes_ = 0;
+            return false;
+        }
+        auto null_pos = architecture.find('\0');
+        if (null_pos != std::string::npos) {
+            architecture.resize(null_pos);
+        }
+    }
+
+    file.clear();
+    file.seekg(0, std::ios::beg);
+    if (!file) {
+        network_.reset();
+        loaded_path_.clear();
+        architecture_.clear();
+        network_bytes_ = 0;
         return false;
     }
 
@@ -97,11 +158,19 @@ bool Evaluator::load_network(const std::string& path) {
     if (!(file >> *network) || !file) {
         network_.reset();
         loaded_path_.clear();
+        architecture_.clear();
+        network_bytes_ = 0;
         return false;
     }
 
     network_ = std::move(network);
     loaded_path_ = path;
+    architecture_ = std::move(architecture);
+    std::error_code ec;
+    network_bytes_ = std::filesystem::file_size(path, ec);
+    if (ec) {
+        network_bytes_ = 0;
+    }
     return true;
 }
 

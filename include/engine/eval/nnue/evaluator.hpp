@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -18,10 +19,14 @@ public:
     int eval_cp(const engine::Board& board) const;
     bool loaded() const noexcept { return static_cast<bool>(network_); }
     const std::string& loaded_path() const noexcept { return loaded_path_; }
+    const std::string& architecture() const noexcept { return architecture_; }
+    std::uintmax_t network_bytes() const noexcept { return network_bytes_; }
 
 private:
     std::unique_ptr<::nnue::Network> network_;
     std::string loaded_path_{};
+    std::string architecture_{};
+    std::uintmax_t network_bytes_ = 0;
 };
 
 } // namespace engine::nnue

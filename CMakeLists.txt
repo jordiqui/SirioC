@@ -124,10 +124,12 @@ set(SIRIOC_SOURCES
   ${CMAKE_SOURCE_DIR}/src/eval/see.cpp
   ${CMAKE_SOURCE_DIR}/src/eval/nnue/accumulator.cpp
   ${CMAKE_SOURCE_DIR}/src/eval/nnue/evaluator.cpp
+  ${CMAKE_SOURCE_DIR}/src/eval/nnue/nnue.cpp
   ${CMAKE_SOURCE_DIR}/src/tt.cpp
   ${CMAKE_SOURCE_DIR}/src/search/search.cpp
   ${CMAKE_SOURCE_DIR}/src/syzygy/syzygy.cpp
   ${CMAKE_SOURCE_DIR}/src/uci/uci.cpp
+  ${CMAKE_SOURCE_DIR}/src/uci/options.cpp
   ${CMAKE_SOURCE_DIR}/src/util/log.cpp
   ${CMAKE_SOURCE_DIR}/src/util/time.cpp
   ${CMAKE_SOURCE_DIR}/3rdparty/fathom/tbprobe.c
