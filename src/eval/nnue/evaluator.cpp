@@ -3,7 +3,7 @@
 #include "engine/core/board.hpp"
 #include "engine/eval/nnue/accumulator.hpp"
 
-#include "3rdparty/jdart_nnue/nnue.h"
+#include "nnue.h"
 
 #include <array>
 #include <fstream>
@@ -82,6 +82,8 @@ private:
 } // namespace
 
 Evaluator::Evaluator() = default;
+
+Evaluator::~Evaluator() = default;
 
 bool Evaluator::load_network(const std::string& path) {
     std::ifstream file(path, std::ios::binary);
