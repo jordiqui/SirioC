@@ -3,7 +3,7 @@
 
 #include "engine/core/board.hpp"
 #include "engine/eval/eval.hpp"
-#include "engine/eval/nnue/evaluator.hpp"
+#include "engine/eval/nnue/nnue.hpp"
 #include "engine/syzygy/syzygy.hpp"
 #include "tbprobe.h"
 #include "engine/util/time.hpp"
@@ -748,6 +748,12 @@ void Search::wait_for_all_tasks(Search::ThreadData& main_td) {
 }
 
 void Search::worker_loop(size_t index) {
+    NNUE::on_thread_start(static_cast<int>(index));
+    struct ThreadGuard {
+        size_t id;
+        ~ThreadGuard() { NNUE::on_thread_stop(static_cast<int>(id)); }
+    } guard{index};
+
     Search::ThreadData& td = thread_data_pool_[index];
     while (true) {
         std::function<void(Search::ThreadData&)> task;
@@ -796,14 +802,6 @@ void Search::set_move_overhead(int overhead_ms) { move_overhead_ms_ = std::max(0
 
 void Search::set_time_config(time::TimeConfig config) { time_config_ = std::move(config); }
 
-void Search::set_eval_file(std::string path) { eval_file_ = std::move(path); }
-
-void Search::set_eval_file_small(std::string path) { eval_file_small_ = std::move(path); }
-
-void Search::set_nnue_evaluator(const nnue::Evaluator* evaluator) { nnue_eval_ = evaluator; }
-
-void Search::set_use_nnue(bool enable) { use_nnue_eval_ = enable; }
-
 void Search::set_show_wdl(bool enable) { show_wdl_ = enable; }
 
 void Search::set_chess960(bool enable) { chess960_ = enable; }
@@ -817,6 +815,10 @@ Search::Result Search::find_bestmove(Board& board, const Limits& lim) {
 
 Search::Result Search::search_position(Board& board, const Limits& lim) {
     Result result;
+    struct MainThreadGuard {
+        MainThreadGuard() { NNUE::on_thread_start(0); }
+        ~MainThreadGuard() { NNUE::on_thread_stop(0); }
+    } main_thread_guard;
     auto start = std::chrono::steady_clock::now();
     search_start_ = start;
     tb_hits_.store(0, std::memory_order_relaxed);
@@ -1597,8 +1599,8 @@ std::vector<Move> Search::extract_pv(const Board& board, Move best) const {
 }
 
 int Search::evaluate(const Board& board) const {
-    if (use_nnue_eval_ && nnue_eval_) {
-        return nnue_eval_->eval_cp(board);
+    if (NNUE::is_enabled()) {
+        return NNUE::evaluate(board);
     }
     return eval::evaluate(board);
 }
