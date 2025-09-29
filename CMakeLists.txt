@@ -123,6 +123,10 @@ set(SIRIOC_SOURCES
   ${CMAKE_SOURCE_DIR}/src/eval/eval.cpp
   ${CMAKE_SOURCE_DIR}/src/eval/see.cpp
   ${CMAKE_SOURCE_DIR}/src/eval/nnue/accumulator.cpp
+  ${CMAKE_SOURCE_DIR}/src/eval/nnue/Accumulator.cpp
+  ${CMAKE_SOURCE_DIR}/src/eval/nnue/HalfKP.cpp
+  ${CMAKE_SOURCE_DIR}/src/eval/nnue/Loader.cpp
+  ${CMAKE_SOURCE_DIR}/src/eval/nnue/Network.cpp
   ${CMAKE_SOURCE_DIR}/src/eval/nnue/evaluator.cpp
   ${CMAKE_SOURCE_DIR}/src/eval/nnue/nnue.cpp
   ${CMAKE_SOURCE_DIR}/src/tt.cpp
