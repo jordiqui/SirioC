@@ -12,6 +12,7 @@ namespace engine::nnue {
 class Evaluator {
 public:
     Evaluator();
+    ~Evaluator();
 
     bool load_network(const std::string& path);
     int eval_cp(const engine::Board& board) const;

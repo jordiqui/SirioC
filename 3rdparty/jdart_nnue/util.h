@@ -32,20 +32,19 @@ static uint64_t to_little_endian64(uint64_t x) { return (x); }
 #endif
 
 template <typename T> T read_little_endian(std::istream &s) {
+    static_assert(sizeof(T) == 1 || sizeof(T) == 2 || sizeof(T) == 4 || sizeof(T) == 8,
+                  "unsupported size");
     char buf[sizeof(T)];
     s.read(buf, sizeof(T));
     T input = *(reinterpret_cast<T *>(buf));
-    switch (sizeof(T)) {
-    case 1:
+    if constexpr (sizeof(T) == 1) {
         return static_cast<T>(input);
-    case 2:
+    } else if constexpr (sizeof(T) == 2) {
         return static_cast<T>(to_little_endian16(input));
-    case 4:
+    } else if constexpr (sizeof(T) == 4) {
         return static_cast<T>(to_little_endian32(input));
-    case 8:
+    } else { // sizeof(T) == 8
         return static_cast<T>(to_little_endian64(input));
-    default:
-        throw std::invalid_argument("unsupported size");
     }
 }
 
