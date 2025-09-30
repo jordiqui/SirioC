@@ -17,7 +17,10 @@ add_library(sirio_core
     src/pyrrhic/engine.cpp
     src/pyrrhic/tbchess.c
     src/pyrrhic/tbprobe.c
-    src/pyrrhic/types.cpp)
+    src/pyrrhic/types.cpp
+    src/nn/nnue.cpp
+    src/uci/Options.cpp
+    src/uci/Uci.cpp)
 
 target_include_directories(sirio_core PUBLIC src)
 
