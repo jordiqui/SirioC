@@ -1,5 +1,5 @@
 #include "evaluate.h"
-#include "accumulator.h"
+#include "nn/accumulator.h"
 #include "../board.h"
 
 #include <stdint.h>
