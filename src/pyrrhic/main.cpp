@@ -3,9 +3,15 @@
 
 #include <algorithm>
 #include <exception>
+#include <filesystem>
 #include <iostream>
+#include <system_error>
 #include <string>
 #include <vector>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace {
 
@@ -14,9 +20,46 @@ std::string decode_fen_argument(std::string fen) {
     return fen;
 }
 
+std::filesystem::path determine_engine_directory(const char* argv0) {
+#ifdef _WIN32
+    wchar_t buffer[MAX_PATH];
+    DWORD length = GetModuleFileNameW(nullptr, buffer, MAX_PATH);
+    if (length > 0) {
+        return std::filesystem::path(buffer).parent_path();
+    }
+#else
+    std::error_code ec_self;
+    auto self_path = std::filesystem::canonical("/proc/self/exe", ec_self);
+    if (!ec_self) {
+        return self_path.parent_path();
+    }
+#endif
+
+    std::error_code ec;
+    if (argv0) {
+        auto canonical = std::filesystem::canonical(argv0, ec);
+        if (!ec) {
+            return canonical.parent_path();
+        }
+        canonical = std::filesystem::absolute(argv0, ec);
+        if (!ec) {
+            return canonical.parent_path();
+        }
+    }
+
+    auto current = std::filesystem::current_path(ec);
+    if (!ec) {
+        return current;
+    }
+    return {};
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
+    g_engine_dir = determine_engine_directory(argc > 0 ? argv[0] : nullptr);
+    init_options();
+
     for (int index = 1; index < argc; ++index) {
         if (std::string(argv[index]) == "--uci") {
             uci::loop();

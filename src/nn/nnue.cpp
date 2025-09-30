@@ -39,7 +39,11 @@ bool load_from_memory(const void* data, std::size_t size, const std::string& sou
     if (!data || size == 0) {
         return false;
     }
-    MemoryResource resource{static_cast<const std::uint8_t*>(data), size, source};
+    MemoryResource resource{
+        static_cast<const std::uint8_t*>(data),
+        size,
+        source,
+        Metadata::SourceType::Memory};
     Metadata meta;
     if (!loader::load_from_memory(resource, meta)) {
         return false;
