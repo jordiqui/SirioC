@@ -31,6 +31,43 @@ architecture.
 * **Interactive shell** – a minimal REPL that exposes FEN loading, evaluation,
   move listing, and PGN inspection commands.
 
+## UCI mode and engine options
+
+SirioC also exposes a lightweight Universal Chess Interface (UCI) frontend for
+GUI integrations and automated testing. Build the standalone C engine via
+`make -C src` and launch it with the `--uci` switch:
+
+```bash
+cd src
+make
+./sirio --uci
+```
+
+When the engine receives the `uci` command it reports the following configurable
+options:
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `UseNNUE` | `check` | Enables or disables the embedded HalfKP neural evaluator. Set to `false` to fall back to the material heuristic. |
+| `EvalFile` | `string` | Path to the primary HalfKP network (`.nnue`). The engine falls back to material evaluation if the file cannot be loaded. |
+| `EvalFileSmall` | `string` | Optional secondary network that is automatically selected for simplified positions (12 pieces or fewer). Provide an empty value to clear it. |
+
+The engine expects Stockfish-compatible UCI flows and responds to `isready`,
+`ucinewgame`, `position`, and `go` commands. A tiny regression bench executes
+`uci`, `isready`, `ucinewgame`, `position startpos`, and `go depth 1`, checking
+that a legal `bestmove` is returned. Invoke it with `make -C src bench`.
+
+### NNUE weight files
+
+SirioC does not ship binary NNUE weights. To use HalfKP evaluation, download a
+compatible network (for example, from the [official Stockfish testing
+server](https://tests.stockfishchess.org/nns/)) and point the `EvalFile` option
+to its location. Stockfish-provided networks are distributed under the GPLv3,
+so ensure that your usage of SirioC complies with the license requirements—this
+may require distributing SirioC under the GPLv3 or isolating the neural network
+in a separate component. When no NNUE file is configured the engine falls back
+to its built-in material evaluator.
+
 ## Building
 
 The project uses CMake and requires a compiler with C++20 support.
