@@ -24,6 +24,9 @@ std::string trim(std::string value) {
     return value;
 }
 
+constexpr const char* kEngineIdName = "SirioC-0.1.0";
+constexpr const char* kEngineIdAuthor = "SirioC Team";
+
 }  // namespace
 
 Engine::Engine()
@@ -142,6 +145,9 @@ void Engine::run_cli(std::istream& input, std::ostream& output) {
         if (token == "help") {
             output << "Commands:\n"
                    << "  help          Show this message\n"
+                   << "  uci           Print the UCI identification banner\n"
+                   << "  isready       Report readiness for UCI controllers\n"
+                   << "  ucinewgame    Reset to the initial position\n"
                    << "  fen <string>  Load a FEN position\n"
                    << "  show          Print the current board\n"
                    << "  eval          Evaluate the current position\n"
@@ -151,6 +157,24 @@ void Engine::run_cli(std::istream& input, std::ostream& output) {
                    << "  load <file>   Load a PGN game\n"
                    << "  game          Show loaded PGN metadata\n"
                    << "  quit          Exit the shell" << std::endl;
+            continue;
+        }
+
+        if (token == "uci") {
+            output << "id name " << kEngineIdName << '\n'
+                   << "id author " << kEngineIdAuthor << '\n'
+                   << "uciok" << std::endl;
+            continue;
+        }
+
+        if (token == "isready") {
+            output << "readyok" << std::endl;
+            continue;
+        }
+
+        if (token == "ucinewgame") {
+            reset();
+            output << "New game initialized." << std::endl;
             continue;
         }
 
