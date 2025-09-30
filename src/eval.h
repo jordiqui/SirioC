@@ -11,6 +11,7 @@ extern "C" {
 void eval_init(void);
 void eval_shutdown(void);
 int eval_load_network(const char* path);
+int eval_load_network_from_buffer(const void* data, size_t size);
 int eval_load_small_network(const char* path);
 void eval_set_use_nnue(bool use_nnue);
 bool eval_use_nnue(void);

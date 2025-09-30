@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 #include "../bits.h"
 
@@ -197,6 +198,91 @@ int sirio_nn_model_load(sirio_nn_model* model, const char* path) {
     int result = sirio_nn_model_load_internal(model, file);
     fclose(file);
     return result;
+}
+
+int sirio_nn_model_load_buffer(sirio_nn_model* model, const void* data, size_t size) {
+    if (!model || !data || size < sizeof(sirio_nnue_file_header)) {
+        return 0;
+    }
+
+    const uint8_t* ptr = (const uint8_t*)data;
+    size_t remaining = size;
+
+    sirio_nnue_file_header header;
+    memcpy(&header, ptr, sizeof(header));
+    if (!validate_header(&header)) {
+        return 0;
+    }
+
+    size_t required = sizeof(header);
+    size_t bias_size = header.hidden_size * sizeof(int16_t);
+    size_t weight_size = (size_t)header.feature_count * (size_t)header.hidden_size * sizeof(int8_t);
+    size_t output_weight_size = header.hidden_size * sizeof(int16_t);
+
+    if (header.hidden_size == 0 || header.feature_count == 0) {
+        return 0;
+    }
+    if (bias_size > SIZE_MAX - required) {
+        return 0;
+    }
+    required += bias_size;
+    if (weight_size > SIZE_MAX - required) {
+        return 0;
+    }
+    required += weight_size;
+    if (sizeof(int32_t) > SIZE_MAX - required) {
+        return 0;
+    }
+    required += sizeof(int32_t);
+    if (output_weight_size > SIZE_MAX - required) {
+        return 0;
+    }
+    required += output_weight_size;
+    if (remaining < required) {
+        return 0;
+    }
+
+    ptr += sizeof(header);
+    remaining -= sizeof(header);
+
+    int16_t* hidden_biases = (int16_t*)malloc(bias_size);
+    int8_t* feature_weights = (int8_t*)malloc(weight_size);
+    int16_t* output_weights = (int16_t*)malloc(output_weight_size);
+    if (!hidden_biases || !feature_weights || !output_weights) {
+        free(hidden_biases);
+        free(feature_weights);
+        free(output_weights);
+        return 0;
+    }
+
+    memcpy(hidden_biases, ptr, bias_size);
+    ptr += bias_size;
+    remaining -= bias_size;
+
+    memcpy(feature_weights, ptr, weight_size);
+    ptr += weight_size;
+    remaining -= weight_size;
+
+    int32_t output_bias = 0;
+    memcpy(&output_bias, ptr, sizeof(output_bias));
+    ptr += sizeof(output_bias);
+    remaining -= sizeof(output_bias);
+
+    memcpy(output_weights, ptr, output_weight_size);
+    (void)remaining;
+
+    apply_defaults(model);
+
+    model->halfkp.hidden_biases = hidden_biases;
+    model->halfkp.feature_weights = feature_weights;
+    model->halfkp.output_weights = output_weights;
+    model->halfkp.feature_count = header.feature_count;
+    model->halfkp.hidden_size = header.hidden_size;
+    model->halfkp.output_scale = header.output_scale;
+    model->halfkp.output_bias = output_bias;
+    model->halfkp.loaded = 1;
+
+    return 1;
 }
 
 int sirio_nn_model_ready(const sirio_nn_model* model) {

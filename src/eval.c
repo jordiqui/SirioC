@@ -17,6 +17,11 @@ static sirio_nn_model g_small_model;
 static bool g_eval_initialized = false;
 static bool g_use_nnue = true;
 
+#ifdef SIRIOC_EMBED_NNUE
+extern const unsigned char g_sirio_nnue_default[];
+extern const size_t g_sirio_nnue_default_size;
+#endif
+
 static int try_load_network(sirio_nn_model* model, const char* primary, const char* fallback) {
     if (sirio_nn_model_load(model, primary)) {
         return 1;
@@ -35,7 +40,15 @@ static void eval_ensure_initialized(void) {
     sirio_nn_model_init(&g_eval_model);
     sirio_nn_model_init(&g_small_model);
 
-    if (!try_load_network(&g_eval_model, SIRIO_DEFAULT_NETWORK, SIRIO_DEFAULT_NETWORK_ALT)) {
+    int loaded_eval = try_load_network(&g_eval_model, SIRIO_DEFAULT_NETWORK, SIRIO_DEFAULT_NETWORK_ALT);
+#ifdef SIRIOC_EMBED_NNUE
+    if (!loaded_eval && g_sirio_nnue_default_size > 0 &&
+        sirio_nn_model_load_buffer(&g_eval_model, g_sirio_nnue_default, g_sirio_nnue_default_size)) {
+        loaded_eval = 1;
+        fprintf(stderr, "info: loaded embedded default NNUE weights\n");
+    }
+#endif
+    if (!loaded_eval) {
         fprintf(stderr,
                 "info: no NNUE weights loaded from %s; falling back to material until EvalFile is set\n",
                 SIRIO_DEFAULT_NETWORK);
@@ -71,6 +84,14 @@ int eval_load_network(const char* path) {
         return 0;
     }
     return sirio_nn_model_load(&g_eval_model, path);
+}
+
+int eval_load_network_from_buffer(const void* data, size_t size) {
+    eval_ensure_initialized();
+    if (!data || size == 0) {
+        return 0;
+    }
+    return sirio_nn_model_load_buffer(&g_eval_model, data, size);
 }
 
 int eval_load_small_network(const char* path) {

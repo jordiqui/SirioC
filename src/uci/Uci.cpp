@@ -266,18 +266,38 @@ static void load_nn_if_needed() {
   auto it_use = OptionsMap.find("UseNNUE");
   if (it_use == OptionsMap.end()) return;
   if (!it_use->second.b) {
-    nnue::state.loaded = false;
+    if (nnue::state.loaded) {
+      nnue::reset();
+    }
     return;
   }
 
   if (!nnue::state.loaded) {
     const auto it_file = OptionsMap.find("EvalFile");
     const std::string path = it_file != OptionsMap.end() ? it_file->second.s : std::string{};
-    if (nnue::load(path)) {
-      std::cout << "info string NNUE evaluation using " << nnue::state.path << ' '
-                << nnue::state.dims << "\n";
-    } else if (!path.empty()) {
-      std::cout << "info string NNUE load failed: " << path << "\n";
+    bool loaded = false;
+    if (!path.empty()) {
+      loaded = nnue::load(path);
+      if (!loaded) {
+        std::cout << "info string NNUE load failed: " << path << "\n";
+      }
+    }
+    if (!loaded && path.empty() && nnue::has_embedded_default()) {
+      loaded = nnue::load_default();
+    } else if (!loaded && nnue::has_embedded_default()) {
+      loaded = nnue::load_default();
+      if (loaded) {
+        std::cout << "info string NNUE falling back to embedded weights\n";
+      }
+    }
+    if (loaded) {
+      const auto& meta = nnue::state.meta;
+      std::cout << "info string NNUE evaluation using " << meta.architecture;
+      if (!meta.dimensions.empty()) {
+        std::cout << ' ' << meta.dimensions;
+      }
+      std::cout << "\n";
+      std::cout << "info string NNUE network source: " << meta.source << "\n";
     }
   }
 }
@@ -365,6 +385,7 @@ void uci::loop() {
       if (!name.empty()) OptionsMap.set(name, value);
     } else if (token == "ucinewgame") {
       nnue::state.loaded = false;
+      nnue::state.meta = nnue::Metadata{};
     } else if (token == "position") {
       cmd_position(is);
     } else if (token == "go") {

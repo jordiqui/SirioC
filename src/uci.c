@@ -167,7 +167,7 @@ static void handle_setoption(UciState* state, char* line) {
 }
 
 static void handle_go(UciState* state, char* args) {
-    SearchLimits limits = { .depth = 1, .movetime_ms = 0, .nodes = 0, .infinite = 0 };
+    SearchLimits limits = { .depth = 1, .movetime_ms = 0, .nodes = 0, .infinite = 0, .multipv = 1 };
     if (args) {
         char* depth_ptr = strstr(args, "depth");
         if (depth_ptr) {
@@ -177,9 +177,26 @@ static void handle_go(UciState* state, char* args) {
                 limits.depth = 1;
             }
         }
+        char* movetime_ptr = strstr(args, "movetime");
+        if (movetime_ptr) {
+            movetime_ptr += 8;
+            while (*movetime_ptr == ' ') {
+                ++movetime_ptr;
+            }
+            limits.movetime_ms = atoi(movetime_ptr);
+            if (limits.movetime_ms < 0) {
+                limits.movetime_ms = 0;
+            }
+        }
     }
 
     Move best = search_iterative_deepening(state->context, &limits);
+    for (size_t index = 0; index < state->context->pv_count; ++index) {
+        char pv_buffer[16];
+        move_to_uci(&state->context->pv_moves[index], pv_buffer, sizeof(pv_buffer));
+        printf("info multipv %zu score cp %d pv %s\n", index + 1,
+               state->context->pv_values[index], pv_buffer);
+    }
     char buffer[16];
     move_to_uci(&best, buffer, sizeof(buffer));
     if (buffer[0] == '\0') {
