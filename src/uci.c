@@ -13,6 +13,7 @@
 #include "movegen.h"
 #include "search.h"
 #include "transposition.h"
+#include "tb.h"
 
 #define UCI_DEFAULT_EVAL_FILE "resources/sirio_default.nnue"
 #define UCI_DEFAULT_EVAL_FILE_SMALL "resources/sirio_small.nnue"
@@ -21,6 +22,11 @@ typedef struct {
     SearchContext* context;
     char eval_file[512];
     char eval_file_small[512];
+    char syzygy_path[1024];
+    int syzygy_probe_depth;
+    int syzygy_50_move_rule;
+    int syzygy_probe_limit;
+    int move_overhead;
 } UciState;
 
 static void trim_whitespace(char* text) {
@@ -47,6 +53,11 @@ static void print_options(const UciState* state) {
     printf("option name UseNNUE type check default %s\n", eval_use_nnue() ? "true" : "false");
     printf("option name EvalFile type string default %s\n", state->eval_file);
     printf("option name EvalFileSmall type string default %s\n", state->eval_file_small[0] ? state->eval_file_small : "");
+    printf("option name SyzygyPath type string default %s\n", state->syzygy_path);
+    printf("option name SyzygyProbeDepth type spin default %d min 0 max 64\n", state->syzygy_probe_depth);
+    printf("option name Syzygy50MoveRule type check default %s\n", state->syzygy_50_move_rule ? "true" : "false");
+    printf("option name SyzygyProbeLimit type spin default %d min 0 max 7\n", state->syzygy_probe_limit);
+    printf("option name Move Overhead type spin default %d min 0 max 5000\n", state->move_overhead);
 }
 
 static void handle_position(UciState* state, char* args) {
@@ -163,6 +174,42 @@ static void handle_setoption(UciState* state, char* line) {
             eval_load_small_network(NULL);
             state->eval_file_small[0] = '\0';
         }
+    } else if (strcmp(name_ptr, "SyzygyPath") == 0 && option_value) {
+        snprintf(state->syzygy_path, sizeof(state->syzygy_path), "%s", option_value);
+        tb_set_path(option_value);
+    } else if (strcmp(name_ptr, "SyzygyProbeDepth") == 0 && option_value) {
+        int depth = atoi(option_value);
+        if (depth < 0) {
+            depth = 0;
+        } else if (depth > 64) {
+            depth = 64;
+        }
+        state->syzygy_probe_depth = depth;
+        tb_set_probe_depth(depth);
+    } else if (strcmp(name_ptr, "Syzygy50MoveRule") == 0 && option_value) {
+        int enabled = (strcmp(option_value, "true") == 0 || strcmp(option_value, "1") == 0);
+        state->syzygy_50_move_rule = enabled;
+        tb_set_50_move_rule(enabled);
+    } else if (strcmp(name_ptr, "SyzygyProbeLimit") == 0 && option_value) {
+        int limit = atoi(option_value);
+        if (limit < 0) {
+            limit = 0;
+        } else if (limit > 7) {
+            limit = 7;
+        }
+        state->syzygy_probe_limit = limit;
+        tb_set_probe_limit(limit);
+    } else if (strcmp(name_ptr, "Move Overhead") == 0 && option_value) {
+        int overhead = atoi(option_value);
+        if (overhead < 0) {
+            overhead = 0;
+        } else if (overhead > 5000) {
+            overhead = 5000;
+        }
+        state->move_overhead = overhead;
+        if (state->context) {
+            state->context->move_overhead = overhead;
+        }
     }
 }
 
@@ -185,6 +232,12 @@ static void handle_go(UciState* state, char* args) {
             }
             limits.movetime_ms = atoi(movetime_ptr);
             if (limits.movetime_ms < 0) {
+                limits.movetime_ms = 0;
+            }
+            int overhead = state->context ? state->context->move_overhead : state->move_overhead;
+            if (limits.movetime_ms > overhead) {
+                limits.movetime_ms -= overhead;
+            } else {
                 limits.movetime_ms = 0;
             }
         }
@@ -239,6 +292,14 @@ static void uci_state_init(UciState* state, SearchContext* context) {
     } else {
         state->eval_file_small[0] = '\0';
     }
+    const char* syzygy_path = tb_get_path();
+    if (syzygy_path) {
+        snprintf(state->syzygy_path, sizeof(state->syzygy_path), "%s", syzygy_path);
+    }
+    state->syzygy_probe_depth = tb_get_probe_depth();
+    state->syzygy_50_move_rule = tb_get_50_move_rule();
+    state->syzygy_probe_limit = tb_get_probe_limit();
+    state->move_overhead = context ? context->move_overhead : 10;
 }
 
 void uci_loop(SearchContext* context) {
