@@ -20,6 +20,7 @@ unset(_sirio_embed_default)
 
 add_library(sirio_core
     src/bits.c
+    src/eval.c
     src/nn/accumulator.c
     src/nn/evaluate.c
     src/files/fen.cpp
