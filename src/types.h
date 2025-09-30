@@ -46,7 +46,7 @@ typedef struct MoveList {
 
 typedef struct Board {
     Piece squares[64];
-    Bitboard bitboards[PIECE_TYPE_NB * COLOR_NB];
+    Bitboard bitboards[((size_t)PIECE_TYPE_NB) * ((size_t)COLOR_NB)];
     enum Color side_to_move;
     int castling_rights;
     Square en_passant_square;
