@@ -44,6 +44,18 @@ int main(int argc, char* argv[]) {
         } else if (arg == "--evaluate") {
             std::cout << "Static evaluation: " << engine.evaluate() << std::endl;
             run_cli = false;
+        } else if (arg == "--network" && index + 1 < argc) {
+            const std::string path = argv[++index];
+            if (!engine.load_network(path)) {
+                std::cerr << "Failed to load evaluation network from " << path << std::endl;
+                return 1;
+            }
+        } else if (arg == "--tablebase" && index + 1 < argc) {
+            const std::string path = argv[++index];
+            if (!engine.configure_tablebase(path)) {
+                std::cerr << "Failed to initialize tablebase from " << path << std::endl;
+                return 1;
+            }
         } else if (arg == "--no-cli") {
             run_cli = false;
         } else if (arg == "--help") {
@@ -52,6 +64,8 @@ int main(int argc, char* argv[]) {
                       << "  --pgn <file>    Load moves from a PGN file\n"
                       << "  --print         Print the current board\n"
                       << "  --evaluate      Print a material evaluation\n"
+                      << "  --network <f>   Load evaluation weights from file\n"
+                      << "  --tablebase <f> Load CSV tablebase\n"
                       << "  --no-cli        Disable the interactive shell\n"
                       << "  --help          Show this message\n";
             return 0;

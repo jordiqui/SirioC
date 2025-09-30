@@ -26,8 +26,15 @@ std::string trim(std::string value) {
 
 }  // namespace
 
-Engine::Engine() {
+Engine::Engine()
+    : tablebase_ready_(false) {
+    load_network("resources/network.dat");
+    configure_tablebase(SIRIO_TB_DEFAULT_PATH);
     reset();
+}
+
+Engine::~Engine() {
+    sirio_tb_shutdown();
 }
 
 void Engine::reset() {
@@ -81,12 +88,36 @@ std::optional<Move> Engine::suggest_move() const {
     return best_move;
 }
 
+std::optional<TablebaseResult> Engine::probe_tablebase() const {
+    if (!tablebase_ready_) {
+        return std::nullopt;
+    }
+
+    const auto fen = current_fen();
+    sirio_tb_result raw{};
+    if (!sirio_tb_probe_fen(fen.c_str(), &raw)) {
+        return std::nullopt;
+    }
+
+    return TablebaseResult{raw.wdl, raw.dtm};
+}
+
 void Engine::load_game(const sirio::files::PgnGame& game) {
     game_ = game;
 }
 
 void Engine::load_game_from_file(const std::string& path) {
     load_game(sirio::files::load_pgn_from_file(path));
+}
+
+bool Engine::load_network(const std::string& path) {
+    return evaluator_.load_network(path);
+}
+
+bool Engine::configure_tablebase(const std::string& path) {
+    tablebase_source_ = path;
+    tablebase_ready_ = sirio_tb_init(path.c_str()) != 0;
+    return tablebase_ready_;
 }
 
 void Engine::run_cli(std::istream& input, std::ostream& output) {
@@ -116,6 +147,7 @@ void Engine::run_cli(std::istream& input, std::ostream& output) {
                    << "  eval          Evaluate the current position\n"
                    << "  moves         List pseudo-legal moves\n"
                    << "  best          Suggest a material-based move\n"
+                   << "  tb            Probe the endgame tablebase\n"
                    << "  load <file>   Load a PGN game\n"
                    << "  game          Show loaded PGN metadata\n"
                    << "  quit          Exit the shell" << std::endl;
@@ -168,6 +200,16 @@ void Engine::run_cli(std::istream& input, std::ostream& output) {
                 output << "Best capture heuristic: " << best_move->to_string() << std::endl;
             } else {
                 output << "No move suggestion available." << std::endl;
+            }
+            continue;
+        }
+
+        if (token == "tb") {
+            const auto tablebase = probe_tablebase();
+            if (tablebase.has_value()) {
+                output << "Tablebase WDL: " << tablebase->wdl << ", DTM: " << tablebase->dtm << std::endl;
+            } else {
+                output << "No tablebase entry available for the current position." << std::endl;
             }
             continue;
         }
