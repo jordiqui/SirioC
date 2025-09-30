@@ -24,8 +24,8 @@ std::string trim(std::string value) {
     return value;
 }
 
-constexpr const char* kEngineIdName = "SirioC-0.1.0";
-constexpr const char* kEngineIdAuthor = "SirioC Team";
+constexpr const char* kEngineIdName = "SirioC-0.1.0 300925";
+constexpr const char* kEngineIdAuthor = "Jorge Ruiz and Codex Chatgpt creditos";
 
 }  // namespace
 
@@ -124,7 +124,6 @@ bool Engine::configure_tablebase(const std::string& path) {
 }
 
 void Engine::run_cli(std::istream& input, std::ostream& output) {
-    output << "SirioC interactive shell. Type 'help' for a list of commands." << std::endl;
     std::string line;
 
     while (std::getline(input, line)) {

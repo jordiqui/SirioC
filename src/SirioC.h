@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-int berserk_run(SearchContext* context);
+int sirio_run(SearchContext* context);
 
 #ifdef __cplusplus
 } /* extern "C" */
