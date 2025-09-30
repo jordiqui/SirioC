@@ -86,6 +86,7 @@ void search_init(SearchContext* context, Board* board, TranspositionTable* tt, H
     context->multipv = 1;
     context->start_time_ms = 0;
     context->stop = 0;
+    context->move_overhead = 10;
     (void)tt;
 }
 

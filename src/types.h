@@ -78,6 +78,7 @@ typedef struct SearchContext {
     int multipv;
     uint64_t start_time_ms;
     int stop;
+    int move_overhead;
 } SearchContext;
 
 typedef struct ThreadContext {
