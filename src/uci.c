@@ -4,7 +4,10 @@
 #include <string.h>
 
 #include "board.h"
+#include "history.h"
 #include "movegen.h"
+#include "search.h"
+#include "transposition.h"
 
 void uci_loop(SearchContext* context) {
     char line[1024];
@@ -26,5 +29,23 @@ void uci_loop(SearchContext* context) {
         }
         fflush(stdout);
     }
+}
+
+int main(void) {
+    Board board;
+    HistoryTable history;
+    TranspositionTable tt;
+    SearchContext context;
+
+    board_init(&board);
+    history_init(&history);
+    transposition_init(&tt, 1 << 16);
+    search_init(&context, &board, &tt, &history);
+    board_set_start_position(&board);
+
+    uci_loop(&context);
+
+    transposition_free(&tt);
+    return 0;
 }
 
