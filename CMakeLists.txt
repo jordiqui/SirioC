@@ -36,7 +36,10 @@ add_library(sirio_core
     src/uci/Options.cpp
     src/uci/Uci.cpp)
 
-target_include_directories(sirio_core PUBLIC src)
+target_include_directories(sirio_core PUBLIC
+    src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/nn
+)
 
 target_compile_features(sirio_core PUBLIC cxx_std_20)
 
