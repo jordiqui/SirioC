@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(SIRIOC_BUILD_TESTS "Build the SirioC test suite" ON)
 
 add_library(sirio_core
+    src/bits.c
     src/nn/accumulator.c
     src/nn/evaluate.c
     src/files/fen.cpp
