@@ -192,8 +192,8 @@ static void uci_loop_impl(UciState* state) {
     char line[1024];
     while (fgets(line, sizeof(line), stdin)) {
         if (strncmp(line, "uci", 3) == 0 && (line[3] == '\0' || isspace((unsigned char)line[3]))) {
-            printf("id name SirioC\n");
-            printf("id author OpenAI\n");
+            printf("id name SirioC-0.1.0 300925\n");
+            printf("id author Jorge Ruiz and Codex Chatgpt creditos\n");
             print_options(state);
             printf("uciok\n");
         } else if (strncmp(line, "isready", 7) == 0 && (line[7] == '\0' || isspace((unsigned char)line[7]))) {

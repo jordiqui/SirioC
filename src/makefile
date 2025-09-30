@@ -3,7 +3,7 @@ CFLAGS ?= -O2 -std=c11
 SRCS = \
     attacks.c \
     bench.c \
-    berserk.c \
+    SirioC.c \
     bits.c \
     board.c \
     eval.c \
@@ -26,17 +26,17 @@ SRCS = \
 
 OBJS = $(SRCS:.c=.o)
 
-sirio: $(OBJS)
+SirioC-0.1.0: $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS)
 
-bench: sirio
-	@printf "uci\nisready\nucinewgame\nposition startpos\ngo depth 1\nquit\n" | ./sirio --uci > .sirio_bench.log
+bench: SirioC-0.1.0
+	@printf "uci\nisready\nucinewgame\nposition startpos\ngo depth 1\nquit\n" | ./SirioC-0.1.0 --uci > .sirio_bench.log
 	@cat .sirio_bench.log
 	@awk '/^bestmove/ { bm=$$2 } END { if (bm == "" || bm == "0000" || bm == "(none)") { printf("bench: invalid bestmove %s\n", bm); exit 1 } }' .sirio_bench.log
 	@rm -f .sirio_bench.log
 
 clean:
-	rm -f $(OBJS) sirio
+	rm -f $(OBJS) SirioC-0.1.0
 
 .PHONY: clean bench
 
