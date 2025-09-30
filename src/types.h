@@ -64,6 +64,12 @@ typedef struct SearchLimits {
     int nodes;
     int infinite;
     int multipv;
+    int wtime_ms;
+    int btime_ms;
+    int winc_ms;
+    int binc_ms;
+    int moves_to_go;
+    int ponder;
 } SearchLimits;
 
 typedef struct SearchContext {
@@ -79,6 +85,9 @@ typedef struct SearchContext {
     uint64_t start_time_ms;
     int stop;
     int move_overhead;
+    uint64_t nodes;
+    int depth_completed;
+    uint64_t last_search_time_ms;
 } SearchContext;
 
 typedef struct ThreadContext {
