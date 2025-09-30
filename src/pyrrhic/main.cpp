@@ -22,10 +22,20 @@ std::string decode_fen_argument(std::string fen) {
 
 std::filesystem::path determine_engine_directory(const char* argv0) {
 #ifdef _WIN32
-    wchar_t buffer[MAX_PATH];
-    DWORD length = GetModuleFileNameW(nullptr, buffer, MAX_PATH);
-    if (length > 0) {
-        return std::filesystem::path(buffer).parent_path();
+    std::wstring buffer(MAX_PATH ? MAX_PATH : 1, L'\0');
+    for (;;) {
+        DWORD length = GetModuleFileNameW(nullptr, buffer.data(),
+                                          static_cast<DWORD>(buffer.size()));
+        if (length == 0) {
+            break;
+        }
+        if (length < buffer.size()) {
+            buffer.resize(length + 1);
+            buffer[length] = L'\0';
+            std::wstring module_path(buffer.c_str());
+            return std::filesystem::path(module_path).parent_path();
+        }
+        buffer.resize(buffer.size() * 2, L'\0');
     }
 #else
     std::error_code ec_self;
