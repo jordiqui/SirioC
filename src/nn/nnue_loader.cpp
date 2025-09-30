@@ -5,6 +5,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <system_error>
 #include <utility>
@@ -86,6 +87,23 @@ std::string canonical_source_path(const std::string& path) {
     return path;
 }
 
+void emit_success_info(const Metadata& meta) {
+    std::cout << "info string NNUE network loaded: " << meta.architecture;
+    if (!meta.dimensions.empty()) {
+        std::cout << ' ' << meta.dimensions;
+    }
+    std::cout << "\n";
+    std::cout << "info string NNUE source: " << meta.source;
+    if (meta.size_bytes > 0) {
+        std::cout << " (" << meta.size_bytes << " bytes)";
+    }
+    std::cout << "\n";
+}
+
+void emit_failure_info(const std::string& source) {
+    std::cout << "info string NNUE load failed from " << source << "\n";
+}
+
 #ifdef SIRIOC_EMBED_NNUE
 extern "C" {
 extern const unsigned char g_sirio_nnue_default[];
@@ -104,14 +122,17 @@ bool load_from_memory(const MemoryResource& resource, Metadata& meta) {
 
     Metadata parsed;
     if (!parse_metadata(resource.data, resource.size, resource.source, parsed)) {
+        emit_failure_info(resource.source.empty() ? "memory resource" : resource.source);
         return false;
     }
 
     if (!eval_load_network_from_buffer(resource.data, resource.size)) {
+        emit_failure_info(resource.source.empty() ? "memory resource" : resource.source);
         return false;
     }
 
     meta = std::move(parsed);
+    emit_success_info(meta);
     return true;
 }
 
@@ -122,25 +143,30 @@ bool load_from_file(const std::string& path, Metadata& meta) {
 
     std::ifstream stream(path, std::ios::binary);
     if (!stream) {
+        emit_failure_info(path);
         return false;
     }
 
     std::vector<std::uint8_t> buffer((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
     stream.close();
     if (buffer.empty()) {
+        emit_failure_info(path);
         return false;
     }
 
     Metadata parsed;
     if (!parse_metadata(buffer.data(), buffer.size(), canonical_source_path(path), parsed)) {
+        emit_failure_info(path);
         return false;
     }
 
     if (!eval_load_network_from_buffer(buffer.data(), buffer.size())) {
+        emit_failure_info(path);
         return false;
     }
 
     meta = std::move(parsed);
+    emit_success_info(meta);
     return true;
 }
 

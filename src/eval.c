@@ -45,19 +45,19 @@ static void eval_ensure_initialized(void) {
     if (!loaded_eval && g_sirio_nnue_default_size > 0 &&
         sirio_nn_model_load_buffer(&g_eval_model, g_sirio_nnue_default, g_sirio_nnue_default_size)) {
         loaded_eval = 1;
-        fprintf(stderr, "info: loaded embedded default NNUE weights\n");
+        printf("info string Loaded embedded default NNUE weights\n");
     }
 #endif
     if (!loaded_eval) {
-        fprintf(stderr,
-                "info: no NNUE weights loaded from %s; falling back to material until EvalFile is set\n",
-                SIRIO_DEFAULT_NETWORK);
+        printf(
+            "info string No NNUE weights loaded from %s; falling back to material until EvalFile is set\n",
+            SIRIO_DEFAULT_NETWORK);
     }
 
     if (!try_load_network(&g_small_model, SIRIO_DEFAULT_SMALL_NETWORK, SIRIO_DEFAULT_SMALL_NETWORK_ALT)) {
-        fprintf(stderr,
-                "info: no secondary network loaded from %s; EvalFileSmall can be used to supply one\n",
-                SIRIO_DEFAULT_SMALL_NETWORK);
+        printf(
+            "info string No secondary network loaded from %s; EvalFileSmall can be used to supply one\n",
+            SIRIO_DEFAULT_SMALL_NETWORK);
         sirio_nn_model_free(&g_small_model);
         sirio_nn_model_init(&g_small_model);
     }
@@ -83,7 +83,11 @@ int eval_load_network(const char* path) {
     if (!path || !*path) {
         return 0;
     }
-    return sirio_nn_model_load(&g_eval_model, path);
+    int ok = sirio_nn_model_load(&g_eval_model, path);
+    if (ok) {
+        printf("info string Primary NNUE network loaded from %s\n", path);
+    }
+    return ok;
 }
 
 int eval_load_network_from_buffer(const void* data, size_t size) {
@@ -91,7 +95,11 @@ int eval_load_network_from_buffer(const void* data, size_t size) {
     if (!data || size == 0) {
         return 0;
     }
-    return sirio_nn_model_load_buffer(&g_eval_model, data, size);
+    int ok = sirio_nn_model_load_buffer(&g_eval_model, data, size);
+    if (ok) {
+        printf("info string Primary NNUE network loaded from buffer (%zu bytes)\n", size);
+    }
+    return ok;
 }
 
 int eval_load_small_network(const char* path) {
@@ -99,9 +107,14 @@ int eval_load_small_network(const char* path) {
     if (!path || !*path) {
         sirio_nn_model_free(&g_small_model);
         sirio_nn_model_init(&g_small_model);
+        printf("info string Secondary NNUE network cleared\n");
         return 1;
     }
-    return sirio_nn_model_load(&g_small_model, path);
+    int ok = sirio_nn_model_load(&g_small_model, path);
+    if (ok) {
+        printf("info string Secondary NNUE network loaded from %s\n", path);
+    }
+    return ok;
 }
 
 void eval_set_use_nnue(bool use_nnue) {

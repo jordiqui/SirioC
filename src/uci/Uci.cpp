@@ -1,6 +1,7 @@
 #include "Uci.h"
 
 #include "Options.h"
+#include "../eval.h"
 #include "../nn/nnue.h"
 
 #include "files/fen.h"
@@ -11,16 +12,20 @@
 #include <cctype>
 #include <cmath>
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
+#include <utility>
 
 namespace {
 constexpr const char* kStartPositionFen =
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+constexpr const char* kDefaultEvalFile = "resources/sirio_default.nnue";
+constexpr const char* kDefaultEvalFileSmall = "resources/sirio_small.nnue";
 
 sirio::pyrrhic::PieceType promotion_type_from_char(char symbol) {
   switch (std::tolower(static_cast<unsigned char>(symbol))) {
@@ -257,47 +262,91 @@ void init_options() {
   OptionsMap["UseNNUE"] = Option{Option::CHECK, 0, 0, 0, true, {}, [] {
                                // Actual loading handled elsewhere
                              }};
-  OptionsMap["EvalFile"] = Option{Option::STRING, 0, 0, 0, false, "", [] {
-                               // Actual loading handled elsewhere
-                             }};
+  std::error_code ec;
+  Option eval_file{Option::STRING, 0, 0, 0, false, "", {}};
+  if (std::filesystem::exists(kDefaultEvalFile, ec)) {
+    eval_file.s = kDefaultEvalFile;
+  }
+  ec.clear();
+  Option eval_file_small{Option::STRING, 0, 0, 0, false, "", {}};
+  if (std::filesystem::exists(kDefaultEvalFileSmall, ec)) {
+    eval_file_small.s = kDefaultEvalFileSmall;
+  }
+  OptionsMap["EvalFile"] = std::move(eval_file);
+  OptionsMap["EvalFileSmall"] = std::move(eval_file_small);
 }
 
 static void load_nn_if_needed() {
+  static std::string last_primary_request;
+  static std::string last_small_request;
+  static bool last_use_nnue = false;
+  static bool reported_primary_failure = false;
+  static bool reported_small_failure = false;
+
   auto it_use = OptionsMap.find("UseNNUE");
   if (it_use == OptionsMap.end()) return;
-  if (!it_use->second.b) {
-    if (nnue::state.loaded) {
-      nnue::reset();
+
+  const bool use_nnue = it_use->second.b;
+  if (!use_nnue) {
+    if (last_use_nnue) {
+      if (nnue::state.loaded) {
+        nnue::reset();
+      }
+      std::cout << "info string NNUE disabled by option\n";
+      reported_primary_failure = false;
+      reported_small_failure = false;
     }
+    last_use_nnue = false;
     return;
   }
 
-  if (!nnue::state.loaded) {
-    const auto it_file = OptionsMap.find("EvalFile");
-    const std::string path = it_file != OptionsMap.end() ? it_file->second.s : std::string{};
+  last_use_nnue = true;
+
+  const auto it_file = OptionsMap.find("EvalFile");
+  const std::string requested_primary = it_file != OptionsMap.end() ? it_file->second.s : std::string{};
+  if (!nnue::state.loaded || requested_primary != last_primary_request) {
+    last_primary_request = requested_primary;
     bool loaded = false;
-    if (!path.empty()) {
-      loaded = nnue::load(path);
+    if (!requested_primary.empty()) {
+      loaded = nnue::load(requested_primary);
       if (!loaded) {
-        std::cout << "info string NNUE load failed: " << path << "\n";
+        std::cout << "info string NNUE load failed: " << requested_primary << "\n";
       }
     }
-    if (!loaded && path.empty() && nnue::has_embedded_default()) {
+    if (!loaded && nnue::has_embedded_default()) {
       loaded = nnue::load_default();
-    } else if (!loaded && nnue::has_embedded_default()) {
-      loaded = nnue::load_default();
-      if (loaded) {
+      if (loaded && !requested_primary.empty()) {
         std::cout << "info string NNUE falling back to embedded weights\n";
       }
     }
-    if (loaded) {
-      const auto& meta = nnue::state.meta;
-      std::cout << "info string NNUE evaluation using " << meta.architecture;
-      if (!meta.dimensions.empty()) {
-        std::cout << ' ' << meta.dimensions;
+    if (!loaded) {
+      if (!reported_primary_failure) {
+        std::cout << "info string NNUE evaluation is using material fallback\n";
       }
-      std::cout << "\n";
-      std::cout << "info string NNUE network source: " << meta.source << "\n";
+      reported_primary_failure = true;
+    } else {
+      reported_primary_failure = false;
+    }
+  }
+
+  const auto it_small = OptionsMap.find("EvalFileSmall");
+  const std::string requested_small = it_small != OptionsMap.end() ? it_small->second.s : std::string{};
+  if (requested_small != last_small_request) {
+    last_small_request = requested_small;
+    bool loaded_small = true;
+    if (requested_small.empty()) {
+      eval_load_small_network(nullptr);
+      reported_small_failure = false;
+    } else {
+      loaded_small = eval_load_small_network(requested_small.c_str()) != 0;
+      if (!loaded_small) {
+        if (!reported_small_failure) {
+          std::cout << "info string NNUE secondary load failed: " << requested_small << "\n";
+        }
+        reported_small_failure = true;
+      } else {
+        reported_small_failure = false;
+      }
     }
   }
 }
@@ -382,7 +431,10 @@ void uci::loop() {
           name += word;
         }
       }
-      if (!name.empty()) OptionsMap.set(name, value);
+      if (!name.empty()) {
+        OptionsMap.set(name, value);
+        load_nn_if_needed();
+      }
     } else if (token == "ucinewgame") {
       nnue::state.loaded = false;
       nnue::state.meta = nnue::Metadata{};

@@ -232,14 +232,14 @@ static void handle_setoption(UciState* state, char* line) {
         if (eval_load_network(option_value)) {
             snprintf(state->eval_file, sizeof(state->eval_file), "%s", option_value);
         } else {
-            fprintf(stderr, "warning: failed to load NNUE file %s\n", option_value);
+            printf("info string Failed to load NNUE file %s\n", option_value);
         }
     } else if (strcmp(name_ptr, "EvalFileSmall") == 0) {
         if (option_value && *option_value) {
             if (eval_load_small_network(option_value)) {
                 snprintf(state->eval_file_small, sizeof(state->eval_file_small), "%s", option_value);
             } else {
-                fprintf(stderr, "warning: failed to load secondary NNUE file %s\n", option_value);
+                printf("info string Failed to load secondary NNUE file %s\n", option_value);
             }
         } else {
             eval_load_small_network(NULL);

@@ -62,11 +62,24 @@ that a legal `bestmove` is returned. Invoke it with `make -C src bench`.
 SirioC does not ship binary NNUE weights. To use HalfKP evaluation, download a
 compatible network (for example, from the [official Stockfish testing
 server](https://tests.stockfishchess.org/nns/)) and point the `EvalFile` option
-to its location. Stockfish-provided networks are distributed under the GPLv3,
-so ensure that your usage of SirioC complies with the license requirements—this
-may require distributing SirioC under the GPLv3 or isolating the neural network
-in a separate component. When no NNUE file is configured the engine falls back
-to its built-in material evaluator.
+to its location. Stockfish-provided networks are distributed under the CC0
+license, so they can be redistributed with SirioC-compatible builds.
+
+A convenience script, `scripts/download_nnue.sh`, fetches the current
+Stockfish main network (`sirio_default.nnue`) and the compact "small" network
+(`sirio_small.nnue`) into `resources/`:
+
+```bash
+./scripts/download_nnue.sh
+```
+
+After the files are available, set `EvalFile`/`EvalFileSmall` accordingly.
+When the small network is configured, SirioC automatically switches to it in
+positions with 12 or fewer pieces to improve accuracy in simplified endgames.
+If you prefer to bundle the default weights with release binaries, configure
+CMake with `-DSIRIOC_EMBED_NNUE=ON` and ensure that
+`resources/sirio_default.nnue` exists at configure time. When no NNUE file is
+configured the engine falls back to its built-in material evaluator.
 
 ## Building
 
