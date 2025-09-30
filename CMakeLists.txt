@@ -27,6 +27,12 @@ target_compile_options(sirio_core PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
     $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->)
 
+if (CMAKE_C_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(sirio_core PUBLIC -msse4.1 -mpopcnt)
+elseif (MSVC)
+    target_compile_options(sirio_core PUBLIC /arch:AVX)
+endif()
+
 add_executable(sirioc src/pyrrhic/main.cpp)
 target_link_libraries(sirioc PRIVATE sirio_core)
 

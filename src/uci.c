@@ -8,6 +8,7 @@
 #include "movegen.h"
 #include "search.h"
 #include "transposition.h"
+#include "eval.h"
 
 void uci_loop(SearchContext* context) {
     char line[1024];
@@ -38,6 +39,10 @@ int main(void) {
     SearchContext context;
 
     board_init(&board);
+    eval_init();
+    if (!eval_load_network("resources/network.dat")) {
+        fprintf(stderr, "warning: could not load network weights from resources/network.dat, using defaults\n");
+    }
     history_init(&history);
     transposition_init(&tt, 1 << 16);
     search_init(&context, &board, &tt, &history);
