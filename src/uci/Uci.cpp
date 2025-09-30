@@ -11,21 +11,32 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <exception>
 #include <filesystem>
 #include <iostream>
 #include <optional>
 #include <sstream>
 #include <string>
+#include <system_error>
 #include <thread>
-#include <vector>
 #include <utility>
+#include <vector>
+
+std::filesystem::path g_engine_dir;
 
 namespace {
 constexpr const char* kStartPositionFen =
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-constexpr const char* kDefaultEvalFile = "resources/sirio_default.nnue";
-constexpr const char* kDefaultEvalFileSmall = "resources/sirio_small.nnue";
+constexpr const char* kDefaultEvalFile = "sirio_default.nnue";
+constexpr const char* kDefaultEvalFileSmall = "sirio_small.nnue";
+
+std::string trim(std::string value) {
+  const auto begin = value.find_first_not_of(" \t\r\n");
+  if (begin == std::string::npos) return {};
+  const auto end = value.find_last_not_of(" \t\r\n");
+  return value.substr(begin, end - begin + 1);
+}
 
 sirio::pyrrhic::PieceType promotion_type_from_char(char symbol) {
   switch (std::tolower(static_cast<unsigned char>(symbol))) {
@@ -61,6 +72,78 @@ std::string square_to_uci(int square) {
 void remove_castling_right(std::string& rights, char symbol) {
   rights.erase(std::remove(rights.begin(), rights.end(), symbol), rights.end());
   if (rights.empty()) rights = "-";
+}
+
+std::filesystem::path resolve_nnue_path(const std::string& value) {
+  if (value.empty()) return {};
+
+  std::error_code ec;
+  std::filesystem::path candidate(value);
+  if (candidate.is_absolute()) {
+    if (std::filesystem::exists(candidate, ec)) return candidate;
+    return {};
+  }
+
+  if (!g_engine_dir.empty()) {
+    std::filesystem::path exe_candidate = g_engine_dir / candidate;
+    if (std::filesystem::exists(exe_candidate, ec)) return exe_candidate;
+  }
+
+  auto cwd = std::filesystem::current_path(ec);
+  if (!ec) {
+    std::filesystem::path cwd_candidate = cwd / candidate;
+    std::error_code ec_cwd;
+    if (std::filesystem::exists(cwd_candidate, ec_cwd)) return cwd_candidate;
+  }
+
+  if (!g_engine_dir.empty()) {
+    std::filesystem::path resources_candidate = g_engine_dir / "resources" / candidate;
+    if (std::filesystem::exists(resources_candidate, ec)) return resources_candidate;
+  }
+
+  return {};
+}
+
+std::string format_source_kind(nnue::Metadata::SourceType type) {
+  using Source = nnue::Metadata::SourceType;
+  switch (type) {
+    case Source::File:
+      return "file";
+    case Source::Embedded:
+      return "<embedded>";
+    case Source::Memory:
+      return "memory";
+    case Source::Unknown:
+    default:
+      return "unknown";
+  }
+}
+
+void report_primary_success(const nnue::Metadata& meta,
+                            const std::filesystem::path& resolved_path) {
+  const std::string display_path = !meta.source.empty()
+                                       ? meta.source
+                                       : (!resolved_path.empty() ? resolved_path.string()
+                                                                 : std::string{"<unknown>"});
+
+  std::cout << "info string NNUE evaluation using " << display_path;
+  std::ostringstream details;
+  bool has_details = false;
+  if (meta.size_bytes > 0) {
+    const std::uint64_t mib = meta.size_bytes / (1024ULL * 1024ULL);
+    details << (mib > 0 ? mib : 1) << "MiB";
+    has_details = true;
+  }
+  if (!meta.dimensions.empty()) {
+    if (has_details) details << ", ";
+    details << meta.dimensions;
+    has_details = true;
+  }
+  if (has_details) {
+    std::cout << " (" << details.str() << ')';
+  }
+  std::cout << "\n";
+  std::cout << "info string     source: " << format_source_kind(meta.source_type) << "\n";
 }
 
 }  // namespace
@@ -262,21 +345,19 @@ void init_options() {
   OptionsMap["UseNNUE"] = Option{Option::CHECK, 0, 0, 0, true, {}, [] {
                                // Actual loading handled elsewhere
                              }};
-  std::error_code ec;
   Option eval_file{Option::STRING, 0, 0, 0, false, "", {}};
-  if (std::filesystem::exists(kDefaultEvalFile, ec)) {
+  if (!resolve_nnue_path(kDefaultEvalFile).empty()) {
     eval_file.s = kDefaultEvalFile;
   }
-  ec.clear();
   Option eval_file_small{Option::STRING, 0, 0, 0, false, "", {}};
-  if (std::filesystem::exists(kDefaultEvalFileSmall, ec)) {
+  if (!resolve_nnue_path(kDefaultEvalFileSmall).empty()) {
     eval_file_small.s = kDefaultEvalFileSmall;
   }
   OptionsMap["EvalFile"] = std::move(eval_file);
   OptionsMap["EvalFileSmall"] = std::move(eval_file_small);
 }
 
-static void load_nn_if_needed() {
+static void try_load_nnue() {
   static std::string last_primary_request;
   static std::string last_small_request;
   static bool last_use_nnue = false;
@@ -297,6 +378,8 @@ static void load_nn_if_needed() {
       reported_small_failure = false;
     }
     last_use_nnue = false;
+    last_primary_request.clear();
+    last_small_request.clear();
     return;
   }
 
@@ -307,25 +390,29 @@ static void load_nn_if_needed() {
   if (!nnue::state.loaded || requested_primary != last_primary_request) {
     last_primary_request = requested_primary;
     bool loaded = false;
+    std::filesystem::path resolved_primary;
     if (!requested_primary.empty()) {
-      loaded = nnue::load(requested_primary);
-      if (!loaded) {
-        std::cout << "info string NNUE load failed: " << requested_primary << "\n";
+      resolved_primary = resolve_nnue_path(requested_primary);
+      if (!resolved_primary.empty()) {
+        std::cout << "info string NNUE: trying main " << resolved_primary.string() << "\n";
+        loaded = nnue::load(resolved_primary.string());
+      } else {
+        std::cout << "info string NNUE: file not found " << requested_primary << "\n";
       }
     }
-    if (!loaded && nnue::has_embedded_default()) {
+    if (!loaded && requested_primary.empty() && nnue::has_embedded_default()) {
+      std::cout << "info string NNUE: trying embedded default\n";
       loaded = nnue::load_default();
-      if (loaded && !requested_primary.empty()) {
-        std::cout << "info string NNUE falling back to embedded weights\n";
-      }
     }
-    if (!loaded) {
+    if (loaded) {
+      reported_primary_failure = false;
+      report_primary_success(nnue::state.meta, resolved_primary);
+    } else {
       if (!reported_primary_failure) {
-        std::cout << "info string NNUE evaluation is using material fallback\n";
+        std::cout << "info string NNUE: no network loaded; using material eval\n";
       }
       reported_primary_failure = true;
-    } else {
-      reported_primary_failure = false;
+      nnue::reset();
     }
   }
 
@@ -333,19 +420,26 @@ static void load_nn_if_needed() {
   const std::string requested_small = it_small != OptionsMap.end() ? it_small->second.s : std::string{};
   if (requested_small != last_small_request) {
     last_small_request = requested_small;
-    bool loaded_small = true;
     if (requested_small.empty()) {
       eval_load_small_network(nullptr);
       reported_small_failure = false;
     } else {
-      loaded_small = eval_load_small_network(requested_small.c_str()) != 0;
-      if (!loaded_small) {
+      const auto resolved_small = resolve_nnue_path(requested_small);
+      if (!resolved_small.empty()) {
+        std::cout << "info string NNUE: trying secondary " << resolved_small.string() << "\n";
+        const bool loaded_small = eval_load_small_network(resolved_small.string().c_str()) != 0;
+        if (loaded_small) {
+          std::cout << "info string NNUE secondary loaded: " << resolved_small.string() << "\n";
+          reported_small_failure = false;
+        } else {
+          std::cout << "info string NNUE secondary failed: " << resolved_small.string() << "\n";
+          reported_small_failure = true;
+        }
+      } else {
         if (!reported_small_failure) {
-          std::cout << "info string NNUE secondary load failed: " << requested_small << "\n";
+          std::cout << "info string NNUE secondary failed: " << requested_small << "\n";
         }
         reported_small_failure = true;
-      } else {
-        reported_small_failure = false;
       }
     }
   }
@@ -388,7 +482,6 @@ static void cmd_go(std::istringstream& is) {
 }
 
 void uci::loop() {
-  init_options();
   std::ios::sync_with_stdio(false);
   std::cin.tie(nullptr);
 
@@ -404,36 +497,31 @@ void uci::loop() {
       OptionsMap.printUci();
       std::cout << "uciok\n";
     } else if (token == "isready") {
-      load_nn_if_needed();
+      try_load_nnue();
       std::cout << "readyok\n";
     } else if (token == "setoption") {
       std::string word;
       std::string name;
       std::string value;
-      bool reading_name = false;
-      bool reading_value = false;
       while (is >> word) {
         if (word == "name") {
-          reading_name = true;
-          reading_value = false;
-          continue;
-        }
-        if (word == "value") {
-          reading_value = true;
-          reading_name = false;
-          continue;
-        }
-        if (reading_value) {
-          if (!value.empty()) value += ' ';
-          value += word;
-        } else if (reading_name) {
-          if (!name.empty()) name += ' ';
-          name += word;
+          std::string rest;
+          std::getline(is, rest);
+          const auto value_pos = rest.find(" value ");
+          if (value_pos != std::string::npos) {
+            name = trim(rest.substr(0, value_pos));
+            value = trim(rest.substr(value_pos + 7));
+          } else {
+            name = trim(rest);
+          }
+          break;
         }
       }
       if (!name.empty()) {
         OptionsMap.set(name, value);
-        load_nn_if_needed();
+        if (name == "EvalFile" || name == "EvalFileSmall" || name == "UseNNUE") {
+          try_load_nnue();
+        }
       }
     } else if (token == "ucinewgame") {
       nnue::state.loaded = false;

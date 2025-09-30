@@ -2,11 +2,9 @@
 
 #include "../eval.h"
 
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <sstream>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -14,65 +12,21 @@
 namespace nnue {
 namespace {
 
-struct FileHeader {
-    char magic[8];
-    std::uint32_t version;
-    std::uint32_t feature_count;
-    std::uint32_t hidden_size;
-    std::uint32_t output_scale;
-};
+constexpr std::size_t kMinimumReasonableSize = 1u << 20;  // 1 MiB
 
-constexpr char kExpectedMagic[] = {'S', 'I', 'R', 'I', 'O', 'N', 'N', 'U'};
-constexpr std::uint32_t kExpectedVersion = 1U;
-
-bool validate_header(const FileHeader& header) {
-    if (std::memcmp(header.magic, kExpectedMagic, sizeof(kExpectedMagic)) != 0) {
-        return false;
-    }
-    if (header.version != kExpectedVersion) {
-        return false;
-    }
-    if (header.feature_count == 0 || header.hidden_size == 0 || header.output_scale == 0) {
-        return false;
-    }
-    return true;
-}
-
-std::size_t payload_size(const FileHeader& header) {
-    const std::size_t bias_size = static_cast<std::size_t>(header.hidden_size) * sizeof(std::int16_t);
-    const std::size_t weight_size = static_cast<std::size_t>(header.feature_count) *
-                                    static_cast<std::size_t>(header.hidden_size) * sizeof(std::int8_t);
-    const std::size_t output_weights = static_cast<std::size_t>(header.hidden_size) * sizeof(std::int16_t);
-    return bias_size + weight_size + sizeof(std::int32_t) + output_weights;
+bool validate_buffer_size(std::size_t size) {
+    return size > kMinimumReasonableSize;
 }
 
 bool parse_metadata(const std::uint8_t* data, std::size_t size, const std::string& source, Metadata& meta) {
-    if (!data || size < sizeof(FileHeader)) {
-        return false;
-    }
-
-    FileHeader header{};
-    std::memcpy(&header, data, sizeof(FileHeader));
-    if (!validate_header(header)) {
-        return false;
-    }
-
-    const std::size_t required = sizeof(FileHeader) + payload_size(header);
-    if (size < required) {
+    if (!data || !validate_buffer_size(size)) {
         return false;
     }
 
     Metadata result;
-    result.architecture = "HalfKP";
-    result.feature_count = header.feature_count;
-    result.hidden_size = header.hidden_size;
-    result.output_scale = header.output_scale;
+    result.architecture = "NNUE";
     result.size_bytes = size;
     result.source = source;
-
-    std::ostringstream dims;
-    dims << '(' << header.feature_count << ", " << header.hidden_size << ", 1, " << header.output_scale << ')';
-    result.dimensions = dims.str();
 
     meta = std::move(result);
     return true;
@@ -92,12 +46,13 @@ void emit_success_info(const Metadata& meta) {
     if (!meta.dimensions.empty()) {
         std::cout << ' ' << meta.dimensions;
     }
-    std::cout << "\n";
-    std::cout << "info string NNUE source: " << meta.source;
     if (meta.size_bytes > 0) {
         std::cout << " (" << meta.size_bytes << " bytes)";
     }
     std::cout << "\n";
+    if (!meta.source.empty()) {
+        std::cout << "info string NNUE source: " << meta.source << "\n";
+    }
 }
 
 void emit_failure_info(const std::string& source) {
@@ -126,6 +81,7 @@ bool load_from_memory(const MemoryResource& resource, Metadata& meta) {
         return false;
     }
 
+    parsed.source_type = resource.source_type;
     if (!eval_load_network_from_buffer(resource.data, resource.size)) {
         emit_failure_info(resource.source.empty() ? "memory resource" : resource.source);
         return false;
@@ -155,11 +111,13 @@ bool load_from_file(const std::string& path, Metadata& meta) {
     }
 
     Metadata parsed;
-    if (!parse_metadata(buffer.data(), buffer.size(), canonical_source_path(path), parsed)) {
+    const std::string canonical = canonical_source_path(path);
+    if (!parse_metadata(buffer.data(), buffer.size(), canonical, parsed)) {
         emit_failure_info(path);
         return false;
     }
 
+    parsed.source_type = Metadata::SourceType::File;
     if (!eval_load_network_from_buffer(buffer.data(), buffer.size())) {
         emit_failure_info(path);
         return false;
@@ -180,7 +138,11 @@ bool has_embedded_default() {
 
 bool load_default(Metadata& meta) {
 #ifdef SIRIOC_EMBED_NNUE
-    MemoryResource resource{g_sirio_nnue_default, g_sirio_nnue_default_size, "embedded (default)"};
+    MemoryResource resource{
+        g_sirio_nnue_default,
+        g_sirio_nnue_default_size,
+        "embedded (default)",
+        Metadata::SourceType::Embedded};
     return load_from_memory(resource, meta);
 #else
     (void)meta;
