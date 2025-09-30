@@ -63,6 +63,7 @@ typedef struct SearchLimits {
     int movetime_ms;
     int nodes;
     int infinite;
+    int multipv;
 } SearchLimits;
 
 typedef struct SearchContext {
@@ -71,6 +72,12 @@ typedef struct SearchContext {
     SearchLimits limits;
     Value best_value;
     Move best_move;
+    Move pv_moves[256];
+    Value pv_values[256];
+    size_t pv_count;
+    int multipv;
+    uint64_t start_time_ms;
+    int stop;
 } SearchContext;
 
 typedef struct ThreadContext {

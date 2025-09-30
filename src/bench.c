@@ -7,7 +7,7 @@ void bench_run(SearchContext* context) {
         return;
     }
 
-    SearchLimits limits = { .depth = 1, .movetime_ms = 0, .nodes = 0, .infinite = 0 };
+    SearchLimits limits = { .depth = 1, .movetime_ms = 0, .nodes = 0, .infinite = 0, .multipv = 1 };
     Move move = search_iterative_deepening(context, &limits);
     printf("bench bestmove %d%d value %d\n", move.from, move.to, context->best_value);
 }

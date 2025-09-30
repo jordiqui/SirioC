@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
 #include "accumulator.h"
@@ -32,6 +33,7 @@ typedef struct {
 void sirio_nn_model_init(sirio_nn_model* model);
 void sirio_nn_model_free(sirio_nn_model* model);
 int sirio_nn_model_load(sirio_nn_model* model, const char* path);
+int sirio_nn_model_load_buffer(sirio_nn_model* model, const void* data, size_t size);
 int sirio_nn_model_ready(const sirio_nn_model* model);
 void sirio_nn_model_set_weight(sirio_nn_model* model, int index, int value);
 int sirio_nn_model_weight(const sirio_nn_model* model, int index);

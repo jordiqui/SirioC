@@ -7,13 +7,26 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(SIRIOC_BUILD_TESTS "Build the SirioC test suite" ON)
 
+set(_sirio_embed_default OFF)
+if(CMAKE_BUILD_TYPE)
+    string(TOUPPER "${CMAKE_BUILD_TYPE}" _sirio_build_type)
+    if(_sirio_build_type STREQUAL "RELEASE")
+        set(_sirio_embed_default ON)
+    endif()
+endif()
+option(SIRIOC_EMBED_NNUE "Embed the default NNUE network in Release builds" ${_sirio_embed_default})
+unset(_sirio_build_type)
+unset(_sirio_embed_default)
+
 add_library(sirio_core
     src/bits.c
+    src/eval.c
     src/nn/accumulator.c
     src/nn/evaluate.c
     src/files/fen.cpp
     src/files/pgn_loader.cpp
     src/nn/evaluator.cpp
+    src/nn/nnue_loader.cpp
     src/pyrrhic/board.cpp
     src/pyrrhic/engine.cpp
     src/pyrrhic/tbchess.c
@@ -35,6 +48,28 @@ if (CMAKE_C_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID STREQUAL "GNU")
     target_compile_options(sirio_core PUBLIC -msse4.1 -mpopcnt)
 elseif (MSVC)
     target_compile_options(sirio_core PUBLIC /arch:AVX)
+endif()
+
+if(SIRIOC_EMBED_NNUE)
+    set(_sirio_nnue_binary "${CMAKE_CURRENT_SOURCE_DIR}/resources/network.dat")
+    if(EXISTS "${_sirio_nnue_binary}")
+        set(_sirio_nnue_generated "${CMAKE_CURRENT_BINARY_DIR}/nnue_default.c")
+        add_custom_command(
+            OUTPUT "${_sirio_nnue_generated}"
+            COMMAND ${CMAKE_COMMAND} -DINPUT="${_sirio_nnue_binary}" -DOUTPUT="${_sirio_nnue_generated}" -DSYMBOL=g_sirio_nnue_default -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedNNUE.cmake"
+            DEPENDS "${_sirio_nnue_binary}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedNNUE.cmake"
+            COMMENT "Generating embedded NNUE network")
+        set_source_files_properties("${_sirio_nnue_generated}" PROPERTIES GENERATED TRUE)
+        add_library(nnue_default_obj OBJECT "${_sirio_nnue_generated}")
+        target_compile_features(nnue_default_obj PRIVATE c_std_99)
+        target_sources(sirio_core PRIVATE $<TARGET_OBJECTS:nnue_default_obj>)
+        add_dependencies(sirio_core nnue_default_obj)
+        target_compile_definitions(sirio_core PRIVATE SIRIOC_EMBED_NNUE)
+    else()
+        message(WARNING "SIRIOC_EMBED_NNUE is enabled but resources/network.dat was not found")
+    endif()
+    unset(_sirio_nnue_binary)
+    unset(_sirio_nnue_generated)
 endif()
 
 add_executable(sirioc src/pyrrhic/main.cpp)
