@@ -1,6 +1,7 @@
 #include "uci.h"
 
 #include <ctype.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -58,6 +59,76 @@ static void print_options(const UciState* state) {
     printf("option name Syzygy50MoveRule type check default %s\n", state->syzygy_50_move_rule ? "true" : "false");
     printf("option name SyzygyProbeLimit type spin default %d min 0 max 7\n", state->syzygy_probe_limit);
     printf("option name Move Overhead type spin default %d min 0 max 5000\n", state->move_overhead);
+}
+
+static char* next_token(char** cursor) {
+    if (cursor == NULL || *cursor == NULL) {
+        return NULL;
+    }
+
+    char* text = *cursor;
+    while (*text && isspace((unsigned char)*text)) {
+        ++text;
+    }
+    if (*text == '\0') {
+        *cursor = text;
+        return NULL;
+    }
+
+    char* start = text;
+    while (*text && !isspace((unsigned char)*text)) {
+        ++text;
+    }
+    if (*text) {
+        *text = '\0';
+        ++text;
+    }
+    *cursor = text;
+    return start;
+}
+
+static int parse_numeric_token(char** cursor) {
+    char* token = next_token(cursor);
+    if (!token) {
+        return 0;
+    }
+    return atoi(token);
+}
+
+static uint64_t compute_nps(uint64_t nodes, uint64_t elapsed_ms) {
+    if (elapsed_ms == 0) {
+        return nodes;
+    }
+    return (nodes * 1000ULL) / elapsed_ms;
+}
+
+static void emit_multipv_info(const UciState* state) {
+    if (!state || !state->context) {
+        return;
+    }
+
+    const SearchContext* context = state->context;
+    const uint64_t elapsed = context->last_search_time_ms ? context->last_search_time_ms : 1;
+    const uint64_t nodes = context->nodes;
+    const uint64_t nps = compute_nps(nodes, elapsed);
+    const int depth = context->depth_completed > 0 ? context->depth_completed : context->limits.depth;
+
+    for (size_t index = 0; index < context->pv_count; ++index) {
+        char pv_buffer[16];
+        move_to_uci(&context->pv_moves[index], pv_buffer, sizeof(pv_buffer));
+        if (pv_buffer[0] == '\0') {
+            snprintf(pv_buffer, sizeof(pv_buffer), "0000");
+        }
+        printf("info multipv %zu depth %d score cp %d time %" PRIu64 " nodes %" PRIu64
+               " nps %" PRIu64 " pv %s\n",
+               index + 1,
+               depth > 0 ? depth : 1,
+               context->pv_values[index],
+               elapsed,
+               nodes,
+               nps,
+               pv_buffer);
+    }
 }
 
 static void handle_position(UciState* state, char* args) {
@@ -214,42 +285,111 @@ static void handle_setoption(UciState* state, char* line) {
 }
 
 static void handle_go(UciState* state, char* args) {
-    SearchLimits limits = { .depth = 1, .movetime_ms = 0, .nodes = 0, .infinite = 0, .multipv = 1 };
+    SearchLimits limits = { .depth = 0,
+                            .movetime_ms = 0,
+                            .nodes = 0,
+                            .infinite = 0,
+                            .multipv = 1,
+                            .wtime_ms = 0,
+                            .btime_ms = 0,
+                            .winc_ms = 0,
+                            .binc_ms = 0,
+                            .moves_to_go = 0,
+                            .ponder = 0 };
+
+    if (state && state->context) {
+        limits.multipv = state->context->multipv > 0 ? state->context->multipv : 1;
+    }
+
     if (args) {
-        char* depth_ptr = strstr(args, "depth");
-        if (depth_ptr) {
-            depth_ptr += 5;
-            limits.depth = atoi(depth_ptr);
-            if (limits.depth <= 0) {
-                limits.depth = 1;
-            }
-        }
-        char* movetime_ptr = strstr(args, "movetime");
-        if (movetime_ptr) {
-            movetime_ptr += 8;
-            while (*movetime_ptr == ' ') {
-                ++movetime_ptr;
-            }
-            limits.movetime_ms = atoi(movetime_ptr);
-            if (limits.movetime_ms < 0) {
-                limits.movetime_ms = 0;
-            }
-            int overhead = state->context ? state->context->move_overhead : state->move_overhead;
-            if (limits.movetime_ms > overhead) {
-                limits.movetime_ms -= overhead;
-            } else {
-                limits.movetime_ms = 0;
+        char* cursor = args;
+        char* token = NULL;
+        while ((token = next_token(&cursor)) != NULL) {
+            if (strcmp(token, "depth") == 0) {
+                limits.depth = parse_numeric_token(&cursor);
+            } else if (strcmp(token, "movetime") == 0) {
+                limits.movetime_ms = parse_numeric_token(&cursor);
+            } else if (strcmp(token, "nodes") == 0) {
+                limits.nodes = parse_numeric_token(&cursor);
+            } else if (strcmp(token, "wtime") == 0) {
+                limits.wtime_ms = parse_numeric_token(&cursor);
+            } else if (strcmp(token, "btime") == 0) {
+                limits.btime_ms = parse_numeric_token(&cursor);
+            } else if (strcmp(token, "winc") == 0) {
+                limits.winc_ms = parse_numeric_token(&cursor);
+            } else if (strcmp(token, "binc") == 0) {
+                limits.binc_ms = parse_numeric_token(&cursor);
+            } else if (strcmp(token, "movestogo") == 0) {
+                limits.moves_to_go = parse_numeric_token(&cursor);
+            } else if (strcmp(token, "infinite") == 0) {
+                limits.infinite = 1;
+            } else if (strcmp(token, "ponder") == 0) {
+                limits.ponder = 1;
+            } else if (strcmp(token, "multipv") == 0) {
+                limits.multipv = parse_numeric_token(&cursor);
             }
         }
     }
 
-    Move best = search_iterative_deepening(state->context, &limits);
-    for (size_t index = 0; index < state->context->pv_count; ++index) {
-        char pv_buffer[16];
-        move_to_uci(&state->context->pv_moves[index], pv_buffer, sizeof(pv_buffer));
-        printf("info multipv %zu score cp %d pv %s\n", index + 1,
-               state->context->pv_values[index], pv_buffer);
+    if (limits.multipv <= 0) {
+        limits.multipv = 1;
     }
+
+    if (!limits.infinite && limits.movetime_ms > 0) {
+        int overhead = state->context ? state->context->move_overhead : state->move_overhead;
+        if (limits.movetime_ms > overhead) {
+            limits.movetime_ms -= overhead;
+        } else {
+            limits.movetime_ms = 0;
+        }
+    }
+
+    if (!limits.infinite && limits.movetime_ms <= 0) {
+        int moves_to_go = limits.moves_to_go > 0 ? limits.moves_to_go : 30;
+        if (moves_to_go <= 0) {
+            moves_to_go = 30;
+        }
+        int color = state && state->context && state->context->board
+                        ? state->context->board->side_to_move
+                        : COLOR_WHITE;
+        int remaining_time = (color == COLOR_WHITE) ? limits.wtime_ms : limits.btime_ms;
+        int increment = (color == COLOR_WHITE) ? limits.winc_ms : limits.binc_ms;
+        if (remaining_time > 0) {
+            int overhead = state->context ? state->context->move_overhead : state->move_overhead;
+            long budget = remaining_time / moves_to_go;
+            if (budget < 0) {
+                budget = 0;
+            }
+            budget += increment;
+            if (budget > remaining_time) {
+                budget = remaining_time;
+            }
+            if (overhead > 0 && budget > overhead) {
+                budget -= overhead;
+            }
+            if (budget <= 0) {
+                budget = remaining_time / (moves_to_go > 1 ? moves_to_go : 2);
+            }
+            if (budget <= 0) {
+                budget = remaining_time;
+            }
+            if (budget <= 0) {
+                budget = 1;
+            }
+            limits.movetime_ms = (int)budget;
+        }
+    }
+
+    if (limits.movetime_ms < 0) {
+        limits.movetime_ms = 0;
+    }
+
+    if (state && state->context) {
+        state->context->stop = 0;
+    }
+
+    Move best = search_iterative_deepening(state->context, &limits);
+    emit_multipv_info(state);
     char buffer[16];
     move_to_uci(&best, buffer, sizeof(buffer));
     if (buffer[0] == '\0') {
@@ -274,6 +414,10 @@ static void uci_loop_impl(UciState* state) {
             handle_position(state, line + 8);
         } else if (strncmp(line, "go", 2) == 0 && (line[2] == '\0' || isspace((unsigned char)line[2]))) {
             handle_go(state, line + 2);
+        } else if (strncmp(line, "stop", 4) == 0 && (line[4] == '\0' || isspace((unsigned char)line[4]))) {
+            if (state->context) {
+                state->context->stop = 1;
+            }
         } else if (strncmp(line, "setoption", 9) == 0 && (line[9] == '\0' || isspace((unsigned char)line[9]))) {
             handle_setoption(state, line + 9);
         } else if (strncmp(line, "quit", 4) == 0 && (line[4] == '\0' || isspace((unsigned char)line[4]))) {

@@ -10,7 +10,7 @@ extern "C" {
 
 void search_init(SearchContext* context, Board* board, TranspositionTable* tt, HistoryTable* history);
 Move search_iterative_deepening(SearchContext* context, const SearchLimits* limits);
-Value search_root(SearchContext* context, int depth);
+Value search_root(SearchContext* context, int depth, Value alpha, Value beta);
 
 #ifdef __cplusplus
 } /* extern "C" */
