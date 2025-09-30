@@ -1,0 +1,8 @@
+# Default SirioC evaluation network
+pawn=100
+knight=325
+bishop=330
+rook=500
+queen=900
+king=20000
+bias=0
