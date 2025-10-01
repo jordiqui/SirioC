@@ -27,15 +27,31 @@ std::filesystem::path determine_engine_directory(const char* argv0) {
         DWORD length = GetModuleFileNameW(nullptr, buffer.data(),
                                           static_cast<DWORD>(buffer.size()));
         if (length == 0) {
+            if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
+                buffer.resize(buffer.size() * 2, L'\0');
+                continue;
+            }
             break;
         }
+
         if (length < buffer.size()) {
-            buffer.resize(length + 1);
+            if (buffer.size() <= static_cast<size_t>(length)) {
+                break;
+            }
             buffer[length] = L'\0';
-            std::wstring module_path(buffer.c_str());
+            std::wstring module_path(buffer.c_str(), length);
             return std::filesystem::path(module_path).parent_path();
         }
-        buffer.resize(buffer.size() * 2, L'\0');
+
+        if (buffer.size() == 0) {
+            break;
+        }
+
+        size_t next_size = buffer.size() * 2;
+        if (next_size <= buffer.size()) {
+            break;
+        }
+        buffer.resize(next_size, L'\0');
     }
 #else
     std::error_code ec_self;
