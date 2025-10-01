@@ -344,6 +344,11 @@ static void handle_go(UciState* state, char* args) {
         }
     }
 
+    if (limits.depth <= 0 && limits.movetime_ms <= 0 && limits.nodes <= 0 && !limits.infinite &&
+        limits.wtime_ms <= 0 && limits.btime_ms <= 0) {
+        limits.depth = 1;
+    }
+
     if (!limits.infinite && limits.movetime_ms <= 0) {
         int moves_to_go = limits.moves_to_go > 0 ? limits.moves_to_go : 30;
         if (moves_to_go <= 0) {

@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "nn/accumulator.h"
+#include "accumulator.h"
 
 struct Board;
 
