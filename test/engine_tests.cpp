@@ -62,6 +62,10 @@ int main() {
     expect(OptionsMap.at("EvalFile").s == "sirio_default.nnue",
            "EvalFile should strip angle brackets");
 
+    OptionsMap.set("EvalFile", "<  sirio_default.nnue >");
+    expect(OptionsMap.at("EvalFile").s == "sirio_default.nnue",
+           "EvalFile should trim whitespace around values");
+
     const auto resolved = uci::resolve_nnue_path_for_tests(OptionsMap.at("EvalFile").s);
     expect(resolved == nnue_file,
            "EvalFile should resolve to the NNUE file in the engine directory");

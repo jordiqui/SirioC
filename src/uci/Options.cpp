@@ -32,6 +32,15 @@ void Options::set(const std::string& name, const std::string& value) {
                  sanitized.back() == '>') {
         sanitized = sanitized.substr(1, sanitized.size() - 2);
       }
+
+      const auto first = sanitized.find_first_not_of(" \t\r\n\f\v");
+      if (first == std::string::npos) {
+        sanitized.clear();
+      } else {
+        const auto last = sanitized.find_last_not_of(" \t\r\n\f\v");
+        sanitized = sanitized.substr(first, last - first + 1);
+      }
+
       o.s = std::move(sanitized);
       break;
     }
