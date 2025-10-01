@@ -538,3 +538,7 @@ void uci::loop() {
   }
 }
 
+std::filesystem::path uci::resolve_nnue_path_for_tests(const std::string& value) {
+  return resolve_nnue_path(value);
+}
+

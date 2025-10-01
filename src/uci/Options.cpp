@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <string>
+#include <utility>
 
 Options OptionsMap;
 
@@ -23,9 +24,17 @@ void Options::set(const std::string& name, const std::string& value) {
     case Option::CHECK:
       o.b = (value == "true" || value == "1");
       break;
-    case Option::STRING:
-      o.s = value;
+    case Option::STRING: {
+      std::string sanitized = value;
+      if (sanitized == "<empty>") {
+        sanitized.clear();
+      } else if (sanitized.size() >= 2 && sanitized.front() == '<' &&
+                 sanitized.back() == '>') {
+        sanitized = sanitized.substr(1, sanitized.size() - 2);
+      }
+      o.s = std::move(sanitized);
       break;
+    }
   }
   if (o.on_change) o.on_change();
 }
