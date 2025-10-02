@@ -69,8 +69,8 @@ neural weights are absent, SirioC now falls back to the legacy
 loading an `.nnue` file is strongly recommended for best strength.
 
 A convenience script, `scripts/download_nnue.sh`, fetches the current
-Stockfish main network (`sirio_default.nnue`) and the compact "small" network
-(`sirio_small.nnue`) into `resources/`:
+Stockfish main network (`nn-1c0000000000.nnue`) and the compact "small" network
+(`nn-37f18f62d772.nnue`) into `resources/`:
 
 ```bash
 ./scripts/download_nnue.sh
@@ -81,10 +81,10 @@ When the small network is configured, SirioC automatically switches to it in
 positions with 12 or fewer pieces to improve accuracy in simplified endgames.
 If you prefer to bundle the default weights with release binaries, configure
 CMake with `-DSIRIOC_EMBED_NNUE=ON` and ensure that
-`resources/sirio_default.nnue` exists at configure time. When no NNUE file is
+`resources/nn-1c0000000000.nnue` exists at configure time. When no NNUE file is
 configured the engine falls back to its built-in material evaluator.
 
-The engine automatically searches for `sirio_default.nnue`/`sirio_small.nnue`
+The engine automatically searches for `nn-1c0000000000.nnue`/`nn-37f18f62d772.nnue`
 next to the executable, in parent directories' `resources/` folders, and in any
 directory pointed to by the `SIRIOC_RESOURCE_DIR` environment variable. This
 allows packaged builds (for example from a `build/` tree) to pick up networks
