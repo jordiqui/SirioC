@@ -22,12 +22,24 @@ FILES = $(wildcard src/*.cpp) src/fathom/src/tbprobe.c
 OBJS = $(FILES:.cpp=.o)
 OBJS := $(OBJS:.c=.o)
 
-OPTIMIZE = -O3 -fno-stack-protector -fno-math-errno -funroll-loops -fno-exceptions -flto -flto-partition=one
+OPTIMIZE = -O3 -fno-stack-protector -fno-math-errno -funroll-loops -fno-exceptions -flto
 
 COMMON_FLAGS = -s -pthread -DNDEBUG -DEvalFile=\"$(EVALFILE)\" $(OPTIMIZE)
 
 CXXFLAGS += -std=c++17 $(COMMON_FLAGS)
 CFLAGS += $(COMMON_FLAGS)
+
+CXX_LTO_PARTITION = -flto-partition=one
+ifneq ($(filter clang%,$(notdir $(CXX))),)
+    CXX_LTO_PARTITION =
+endif
+CXXFLAGS += $(CXX_LTO_PARTITION)
+
+C_LTO_PARTITION = -flto-partition=one
+ifneq ($(filter clang%,$(notdir $(CC))),)
+    C_LTO_PARTITION =
+endif
+CFLAGS += $(C_LTO_PARTITION)
 
 ifeq ($(OS),Windows_NT)
     CXXFLAGS += -static
