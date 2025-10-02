@@ -7,6 +7,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+ codex/fix-nnue-weights-loading-issues-3nn6d5
+#ifdef _WIN32
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
+#include <unistd.h>
+#else
+#include <unistd.h>
+#endif
+=======
+ main
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -61,6 +72,55 @@ static int load_from_directory(sirio_nn_model* model, const char* directory, con
     return sirio_nn_model_load(model, buffer);
 }
 
+codex/fix-nnue-weights-loading-issues-3nn6d5
+static int get_executable_directory(char* buffer, size_t size) {
+    if (!buffer || size == 0) {
+        return 0;
+    }
+#ifdef _WIN32
+    DWORD length = GetModuleFileNameA(NULL, buffer, (DWORD)size);
+    if (length == 0 || length >= size) {
+        return 0;
+    }
+    while (length > 0) {
+        char c = buffer[length - 1];
+        if (c == '\\' || c == '/') {
+            buffer[length - 1] = '\0';
+            return 1;
+        }
+        --length;
+    }
+    buffer[0] = '\0';
+    return 0;
+#elif defined(__APPLE__)
+    uint32_t path_size = (uint32_t)size;
+    if (_NSGetExecutablePath(buffer, &path_size) != 0 || path_size == 0) {
+        return 0;
+    }
+    buffer[path_size] = '\0';
+    char* slash = strrchr(buffer, '/');
+    if (!slash) {
+        return 0;
+    }
+    *slash = '\0';
+    return 1;
+#else
+    ssize_t length = readlink("/proc/self/exe", buffer, size - 1);
+    if (length <= 0 || (size_t)length >= size) {
+        return 0;
+    }
+    buffer[length] = '\0';
+    char* slash = strrchr(buffer, '/');
+    if (!slash) {
+        return 0;
+    }
+    *slash = '\0';
+    return 1;
+#endif
+}
+
+=======
+ main
 static int try_load_default_locations(sirio_nn_model* model, const char* file_name) {
     if (!file_name || !*file_name) {
         return 0;
@@ -109,6 +169,30 @@ static int try_load_default_locations(sirio_nn_model* model, const char* file_na
         }
     }
 
+ codex/fix-nnue-weights-loading-issues-3nn6d5
+    char exe_dir[PATH_MAX];
+    if (get_executable_directory(exe_dir, sizeof(exe_dir))) {
+        if (load_from_directory(model, exe_dir, file_name)) {
+            return 1;
+        }
+
+        const char* suffixes[] = { "resources", "..", "../resources", "../../resources" };
+        for (size_t i = 0; i < sizeof(suffixes) / sizeof(suffixes[0]); ++i) {
+            char buffer[PATH_MAX];
+            if (suffixes[i][0] == '\0') {
+                continue;
+            }
+            int written = snprintf(buffer, sizeof(buffer), "%s/%s", exe_dir, suffixes[i]);
+            if (written > 0 && (size_t)written < sizeof(buffer)) {
+                if (load_from_directory(model, buffer, file_name)) {
+                    return 1;
+                }
+            }
+        }
+    }
+
+=======
+ main
     return 0;
 }
 
