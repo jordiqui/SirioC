@@ -7,6 +7,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(SIRIOC_BUILD_TESTS "Build the SirioC test suite" ON)
 
+find_package(Threads REQUIRED)
+
 set(_sirio_embed_default OFF)
 if(CMAKE_BUILD_TYPE)
     string(TOUPPER "${CMAKE_BUILD_TYPE}" _sirio_build_type)
@@ -75,8 +77,41 @@ if(SIRIOC_EMBED_NNUE)
     unset(_sirio_nnue_generated)
 endif()
 
-add_executable(sirioc src/pyrrhic/main.cpp)
-target_link_libraries(sirioc PRIVATE sirio_core)
+add_executable(sirioc_cpp src/pyrrhic/main.cpp)
+target_link_libraries(sirioc_cpp PRIVATE sirio_core)
+
+set(SIRIOC_C_ENGINE_SOURCES
+    src/SirioC.c
+    src/attacks.c
+    src/bench.c
+    src/bits.c
+    src/board.c
+    src/eval.c
+    src/history.c
+    src/move.c
+    src/movegen.c
+    src/movepick.c
+    src/perft.c
+    src/random.c
+    src/search.c
+    src/see.c
+    src/tb.c
+    src/thread.c
+    src/transposition.c
+    src/uci.c
+    src/util.c
+    src/nn/accumulator.c
+    src/nn/evaluate.c
+    src/zobrist.cpp
+    vendor/fathom/tbprobe.c
+)
+
+add_executable(sirioc ${SIRIOC_C_ENGINE_SOURCES})
+target_include_directories(sirioc PRIVATE src vendor/fathom)
+target_link_libraries(sirioc PRIVATE Threads::Threads)
+if (UNIX)
+    target_link_libraries(sirioc PRIVATE m)
+endif()
 
 if(SIRIOC_BUILD_TESTS)
     enable_testing()

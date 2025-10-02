@@ -14,6 +14,7 @@ static int g_syzygy_50_move_rule = 1;
 static int g_syzygy_probe_limit = 6;
 static int g_tb_ready = 0;
 static unsigned g_tb_largest = 0;
+static uint64_t g_tb_hits = 0;
 
 static unsigned effective_probe_limit(void) {
     if (g_syzygy_probe_limit <= 0) {
@@ -104,6 +105,7 @@ static bool tb_can_probe(const Board* board) {
 }
 
 void tb_initialize(void) {
+    g_tb_hits = 0;
     tb_load_tables();
 }
 
@@ -193,7 +195,11 @@ Value tb_probe(const Board* board) {
         return VALUE_NONE;
     }
 
-    return wdl_to_value(wdl);
+    Value value = wdl_to_value(wdl);
+    if (value != VALUE_NONE) {
+        ++g_tb_hits;
+    }
+    return value;
 }
 
 static Piece promotion_from_tb(unsigned promote_code) {
@@ -249,12 +255,14 @@ int tb_probe_root_position(const Board* board, Move* out_move, Value* out_value)
     if (result == TB_RESULT_STALEMATE) {
         *out_move = move_create(0, 0, PIECE_NONE, PIECE_NONE, PIECE_NONE, 0);
         *out_value = VALUE_DRAW;
+        ++g_tb_hits;
         return 1;
     }
 
     if (result == TB_RESULT_CHECKMATE) {
         *out_move = move_create(0, 0, PIECE_NONE, PIECE_NONE, PIECE_NONE, 0);
         *out_value = -VALUE_MATE + 1;
+        ++g_tb_hits;
         return 1;
     }
 
@@ -276,6 +284,14 @@ int tb_probe_root_position(const Board* board, Move* out_move, Value* out_value)
 
     *out_move = move_create(from, to, piece, capture, promotion, 0);
     *out_value = wdl_to_value(TB_GET_WDL(result));
-    return (*out_value != VALUE_NONE);
+    if (*out_value != VALUE_NONE) {
+        ++g_tb_hits;
+        return 1;
+    }
+    return 0;
+}
+
+uint64_t tb_get_hits(void) {
+    return g_tb_hits;
 }
 

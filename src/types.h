@@ -85,12 +85,15 @@ typedef struct SearchContext {
     Move pv_moves[256];
     Value pv_values[256];
     size_t pv_count;
+    Move pv_table[256][64];
+    int pv_lengths[256];
     int multipv;
     uint64_t start_time_ms;
     int stop;
     int move_overhead;
     uint64_t nodes;
     int depth_completed;
+    int seldepth;
     uint64_t last_search_time_ms;
     uint64_t last_info_report_ms;
 } SearchContext;
