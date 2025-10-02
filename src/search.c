@@ -5,6 +5,8 @@
 #include "movepick.h"
 #include "tb.h"
 
+#include <inttypes.h>
+#include <stdio.h>
 #include <time.h>
 
 static uint64_t search_now_ms(void) {
@@ -12,24 +14,74 @@ static uint64_t search_now_ms(void) {
     return (uint64_t)((now * 1000) / CLOCKS_PER_SEC);
 }
 
+static uint64_t search_compute_nps(uint64_t nodes, uint64_t elapsed_ms) {
+    if (elapsed_ms == 0) {
+        return nodes;
+    }
+    return (nodes * 1000ULL) / elapsed_ms;
+}
+
+static void search_maybe_emit_info(SearchContext* context, int depth, int force) {
+    if (context == NULL) {
+        return;
+    }
+
+    uint64_t now = search_now_ms();
+    if (!force && context->last_info_report_ms != 0 &&
+        now - context->last_info_report_ms < 200ULL) {
+        return;
+    }
+
+    context->last_info_report_ms = now;
+
+    uint64_t elapsed = now - context->start_time_ms;
+    if (elapsed == 0) {
+        elapsed = 1;
+    }
+
+    uint64_t nps = search_compute_nps(context->nodes, elapsed);
+
+    char pv_buffer[32];
+    move_to_uci(&context->best_move, pv_buffer, sizeof(pv_buffer));
+    if (pv_buffer[0] == '\0') {
+        snprintf(pv_buffer, sizeof(pv_buffer), "0000");
+    }
+
+    if (depth <= 0) {
+        depth = 1;
+    }
+
+    printf("info depth %d time %" PRIu64 " nodes %" PRIu64 " nps %" PRIu64 " pv %s\n",
+           depth,
+           elapsed,
+           context->nodes,
+           nps,
+           pv_buffer);
+    fflush(stdout);
+}
+
 static int search_should_stop(SearchContext* context) {
     if (context == NULL) {
         return 1;
     }
-    if (context->limits.infinite) {
-        return 0;
-    }
     if (context->stop) {
         return 1;
     }
+    int report_depth = context->depth_completed > 0 ? context->depth_completed : 1;
+    search_maybe_emit_info(context, report_depth, 0);
+    if (context->limits.infinite) {
+        return 0;
+    }
     if (context->limits.nodes > 0 && context->nodes >= (uint64_t)context->limits.nodes) {
         context->stop = 1;
+        search_maybe_emit_info(context, report_depth, 1);
         return 1;
     }
     if (context->limits.movetime_ms > 0) {
         uint64_t elapsed = search_now_ms() - context->start_time_ms;
         if (elapsed >= (uint64_t)context->limits.movetime_ms) {
             context->stop = 1;
+            search_maybe_emit_info(context, report_depth, 1);
             return 1;
         }
     }
@@ -157,6 +209,7 @@ void search_init(SearchContext* context, Board* board, TranspositionTable* tt, H
     context->nodes = 0;
     context->depth_completed = 0;
     context->last_search_time_ms = 0;
+    context->last_info_report_ms = 0;
 }
 
 static int search_max_depth(const SearchLimits* limits) {
@@ -179,6 +232,7 @@ Move search_iterative_deepening(SearchContext* context, const SearchLimits* limi
     context->nodes = 0;
     context->depth_completed = 0;
     context->last_search_time_ms = 0;
+    context->last_info_report_ms = context->start_time_ms;
 
     Move best_move = move_create(0, 0, PIECE_NONE, PIECE_NONE, PIECE_NONE, 0);
     Value aspiration_center = 0;
@@ -226,10 +280,14 @@ Move search_iterative_deepening(SearchContext* context, const SearchLimits* limi
         }
 
         context->depth_completed = depth;
+        search_maybe_emit_info(context, depth, 1);
     }
 
     context->best_value = best_value;
     context->last_search_time_ms = search_now_ms() - context->start_time_ms;
+    if (context->stop && context->depth_completed > 0) {
+        search_maybe_emit_info(context, context->depth_completed, 1);
+    }
 
     return best_move;
 }

@@ -92,6 +92,7 @@ typedef struct SearchContext {
     uint64_t nodes;
     int depth_completed;
     uint64_t last_search_time_ms;
+    uint64_t last_info_report_ms;
 } SearchContext;
 
 typedef struct ThreadContext {

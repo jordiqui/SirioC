@@ -4,6 +4,8 @@ CFLAGS ?= -O2 -std=c11
 CXXFLAGS ?= -O2 -std=c++20
 CFLAGS += -I../vendor/fathom
 CXXFLAGS += -I../vendor/fathom
+CFLAGS += -pthread
+CXXFLAGS += -pthread
 
 SRCS = \
     attacks.c \
