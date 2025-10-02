@@ -2,6 +2,7 @@
 
 #include <array>
 #include <atomic>
+#include <cstddef>
 
 namespace {
 
@@ -74,7 +75,12 @@ uint64_t zobrist_compute_key(const Board* board) {
             continue;
         }
         uint64_t bit = 1ULL << square;
-        enum Color color = (board->bitboards[piece + PIECE_TYPE_NB * COLOR_WHITE] & bit) ? COLOR_WHITE : COLOR_BLACK;
+        size_t white_index = (size_t)piece + (size_t)PIECE_TYPE_NB * (size_t)COLOR_WHITE;
+        size_t black_index = (size_t)piece + (size_t)PIECE_TYPE_NB * (size_t)COLOR_BLACK;
+        enum Color color = (board->bitboards[white_index] & bit) ? COLOR_WHITE : COLOR_BLACK;
+        if (!(board->bitboards[white_index] & bit) && !(board->bitboards[black_index] & bit)) {
+            continue;
+        }
         key ^= g_piece_keys[color][piece][square];
     }
 

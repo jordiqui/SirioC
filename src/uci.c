@@ -492,21 +492,29 @@ static void handle_setoption(UciState* state, char* line) {
 }
 
 static void handle_go(UciState* state, char* args) {
+    if (!state || !state->context) {
+        return;
+    }
+
     SearchLimits limits = { .depth = 0,
                             .movetime_ms = 0,
                             .nodes = 0,
                             .infinite = 0,
-                            .multipv = 1,
+                            .multipv = state->context->multipv > 0 ? state->context->multipv : 1,
                             .wtime_ms = 0,
                             .btime_ms = 0,
                             .winc_ms = 0,
                             .binc_ms = 0,
                             .moves_to_go = 0,
+ codex/integrate-go-command-for-complete-output-2znwzi
+                            .ponder = state->ponder_enabled };
+
                             .ponder = state ? state->ponder_enabled : 0 };
 
     if (state && state->context) {
         limits.multipv = state->context->multipv > 0 ? state->context->multipv : 1;
     }
+ main
 
     if (args) {
         char* cursor = args;
@@ -534,6 +542,12 @@ static void handle_go(UciState* state, char* args) {
                 limits.ponder = 1;
             } else if (strcmp(token, "multipv") == 0) {
                 limits.multipv = parse_numeric_token(&cursor);
+            } else if (strcmp(token, "searchmoves") == 0) {
+                /* searchmoves not yet supported; skip remaining tokens on the line */
+                while ((token = next_token(&cursor)) != NULL) {
+                    (void)token;
+                }
+                break;
             }
         }
     }
@@ -543,17 +557,17 @@ static void handle_go(UciState* state, char* args) {
     }
 
     if (!limits.infinite && limits.movetime_ms > 0) {
-        int overhead = state->context ? state->context->move_overhead : state->move_overhead;
+        int overhead = state->context->move_overhead;
         if (limits.movetime_ms > overhead) {
             limits.movetime_ms -= overhead;
         } else {
-            limits.movetime_ms = 0;
+            limits.movetime_ms = 1;
         }
     }
 
     if (limits.depth <= 0 && limits.movetime_ms <= 0 && limits.nodes <= 0 && !limits.infinite &&
         limits.wtime_ms <= 0 && limits.btime_ms <= 0) {
-        limits.depth = 1;
+        limits.depth = 64;
     }
 
     if (!limits.infinite && limits.movetime_ms <= 0) {
@@ -561,21 +575,24 @@ static void handle_go(UciState* state, char* args) {
         if (moves_to_go <= 0) {
             moves_to_go = 30;
         }
-        int color = state && state->context && state->context->board
-                        ? state->context->board->side_to_move
-                        : COLOR_WHITE;
+
+        enum Color color = state->context->board ? state->context->board->side_to_move : COLOR_WHITE;
         int remaining_time = (color == COLOR_WHITE) ? limits.wtime_ms : limits.btime_ms;
         int increment = (color == COLOR_WHITE) ? limits.winc_ms : limits.binc_ms;
+
         if (remaining_time > 0) {
-            int overhead = state->context ? state->context->move_overhead : state->move_overhead;
             long budget = remaining_time / moves_to_go;
             if (budget < 0) {
                 budget = 0;
             }
-            budget += increment;
+            if (increment > 0) {
+                budget += increment;
+            }
             if (budget > remaining_time) {
                 budget = remaining_time;
             }
+
+            int overhead = state->context->move_overhead;
             if (overhead > 0 && budget > overhead) {
                 budget -= overhead;
             }
@@ -597,10 +614,7 @@ static void handle_go(UciState* state, char* args) {
     }
 
     stop_search(state);
-
-    if (state && state->context) {
-        state->context->stop = 0;
-    }
+    state->context->stop = 0;
 
     UciSearchThreadData* data = (UciSearchThreadData*)malloc(sizeof(UciSearchThreadData));
     if (!data) {
