@@ -382,8 +382,13 @@ Move search_iterative_deepening(SearchContext* context, const SearchLimits* limi
         if (depth == 1) {
             value = search_root(context, depth, -VALUE_INFINITE, VALUE_INFINITE);
         } else {
-            Value alpha = aspiration_center - 16;
-            Value beta = aspiration_center + 16;
+            Value score = aspiration_center;
+            Value window = 24;
+            int retries = 0;
+            const int max_aspiration_retries = 6;
+
+            Value alpha = score - window;
+            Value beta = score + window;
             if (alpha < -VALUE_INFINITE) {
                 alpha = -VALUE_INFINITE;
             }
@@ -391,27 +396,25 @@ Move search_iterative_deepening(SearchContext* context, const SearchLimits* limi
                 beta = VALUE_INFINITE;
             }
 
-            Value local_alpha = alpha;
-            Value local_beta = beta;
-            int window = 16;
-            int retries = 0;
-            const int max_aspiration_retries = 6;
-
             while (1) {
-                value = search_root(context, depth, local_alpha, local_beta);
+                Value s = search_root(context, depth, alpha, beta);
+                value = s;
                 if (context->stop) {
                     break;
                 }
 
-                if (value <= local_alpha) {
+                if (s <= alpha) {
                     ++retries;
                     if (retries > max_aspiration_retries) {
-                        local_alpha = -VALUE_INFINITE;
-                        local_beta = VALUE_INFINITE;
-                        value = search_root(context, depth, local_alpha, local_beta);
+                        alpha = -VALUE_INFINITE;
+                        beta = VALUE_INFINITE;
+                        value = search_root(context, depth, alpha, beta);
                         break;
                     }
-                    Value new_alpha = value - (Value)(window * 2);
+                    if (window < VALUE_INFINITE / 4) {
+                        window <<= 1;
+                    }
+                    Value new_alpha = s - window;
                     Value lower_bound = -VALUE_INFINITE / 2;
                     if (new_alpha < lower_bound) {
                         new_alpha = lower_bound;
@@ -419,16 +422,16 @@ Move search_iterative_deepening(SearchContext* context, const SearchLimits* limi
                     if (new_alpha < -VALUE_INFINITE) {
                         new_alpha = -VALUE_INFINITE;
                     }
-                    local_alpha = new_alpha;
-                } else if (value >= local_beta) {
+                    alpha = new_alpha;
+                } else if (s >= beta) {
                     ++retries;
                     if (retries > max_aspiration_retries) {
-                        local_alpha = -VALUE_INFINITE;
-                        local_beta = VALUE_INFINITE;
-                        value = search_root(context, depth, local_alpha, local_beta);
+                        alpha = -VALUE_INFINITE;
+                        beta = VALUE_INFINITE;
+                        value = search_root(context, depth, alpha, beta);
                         break;
                     }
-                    Value new_beta = value + (Value)(window * 2);
+                    Value new_beta = s + window;
                     Value upper_bound = VALUE_INFINITE / 2;
                     if (new_beta > upper_bound) {
                         new_beta = upper_bound;
@@ -436,20 +439,12 @@ Move search_iterative_deepening(SearchContext* context, const SearchLimits* limi
                     if (new_beta > VALUE_INFINITE) {
                         new_beta = VALUE_INFINITE;
                     }
-                    local_beta = new_beta;
+                    beta = new_beta;
+                    if (window < VALUE_INFINITE / 4) {
+                        window <<= 1;
+                    }
                 } else {
                     break;
-                }
-
-                if (window < VALUE_INFINITE / 4) {
-                    window *= 2;
-                }
-
-                if (local_alpha < -VALUE_INFINITE) {
-                    local_alpha = -VALUE_INFINITE;
-                }
-                if (local_beta > VALUE_INFINITE) {
-                    local_beta = VALUE_INFINITE;
                 }
             }
         }
