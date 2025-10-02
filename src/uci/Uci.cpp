@@ -32,8 +32,8 @@ std::filesystem::path g_engine_dir;
 namespace {
 constexpr const char* kStartPositionFen =
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-constexpr const char* kDefaultEvalFile = "sirio_default.nnue";
-constexpr const char* kDefaultEvalFileSmall = "sirio_small.nnue";
+constexpr const char* kDefaultEvalFile = "nn-1c0000000000.nnue";
+constexpr const char* kDefaultEvalFileSmall = "nn-37f18f62d772.nnue";
 
 std::string trim(std::string value) {
   const auto begin = value.find_first_not_of(" \t\r\n");

@@ -18,8 +18,8 @@
 #include "transposition.h"
 #include "tb.h"
 
-#define UCI_DEFAULT_EVAL_FILE "resources/sirio_default.nnue"
-#define UCI_DEFAULT_EVAL_FILE_SMALL "resources/sirio_small.nnue"
+#define UCI_DEFAULT_EVAL_FILE "resources/nn-1c0000000000.nnue"
+#define UCI_DEFAULT_EVAL_FILE_SMALL "resources/nn-37f18f62d772.nnue"
 
 typedef struct {
     SearchContext* context;

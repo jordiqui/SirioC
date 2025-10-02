@@ -19,12 +19,12 @@
 #define PATH_MAX 4096
 #endif
 
-#define SIRIO_DEFAULT_NETWORK "resources/sirio_default.nnue"
-#define SIRIO_DEFAULT_NETWORK_ALT "../resources/sirio_default.nnue"
-#define SIRIO_DEFAULT_SMALL_NETWORK "resources/sirio_small.nnue"
-#define SIRIO_DEFAULT_SMALL_NETWORK_ALT "../resources/sirio_small.nnue"
-#define SIRIO_DEFAULT_PRIMARY_NAME "sirio_default.nnue"
-#define SIRIO_DEFAULT_SMALL_NAME "sirio_small.nnue"
+#define SIRIO_DEFAULT_NETWORK "resources/nn-1c0000000000.nnue"
+#define SIRIO_DEFAULT_NETWORK_ALT "../resources/nn-1c0000000000.nnue"
+#define SIRIO_DEFAULT_SMALL_NETWORK "resources/nn-37f18f62d772.nnue"
+#define SIRIO_DEFAULT_SMALL_NETWORK_ALT "../resources/nn-37f18f62d772.nnue"
+#define SIRIO_DEFAULT_PRIMARY_NAME "nn-1c0000000000.nnue"
+#define SIRIO_DEFAULT_SMALL_NAME "nn-37f18f62d772.nnue"
 #define SIRIO_SMALL_NETWORK_THRESHOLD 12
 
 static sirio_nn_model g_eval_model;

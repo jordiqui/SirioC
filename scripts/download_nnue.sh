@@ -30,8 +30,8 @@ TARGET_DIR="$ROOT_DIR/resources"
 FORCE_DOWNLOAD=0
 DOWNLOAD_PRIMARY=1
 DOWNLOAD_SMALL=1
-PRIMARY_URL="${SIRIO_NNUE_PRIMARY_URL:-https://tests.stockfishchess.org/api/nn/nn-62ef826d1a6d.nnue}"
-SMALL_URL="${SIRIO_NNUE_SMALL_URL:-https://tests.stockfishchess.org/api/nn/nn-5af11540bbfe.nnue}"
+PRIMARY_URL="${SIRIO_NNUE_PRIMARY_URL:-https://tests.stockfishchess.org/api/nn/nn-1c0000000000.nnue}"
+SMALL_URL="${SIRIO_NNUE_SMALL_URL:-https://tests.stockfishchess.org/api/nn/nn-37f18f62d772.nnue}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -97,8 +97,8 @@ if [[ $DOWNLOAD_PRIMARY -eq 0 && $DOWNLOAD_SMALL -eq 0 ]]; then
 fi
 
 mkdir -p "$TARGET_DIR"
-PRIMARY_DEST="$TARGET_DIR/sirio_default.nnue"
-SMALL_DEST="$TARGET_DIR/sirio_small.nnue"
+PRIMARY_DEST="$TARGET_DIR/nn-1c0000000000.nnue"
+SMALL_DEST="$TARGET_DIR/nn-37f18f62d772.nnue"
 
 cleanup() {
     [[ -n ${TMP_FILE:-} && -f $TMP_FILE ]] && rm -f "$TMP_FILE"

@@ -44,7 +44,7 @@ int main() {
     const auto original_engine_dir = g_engine_dir;
     const fs::path temp_root = fs::temp_directory_path() / "sirio_nnue_option_test";
     const fs::path resources_dir = temp_root / "resources";
-    const fs::path nnue_file = resources_dir / "sirio_default.nnue";
+    const fs::path nnue_file = resources_dir / "nn-1c0000000000.nnue";
     fs::create_directories(resources_dir);
     {
         std::ofstream out(nnue_file);
@@ -61,12 +61,12 @@ int main() {
     OptionsMap.set("EvalFile", "<empty>");
     expect(OptionsMap.at("EvalFile").s.empty(), "EvalFile <empty> should clear the string");
 
-    OptionsMap.set("EvalFile", "<sirio_default.nnue>");
-    expect(OptionsMap.at("EvalFile").s == "sirio_default.nnue",
+    OptionsMap.set("EvalFile", "<nn-1c0000000000.nnue>");
+    expect(OptionsMap.at("EvalFile").s == "nn-1c0000000000.nnue",
            "EvalFile should strip angle brackets");
 
-    OptionsMap.set("EvalFile", "<  sirio_default.nnue >");
-    expect(OptionsMap.at("EvalFile").s == "sirio_default.nnue",
+    OptionsMap.set("EvalFile", "<  nn-1c0000000000.nnue >");
+    expect(OptionsMap.at("EvalFile").s == "nn-1c0000000000.nnue",
            "EvalFile should trim whitespace around values");
 
     const auto resolved = uci::resolve_nnue_path_for_tests(OptionsMap.at("EvalFile").s);
