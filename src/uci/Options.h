@@ -29,11 +29,7 @@ struct Option {
 
 struct Options : public std::unordered_map<std::string, Option> {
   void set(const std::string& name, const std::string& value);
-  void printUci() const {
-    for (const auto& [k, v] : *this) {
-      std::cout << v.uciDecl(k) << "\n";
-    }
-  }
+  void printUci() const;
 };
 
 extern Options OptionsMap;
