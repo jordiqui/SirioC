@@ -2,19 +2,12 @@
 #include "board.h"
 #include "bits.h"
 #include "nn/evaluate.h"
+#include "nn/nnue_paths.h"
 
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef _WIN32
-#include <windows.h>
-#elif defined(__APPLE__)
-#include <mach-o/dyld.h>
-#include <unistd.h>
-#else
-#include <unistd.h>
-#endif
 #ifndef PATH_MAX
 #define PATH_MAX 4096
 #endif
@@ -124,143 +117,17 @@ static int load_legacy_material_weights(sirio_nn_model* model, const char* path)
     return 1;
 }
 
-static int load_from_directory(sirio_nn_model* model, const char* directory, const char* file_name) {
-    if (!directory || !*directory || !file_name || !*file_name) {
-        return 0;
-    }
-
-    char buffer[PATH_MAX];
-    size_t dir_len = strlen(directory);
-    int needs_sep = dir_len > 0 && directory[dir_len - 1] != '/' && directory[dir_len - 1] != '\\';
-    int written;
-    if (needs_sep) {
-        written = snprintf(buffer, sizeof(buffer), "%s/%s", directory, file_name);
-    } else {
-        written = snprintf(buffer, sizeof(buffer), "%s%s", directory, file_name);
-    }
-    if (written <= 0 || (size_t)written >= sizeof(buffer)) {
-        return 0;
-    }
-
-    return sirio_nn_model_load(model, buffer);
-}
-
-static int get_executable_directory(char* buffer, size_t size) {
-    if (!buffer || size == 0) {
-        return 0;
-    }
-#ifdef _WIN32
-    DWORD length = GetModuleFileNameA(NULL, buffer, (DWORD)size);
-    if (length == 0 || length >= size) {
-        return 0;
-    }
-    while (length > 0) {
-        char c = buffer[length - 1];
-        if (c == '\\' || c == '/') {
-            buffer[length - 1] = '\0';
-            return 1;
-        }
-        --length;
-    }
-    buffer[0] = '\0';
-    return 0;
-#elif defined(__APPLE__)
-    uint32_t path_size = (uint32_t)size;
-    if (_NSGetExecutablePath(buffer, &path_size) != 0 || path_size == 0) {
-        return 0;
-    }
-    buffer[path_size] = '\0';
-    char* slash = strrchr(buffer, '/');
-    if (!slash) {
-        return 0;
-    }
-    *slash = '\0';
-    return 1;
-#else
-    ssize_t length = readlink("/proc/self/exe", buffer, size - 1);
-    if (length <= 0 || (size_t)length >= size) {
-        return 0;
-    }
-    buffer[length] = '\0';
-    char* slash = strrchr(buffer, '/');
-    if (!slash) {
-        return 0;
-    }
-    *slash = '\0';
-    return 1;
-#endif
-}
-
 static int try_load_default_locations(sirio_nn_model* model, const char* file_name) {
     if (!file_name || !*file_name) {
         return 0;
     }
 
-    if (sirio_nn_model_load(model, file_name)) {
-        return 1;
+    char resolved[PATH_MAX];
+    if (!sirio_nnue_locate(file_name, resolved, sizeof(resolved))) {
+        return 0;
     }
 
-    const char* env_dirs[] = {
-        getenv("SIRIOC_RESOURCE_DIR"),
-        getenv("SIRIO_RESOURCE_DIR"),
-    };
-
-    for (size_t i = 0; i < sizeof(env_dirs) / sizeof(env_dirs[0]); ++i) {
-        if (load_from_directory(model, env_dirs[i], file_name)) {
-            return 1;
-        }
-
-        if (env_dirs[i] && *env_dirs[i]) {
-            char buffer[PATH_MAX];
-            int written = snprintf(buffer, sizeof(buffer), "%s/resources", env_dirs[i]);
-            if (written > 0 && (size_t)written < sizeof(buffer)) {
-                if (load_from_directory(model, buffer, file_name)) {
-                    return 1;
-                }
-            }
-        }
-    }
-
-    const char* prefixes[] = {
-        "./",
-        "resources/",
-        "./resources/",
-        "../",
-        "../resources/",
-        "../../",
-        "../../resources/",
-        "../../../",
-        "../../../resources/",
-    };
-
-    for (size_t i = 0; i < sizeof(prefixes) / sizeof(prefixes[0]); ++i) {
-        if (load_from_directory(model, prefixes[i], file_name)) {
-            return 1;
-        }
-    }
-
-    char exe_dir[PATH_MAX];
-    if (get_executable_directory(exe_dir, sizeof(exe_dir))) {
-        if (load_from_directory(model, exe_dir, file_name)) {
-            return 1;
-        }
-
-        const char* suffixes[] = { "resources", "..", "../resources", "../../resources" };
-        for (size_t i = 0; i < sizeof(suffixes) / sizeof(suffixes[0]); ++i) {
-            char buffer[PATH_MAX];
-            if (suffixes[i][0] == '\0') {
-                continue;
-            }
-            int written = snprintf(buffer, sizeof(buffer), "%s/%s", exe_dir, suffixes[i]);
-            if (written > 0 && (size_t)written < sizeof(buffer)) {
-                if (load_from_directory(model, buffer, file_name)) {
-                    return 1;
-                }
-            }
-        }
-    }
-
-    return 0;
+    return sirio_nn_model_load(model, resolved);
 }
 
 static void eval_ensure_initialized(void) {

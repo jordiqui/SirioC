@@ -11,6 +11,7 @@
 #include "bench.h"
 #include "board.h"
 #include "eval.h"
+#include "nn/nnue_paths.h"
 #include "history.h"
 #include "move.h"
 #include "movegen.h"
@@ -21,6 +22,10 @@
 
 #define UCI_DEFAULT_EVAL_FILE "resources/nn-1c0000000000.nnue"
 #define UCI_DEFAULT_EVAL_FILE_SMALL "resources/nn-37f18f62d772.nnue"
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 
 typedef struct {
     SearchContext* context;
@@ -58,6 +63,45 @@ static void trim_whitespace(char* text) {
     if (start != text) {
         memmove(text, start, strlen(start) + 1);
     }
+}
+
+static const char* normalize_eval_option(const char* value, char* buffer, size_t size) {
+    if (!buffer || size == 0) {
+        return "";
+    }
+
+    buffer[0] = '\0';
+    if (!value) {
+        return buffer;
+    }
+
+    snprintf(buffer, size, "%s", value);
+    trim_whitespace(buffer);
+
+    size_t len = strlen(buffer);
+    if (len >= 2 && buffer[0] == '<' && buffer[len - 1] == '>') {
+        memmove(buffer, buffer + 1, len - 2);
+        buffer[len - 2] = '\0';
+        trim_whitespace(buffer);
+        len = strlen(buffer);
+    }
+
+    if (len == 0) {
+        return buffer;
+    }
+
+    char lowered[16];
+    size_t copy_len = len < sizeof(lowered) - 1 ? len : sizeof(lowered) - 1;
+    for (size_t i = 0; i < copy_len; ++i) {
+        lowered[i] = (char)tolower((unsigned char)buffer[i]);
+    }
+    lowered[copy_len] = '\0';
+
+    if (strcmp(lowered, "default") == 0 || strcmp(lowered, "empty") == 0) {
+        buffer[0] = '\0';
+    }
+
+    return buffer;
 }
 
 static void print_options(const UciState* state) {
@@ -98,14 +142,31 @@ static bool load_nnue_files(UciState* state, const char* primary, const char* se
         return false;
     }
 
-    const char* resolved_primary = NULL;
-    if (primary && *primary) {
-        resolved_primary = util_resolve_resource_cstr(primary);
+    const char* candidate_primary = (primary && *primary) ? primary : UCI_DEFAULT_EVAL_FILE;
+    char normalized_primary_buf[PATH_MAX];
+    const char* normalized_primary = normalize_eval_option(candidate_primary, normalized_primary_buf, sizeof(normalized_primary_buf));
+    int using_default_primary = 0;
+    if (!normalized_primary[0]) {
+        snprintf(normalized_primary_buf, sizeof(normalized_primary_buf), "%s", UCI_DEFAULT_EVAL_FILE);
+        normalized_primary = normalized_primary_buf;
+        using_default_primary = 1;
+    }
+    if (!primary || !*primary) {
+        using_default_primary = 1;
+    }
+
+    char resolved_primary_buf[PATH_MAX];
+    resolved_primary_buf[0] = '\0';
+    const char* resolved_primary = util_resolve_resource_cstr(normalized_primary);
+    if (!resolved_primary) {
+        if (sirio_nnue_locate(normalized_primary, resolved_primary_buf, sizeof(resolved_primary_buf))) {
+            resolved_primary = resolved_primary_buf;
+        }
     }
 
     bool ok_primary = resolved_primary && eval_load_network(resolved_primary);
     if (!ok_primary) {
-        const char* label = (primary && *primary) ? primary : "<empty>";
+        const char* label = using_default_primary ? "<default>" : normalized_primary;
         printf("Fallback: info string NNUE primary NOT FOUND or failed: %s; falling back to material\n", label);
         fflush(stdout);
         eval_set_use_nnue(false);
@@ -117,17 +178,27 @@ static bool load_nnue_files(UciState* state, const char* primary, const char* se
     printf("NNUE OK: info string NNUE evaluation using %s\n", resolved_primary);
     fflush(stdout);
 
-    if (secondary && *secondary) {
-        const char* resolved_secondary = util_resolve_resource_cstr(secondary);
+    char normalized_secondary_buf[PATH_MAX];
+    const char* normalized_secondary = normalize_eval_option(secondary, normalized_secondary_buf, sizeof(normalized_secondary_buf));
+    if (normalized_secondary && *normalized_secondary) {
+        char resolved_secondary_buf[PATH_MAX];
+        resolved_secondary_buf[0] = '\0';
+
+        const char* resolved_secondary = util_resolve_resource_cstr(normalized_secondary);
+        if (!resolved_secondary) {
+            if (sirio_nnue_locate(normalized_secondary, resolved_secondary_buf, sizeof(resolved_secondary_buf))) {
+                resolved_secondary = resolved_secondary_buf;
+            }
+        }
         if (resolved_secondary) {
             if (eval_load_small_network(resolved_secondary)) {
                 printf("info string NNUE secondary using %s\n", resolved_secondary);
             } else {
-                printf("info string NNUE secondary failed: %s\n", secondary);
+                printf("info string NNUE secondary failed: %s\n", normalized_secondary);
                 eval_load_small_network(NULL);
             }
         } else {
-            printf("info string NNUE secondary failed: %s\n", secondary);
+            printf("info string NNUE secondary failed: %s\n", normalized_secondary);
             eval_load_small_network(NULL);
         }
         fflush(stdout);
