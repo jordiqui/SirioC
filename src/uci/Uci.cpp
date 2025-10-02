@@ -133,13 +133,6 @@ std::filesystem::path resolve_nnue(const std::string& userPath) {
     candidates.push_back(user);
     if (!cwd.empty()) candidates.push_back(cwd / user);
 
-    fs::path exe_probe = exe;
-    for (int depth = 0; depth < 5 && !exe_probe.empty(); ++depth) {
-      candidates.push_back(exe_probe / user);
-      candidates.push_back(exe_probe / "resources" / user);
-      exe_probe = exe_probe.parent_path();
-    }
-
     if (!g_engine_dir.empty()) {
       fs::path probe = g_engine_dir;
       for (int depth = 0; depth < 5 && !probe.empty(); ++depth) {
@@ -148,16 +141,16 @@ std::filesystem::path resolve_nnue(const std::string& userPath) {
         probe = probe.parent_path();
       }
     }
+
+    fs::path exe_probe = exe;
+    for (int depth = 0; depth < 5 && !exe_probe.empty(); ++depth) {
+      candidates.push_back(exe_probe / user);
+      candidates.push_back(exe_probe / "resources" / user);
+      exe_probe = exe_probe.parent_path();
+    }
   }
 
   const fs::path default_relative = fs::path("resources") / "nn-1c0000000000.nnue";
-  if (!cwd.empty()) candidates.push_back(cwd / default_relative);
-
-  fs::path exe_probe = exe;
-  for (int depth = 0; depth < 5 && !exe_probe.empty(); ++depth) {
-    candidates.push_back(exe_probe / default_relative);
-    exe_probe = exe_probe.parent_path();
-  }
 
   if (!g_engine_dir.empty()) {
     fs::path probe = g_engine_dir;
@@ -165,6 +158,14 @@ std::filesystem::path resolve_nnue(const std::string& userPath) {
       candidates.push_back(probe / default_relative);
       probe = probe.parent_path();
     }
+  }
+
+  if (!cwd.empty()) candidates.push_back(cwd / default_relative);
+
+  fs::path exe_probe = exe;
+  for (int depth = 0; depth < 5 && !exe_probe.empty(); ++depth) {
+    candidates.push_back(exe_probe / default_relative);
+    exe_probe = exe_probe.parent_path();
   }
 
   return pathutil::first_existing(candidates);

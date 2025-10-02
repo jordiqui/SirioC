@@ -59,37 +59,35 @@ that a legal `bestmove` is returned. Invoke it with `make -C src bench`.
 
 ### NNUE weight files
 
-SirioC does not ship binary NNUE weights. To use HalfKP evaluation, download a
-compatible network (for example, from the [official Stockfish testing
-server](https://tests.stockfishchess.org/nns/)) and point the `EvalFile` option
-to its location. Stockfish-provided networks are distributed under the CC0
-license, so they can be redistributed with SirioC-compatible builds. If the
-neural weights are absent, SirioC now falls back to the legacy
-`resources/network.dat` material weights to keep the engine operational, but
-loading an `.nnue` file is strongly recommended for best strength.
+SirioC does **not** bundle neural network weights. When NNUE support is enabled
+the engine expects Stockfish-compatible `.nnue` files to be available on disk.
+You can download the current CC0-licensed Stockfish networks (or provide your
+own) and point the `EvalFile`/`EvalFileSmall` options to their locations. If the
+files are missing or fail to load SirioC automatically falls back to the legacy
+`resources/network.dat` material evaluator so the engine continues to run.
 
-A convenience script, `scripts/download_nnue.sh`, fetches the current
-Stockfish main network (`nn-1c0000000000.nnue`) and the compact "small" network
+A convenience script, `scripts/download_nnue.sh`, fetches the current Stockfish
+main network (`nn-1c0000000000.nnue`) and the compact "small" network
 (`nn-37f18f62d772.nnue`) into `resources/`:
 
 ```bash
 ./scripts/download_nnue.sh
 ```
 
-If you prefer an automated setup, enable
-`-DSIRIOC_AUTO_DOWNLOAD_NNUE=ON` during configuration. CMake will then attempt
-to download both networks automatically. The download step is opt-in to keep
-offline builds working by default; override the source URLs with
+If you prefer an automated setup, enable `-DSIRIOC_AUTO_DOWNLOAD_NNUE=ON`
+during configuration. CMake will then attempt to download both networks
+automatically. The download step is opt-in to keep offline builds working by
+default; override the source URLs with
 `-DSIRIOC_NNUE_PRIMARY_URL=...` / `-DSIRIOC_NNUE_SMALL_URL=...` if you host the
 files elsewhere.
 
-After the files are available, set `EvalFile`/`EvalFileSmall` accordingly.
-When the small network is configured, SirioC automatically switches to it in
+After the files are available, set `EvalFile`/`EvalFileSmall` accordingly. When
+the small network is configured, SirioC automatically switches to it in
 positions with 12 or fewer pieces to improve accuracy in simplified endgames.
 If you prefer to bundle the default weights with release binaries, configure
-CMake with `-DSIRIOC_EMBED_NNUE=ON` and ensure that
-`resources/nn-1c0000000000.nnue` exists at configure time. When no NNUE file is
-configured the engine falls back to its built-in material evaluator.
+CMake with `-DSIRIOC_EMBED_NNUE=ON` and make sure the target network file exists
+at configure time. When no NNUE file is configured the engine falls back to its
+built-in material evaluator.
 
 The engine automatically searches for `nn-1c0000000000.nnue`/`nn-37f18f62d772.nnue`
 next to the executable, in parent directories' `resources/` folders, and in any
