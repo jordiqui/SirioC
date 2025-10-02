@@ -506,7 +506,15 @@ static void handle_go(UciState* state, char* args) {
                             .winc_ms = 0,
                             .binc_ms = 0,
                             .moves_to_go = 0,
+ codex/integrate-go-command-for-complete-output-2znwzi
                             .ponder = state->ponder_enabled };
+
+                            .ponder = state ? state->ponder_enabled : 0 };
+
+    if (state && state->context) {
+        limits.multipv = state->context->multipv > 0 ? state->context->multipv : 1;
+    }
+ main
 
     if (args) {
         char* cursor = args;
