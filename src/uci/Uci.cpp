@@ -13,6 +13,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -22,6 +23,7 @@
 #include <string>
 #include <system_error>
 #include <thread>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -86,21 +88,53 @@ std::filesystem::path resolve_nnue_path(const std::string& value) {
     return {};
   }
 
-  if (!g_engine_dir.empty()) {
-    std::filesystem::path exe_candidate = g_engine_dir / candidate;
-    if (std::filesystem::exists(exe_candidate, ec)) return exe_candidate;
-  }
+  std::vector<std::filesystem::path> resolved;
+  std::unordered_set<std::string> seen;
+
+  auto push_if_exists = [&](const std::filesystem::path& path) {
+    if (path.empty()) return;
+    std::error_code exists_ec;
+    if (!std::filesystem::exists(path, exists_ec)) return;
+    const std::string key = path.lexically_normal().generic_string();
+    if (seen.insert(key).second) {
+      resolved.push_back(path);
+    }
+  };
+
+  auto consider_base = [&](const std::filesystem::path& base, bool include_resources) {
+    if (base.empty()) return;
+    push_if_exists(base / candidate);
+    if (include_resources) {
+      push_if_exists(base / "resources" / candidate);
+    }
+  };
+
+  push_if_exists(candidate);
 
   auto cwd = std::filesystem::current_path(ec);
   if (!ec) {
-    std::filesystem::path cwd_candidate = cwd / candidate;
-    std::error_code ec_cwd;
-    if (std::filesystem::exists(cwd_candidate, ec_cwd)) return cwd_candidate;
+    consider_base(cwd, true);
+  }
+
+  const char* env_resource_dir = std::getenv("SIRIOC_RESOURCE_DIR");
+  if (env_resource_dir && *env_resource_dir) {
+    consider_base(env_resource_dir, true);
+  }
+  const char* legacy_env_dir = std::getenv("SIRIO_RESOURCE_DIR");
+  if (legacy_env_dir && *legacy_env_dir) {
+    consider_base(legacy_env_dir, true);
   }
 
   if (!g_engine_dir.empty()) {
-    std::filesystem::path resources_candidate = g_engine_dir / "resources" / candidate;
-    if (std::filesystem::exists(resources_candidate, ec)) return resources_candidate;
+    std::filesystem::path probe = g_engine_dir;
+    for (int depth = 0; depth < 5 && !probe.empty(); ++depth) {
+      consider_base(probe, true);
+      probe = probe.parent_path();
+    }
+  }
+
+  if (!resolved.empty()) {
+    return resolved.front();
   }
 
   return {};

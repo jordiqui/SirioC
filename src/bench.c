@@ -8,6 +8,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
+#include <unistd.h>
+#else
+#include <unistd.h>
+#endif
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 
 static void bench_trim(char* text) {
     if (!text) {
@@ -28,6 +40,52 @@ static void bench_trim(char* text) {
     if (start != text) {
         memmove(text, start, strlen(start) + 1);
     }
+}
+
+static int bench_get_executable_directory(char* buffer, size_t size) {
+    if (!buffer || size == 0) {
+        return 0;
+    }
+#ifdef _WIN32
+    DWORD length = GetModuleFileNameA(NULL, buffer, (DWORD)size);
+    if (length == 0 || length >= size) {
+        return 0;
+    }
+    while (length > 0) {
+        char c = buffer[length - 1];
+        if (c == '\\' || c == '/') {
+            buffer[length - 1] = '\0';
+            return 1;
+        }
+        --length;
+    }
+    buffer[0] = '\0';
+    return 0;
+#elif defined(__APPLE__)
+    uint32_t path_size = (uint32_t)size;
+    if (_NSGetExecutablePath(buffer, &path_size) != 0 || path_size == 0) {
+        return 0;
+    }
+    buffer[path_size] = '\0';
+    char* slash = strrchr(buffer, '/');
+    if (!slash) {
+        return 0;
+    }
+    *slash = '\0';
+    return 1;
+#else
+    ssize_t length = readlink("/proc/self/exe", buffer, size - 1);
+    if (length <= 0 || (size_t)length >= size) {
+        return 0;
+    }
+    buffer[length] = '\0';
+    char* slash = strrchr(buffer, '/');
+    if (!slash) {
+        return 0;
+    }
+    *slash = '\0';
+    return 1;
+#endif
 }
 
 void bench_run(SearchContext* context, const SearchLimits* limits) {
@@ -51,12 +109,37 @@ void bench_run(SearchContext* context, const SearchLimits* limits) {
         bench_limits = *limits;
     }
 
-    const char* paths[] = { "resources/bench.fens", "../resources/bench.fens" };
+    const char* paths[] = {
+        "resources/bench.fens",
+        "./resources/bench.fens",
+        "../resources/bench.fens",
+        "../../resources/bench.fens",
+        "../../../resources/bench.fens",
+    };
     FILE* file = NULL;
     for (size_t i = 0; i < sizeof(paths) / sizeof(paths[0]); ++i) {
         file = fopen(paths[i], "r");
         if (file) {
             break;
+        }
+    }
+
+    if (!file) {
+        char exe_dir[PATH_MAX];
+        if (bench_get_executable_directory(exe_dir, sizeof(exe_dir))) {
+            const char* suffixes[] = { "resources/bench.fens",
+                                       "../resources/bench.fens",
+                                       "../../resources/bench.fens" };
+            for (size_t i = 0; i < sizeof(suffixes) / sizeof(suffixes[0]); ++i) {
+                char candidate[PATH_MAX];
+                int written = snprintf(candidate, sizeof(candidate), "%s/%s", exe_dir, suffixes[i]);
+                if (written > 0 && (size_t)written < sizeof(candidate)) {
+                    file = fopen(candidate, "r");
+                    if (file) {
+                        break;
+                    }
+                }
+            }
         }
     }
 
