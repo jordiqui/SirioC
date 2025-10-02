@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-void bench_run(SearchContext* context);
+void bench_run(SearchContext* context, const SearchLimits* limits);
 
 #ifdef __cplusplus
 } /* extern "C" */

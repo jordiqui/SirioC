@@ -2,6 +2,8 @@
 
 #include <ctype.h>
 #include <inttypes.h>
+#include <pthread.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,6 +30,9 @@ typedef struct {
     int syzygy_50_move_rule;
     int syzygy_probe_limit;
     int move_overhead;
+    int search_thread_running;
+    int search_thread_active;
+    pthread_t search_thread;
 } UciState;
 
 static void trim_whitespace(char* text) {
@@ -100,6 +105,62 @@ static uint64_t compute_nps(uint64_t nodes, uint64_t elapsed_ms) {
         return nodes;
     }
     return (nodes * 1000ULL) / elapsed_ms;
+}
+
+static void emit_multipv_info(const UciState* state);
+
+typedef struct {
+    UciState* state;
+    SearchLimits limits;
+} UciSearchThreadData;
+
+static void stop_search(UciState* state) {
+    if (!state) {
+        return;
+    }
+
+    if (state->context) {
+        state->context->stop = 1;
+    }
+
+    if (state->search_thread_active) {
+        pthread_join(state->search_thread, NULL);
+        state->search_thread_active = 0;
+        state->search_thread_running = 0;
+    }
+}
+
+static void* uci_search_thread(void* arg) {
+    UciSearchThreadData* data = (UciSearchThreadData*)arg;
+    if (!data) {
+        return NULL;
+    }
+
+    UciState* state = data->state;
+    SearchLimits limits = data->limits;
+    free(data);
+
+    if (!state || !state->context) {
+        if (state) {
+            state->search_thread_running = 0;
+        }
+        return NULL;
+    }
+
+    Move best = search_iterative_deepening(state->context, &limits);
+    emit_multipv_info(state);
+
+    char buffer[16];
+    move_to_uci(&best, buffer, sizeof(buffer));
+    if (buffer[0] == '\0') {
+        snprintf(buffer, sizeof(buffer), "0000");
+    }
+
+    printf("bestmove %s\n", buffer);
+    fflush(stdout);
+
+    state->search_thread_running = 0;
+    return NULL;
 }
 
 static void emit_multipv_info(const UciState* state) {
@@ -389,18 +450,88 @@ static void handle_go(UciState* state, char* args) {
         limits.movetime_ms = 0;
     }
 
+    stop_search(state);
+
     if (state && state->context) {
         state->context->stop = 0;
     }
 
-    Move best = search_iterative_deepening(state->context, &limits);
-    emit_multipv_info(state);
-    char buffer[16];
-    move_to_uci(&best, buffer, sizeof(buffer));
-    if (buffer[0] == '\0') {
-        snprintf(buffer, sizeof(buffer), "0000");
+    UciSearchThreadData* data = (UciSearchThreadData*)malloc(sizeof(UciSearchThreadData));
+    if (!data) {
+        Move best = search_iterative_deepening(state->context, &limits);
+        emit_multipv_info(state);
+        char buffer[16];
+        move_to_uci(&best, buffer, sizeof(buffer));
+        if (buffer[0] == '\0') {
+            snprintf(buffer, sizeof(buffer), "0000");
+        }
+        printf("bestmove %s\n", buffer);
+        fflush(stdout);
+        return;
     }
-    printf("bestmove %s\n", buffer);
+
+    data->state = state;
+    data->limits = limits;
+
+    state->search_thread_running = 1;
+    state->search_thread_active = 1;
+    int rc = pthread_create(&state->search_thread, NULL, uci_search_thread, data);
+    if (rc != 0) {
+        state->search_thread_running = 0;
+        state->search_thread_active = 0;
+        free(data);
+        Move best = search_iterative_deepening(state->context, &limits);
+        emit_multipv_info(state);
+        char buffer[16];
+        move_to_uci(&best, buffer, sizeof(buffer));
+        if (buffer[0] == '\0') {
+            snprintf(buffer, sizeof(buffer), "0000");
+        }
+        printf("bestmove %s\n", buffer);
+        fflush(stdout);
+    }
+}
+
+static void handle_bench(UciState* state, char* args) {
+    if (!state || !state->context) {
+        return;
+    }
+
+    stop_search(state);
+
+    SearchLimits limits = { .depth = 12,
+                            .movetime_ms = 0,
+                            .nodes = 0,
+                            .infinite = 0,
+                            .multipv = 1,
+                            .wtime_ms = 0,
+                            .btime_ms = 0,
+                            .winc_ms = 0,
+                            .binc_ms = 0,
+                            .moves_to_go = 0,
+                            .ponder = 0 };
+
+    if (args) {
+        char* cursor = args;
+        char* token = NULL;
+        while ((token = next_token(&cursor)) != NULL) {
+            if (strcmp(token, "depth") == 0) {
+                limits.depth = parse_numeric_token(&cursor);
+                if (limits.depth < 0) {
+                    limits.depth = 0;
+                }
+                limits.movetime_ms = 0;
+            } else if (strcmp(token, "movetime") == 0) {
+                limits.movetime_ms = parse_numeric_token(&cursor);
+                if (limits.movetime_ms < 0) {
+                    limits.movetime_ms = 0;
+                }
+                limits.depth = 0;
+            }
+        }
+    }
+
+    bench_run(state->context, &limits);
 }
 
 static void uci_loop_impl(UciState* state) {
@@ -412,20 +543,25 @@ static void uci_loop_impl(UciState* state) {
             print_options(state);
             printf("uciok\n");
         } else if (strncmp(line, "isready", 7) == 0 && (line[7] == '\0' || isspace((unsigned char)line[7]))) {
+            stop_search(state);
             printf("readyok\n");
         } else if (strncmp(line, "ucinewgame", 10) == 0 && (line[10] == '\0' || isspace((unsigned char)line[10]))) {
+            stop_search(state);
             board_set_start_position(state->context->board);
         } else if (strncmp(line, "position", 8) == 0 && (line[8] == '\0' || isspace((unsigned char)line[8]))) {
+            stop_search(state);
             handle_position(state, line + 8);
         } else if (strncmp(line, "go", 2) == 0 && (line[2] == '\0' || isspace((unsigned char)line[2]))) {
             handle_go(state, line + 2);
+        } else if (strncmp(line, "bench", 5) == 0 &&
+                   (line[5] == '\0' || isspace((unsigned char)line[5]))) {
+            handle_bench(state, line + 5);
         } else if (strncmp(line, "stop", 4) == 0 && (line[4] == '\0' || isspace((unsigned char)line[4]))) {
-            if (state->context) {
-                state->context->stop = 1;
-            }
+            stop_search(state);
         } else if (strncmp(line, "setoption", 9) == 0 && (line[9] == '\0' || isspace((unsigned char)line[9]))) {
             handle_setoption(state, line + 9);
         } else if (strncmp(line, "quit", 4) == 0 && (line[4] == '\0' || isspace((unsigned char)line[4]))) {
+            stop_search(state);
             break;
         }
         fflush(stdout);
@@ -449,6 +585,8 @@ static void uci_state_init(UciState* state, SearchContext* context) {
     state->syzygy_50_move_rule = tb_get_50_move_rule();
     state->syzygy_probe_limit = tb_get_probe_limit();
     state->move_overhead = context ? context->move_overhead : 10;
+    state->search_thread_running = 0;
+    state->search_thread_active = 0;
 }
 
 void uci_loop(SearchContext* context) {
@@ -487,7 +625,7 @@ int main(int argc, char* argv[]) {
     eval_init();
 
     if (run_bench && !run_uci) {
-        bench_run(&context);
+        bench_run(&context, NULL);
     }
     if (run_uci) {
         uci_loop(&context);

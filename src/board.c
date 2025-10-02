@@ -2,6 +2,8 @@
 #include "bits.h"
 #include "zobrist.h"
 
+#include <ctype.h>
+#include <stdlib.h>
 #include <string.h>
 
 void board_init(Board* board) {
@@ -46,6 +48,127 @@ void board_set_start_position(Board* board) {
     board->halfmove_clock = 0;
     board->fullmove_number = 1;
     board->zobrist_key = zobrist_compute_key(board);
+}
+
+static Piece piece_from_fen_char(char symbol, enum Color* color_out) {
+    *color_out = isupper((unsigned char)symbol) ? COLOR_WHITE : COLOR_BLACK;
+    char lower = (char)tolower((unsigned char)symbol);
+    switch (lower) {
+        case 'p':
+            return PIECE_PAWN;
+        case 'n':
+            return PIECE_KNIGHT;
+        case 'b':
+            return PIECE_BISHOP;
+        case 'r':
+            return PIECE_ROOK;
+        case 'q':
+            return PIECE_QUEEN;
+        case 'k':
+            return PIECE_KING;
+        default:
+            return PIECE_NONE;
+    }
+}
+
+int board_set_fen(Board* board, const char* fen) {
+    if (board == NULL || fen == NULL) {
+        return 0;
+    }
+
+    board_init(board);
+
+    char buffer[512];
+    strncpy(buffer, fen, sizeof(buffer) - 1);
+    buffer[sizeof(buffer) - 1] = '\0';
+
+    char* tokens[6] = {0};
+    size_t token_count = 0;
+    char* save_ptr = NULL;
+    char* token = strtok_r(buffer, " ", &save_ptr);
+    while (token && token_count < 6) {
+        tokens[token_count++] = token;
+        token = strtok_r(NULL, " ", &save_ptr);
+    }
+
+    if (token_count < 4) {
+        return 0;
+    }
+
+    int rank = 7;
+    int file = 0;
+    for (const char* cursor = tokens[0]; *cursor && rank >= 0; ++cursor) {
+        char symbol = *cursor;
+        if (symbol == '/') {
+            --rank;
+            file = 0;
+            continue;
+        }
+        if (isdigit((unsigned char)symbol)) {
+            file += symbol - '0';
+            if (file > 8) {
+                return 0;
+            }
+            continue;
+        }
+
+        enum Color piece_color = COLOR_WHITE;
+        Piece piece = piece_from_fen_char(symbol, &piece_color);
+        if (piece == PIECE_NONE || file >= 8 || rank < 0) {
+            return 0;
+        }
+        Square square = rank * 8 + file;
+        set_piece(board, square, piece, piece_color);
+        ++file;
+    }
+
+    board->side_to_move = (tokens[1][0] == 'b') ? COLOR_BLACK : COLOR_WHITE;
+
+    int castling = 0;
+    if (tokens[2][0] != '-') {
+        for (const char* cursor = tokens[2]; *cursor; ++cursor) {
+            switch (*cursor) {
+                case 'K':
+                    castling |= 1;
+                    break;
+                case 'Q':
+                    castling |= 2;
+                    break;
+                case 'k':
+                    castling |= 4;
+                    break;
+                case 'q':
+                    castling |= 8;
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+    board->castling_rights = castling;
+
+    board->en_passant_square = -1;
+    if (tokens[3][0] != '-') {
+        if (strlen(tokens[3]) == 2) {
+            int file_index = tokens[3][0] - 'a';
+            int rank_index = tokens[3][1] - '1';
+            if (file_index >= 0 && file_index < 8 && rank_index >= 0 && rank_index < 8) {
+                board->en_passant_square = rank_index * 8 + file_index;
+            }
+        }
+    }
+
+    board->halfmove_clock = (token_count >= 5) ? atoi(tokens[4]) : 0;
+    if (board->halfmove_clock < 0) {
+        board->halfmove_clock = 0;
+    }
+    board->fullmove_number = (token_count >= 6) ? atoi(tokens[5]) : 1;
+    if (board->fullmove_number < 1) {
+        board->fullmove_number = 1;
+    }
+
+    board->zobrist_key = zobrist_compute_key(board);
+    return 1;
 }
 
 Bitboard board_occupancy(const Board* board, enum Color color) {
