@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+ codex/fix-nnue-weights-loading-issues-3nn6d5
 #ifdef _WIN32
 #include <windows.h>
 #elif defined(__APPLE__)
@@ -15,6 +16,8 @@
 #else
 #include <unistd.h>
 #endif
+=======
+ main
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -69,6 +72,7 @@ static int load_from_directory(sirio_nn_model* model, const char* directory, con
     return sirio_nn_model_load(model, buffer);
 }
 
+codex/fix-nnue-weights-loading-issues-3nn6d5
 static int get_executable_directory(char* buffer, size_t size) {
     if (!buffer || size == 0) {
         return 0;
@@ -115,6 +119,8 @@ static int get_executable_directory(char* buffer, size_t size) {
 #endif
 }
 
+=======
+ main
 static int try_load_default_locations(sirio_nn_model* model, const char* file_name) {
     if (!file_name || !*file_name) {
         return 0;
@@ -163,6 +169,7 @@ static int try_load_default_locations(sirio_nn_model* model, const char* file_na
         }
     }
 
+ codex/fix-nnue-weights-loading-issues-3nn6d5
     char exe_dir[PATH_MAX];
     if (get_executable_directory(exe_dir, sizeof(exe_dir))) {
         if (load_from_directory(model, exe_dir, file_name)) {
@@ -184,6 +191,8 @@ static int try_load_default_locations(sirio_nn_model* model, const char* file_na
         }
     }
 
+=======
+ main
     return 0;
 }
 
