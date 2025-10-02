@@ -5,7 +5,9 @@
 #include "../nn/nnue.h"
 
 #include "files/fen.h"
+#include "pyrrhic/bench.hpp"
 #include "pyrrhic/board.h"
+#include "pyrrhic/path.hpp"
 #include "pyrrhic/types.h"
 
 #include <algorithm>
@@ -16,18 +18,23 @@
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
-#include <fstream>
 #include <iostream>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <system_error>
 #include <thread>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
 std::filesystem::path g_engine_dir;
+
+struct NNUEState {
+  bool use = true;
+  std::string primary;
+  std::string secondary;
+  bool loaded = false;
+} g_nnue;
 
 namespace {
 constexpr const char* kStartPositionFen =
@@ -78,108 +85,179 @@ void remove_castling_right(std::string& rights, char symbol) {
   if (rights.empty()) rights = "-";
 }
 
-std::filesystem::path resolve_nnue_path(const std::string& value) {
-  if (value.empty()) return {};
+class ThreadPool {
+ public:
+  void resize(int requested) {
+    int desired = std::max(1, requested);
+    if (desired == size_) return;
+    workers_.clear();
+    for (int i = 0; i < desired - 1; ++i) {
+      workers_.emplace_back([](std::stop_token st) {
+        while (!st.stop_requested()) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+      });
+    }
+    size_ = desired;
+  }
 
+  int size() const { return size_; }
+
+ private:
+  int size_ = 1;
+  std::vector<std::jthread> workers_;
+};
+
+ThreadPool g_thread_pool;
+std::filesystem::path g_loaded_nnue_path;
+std::filesystem::path g_loaded_secondary_path;
+bool g_secondary_loaded = false;
+
+void configure_threads(int requested) {
+  const int clamped = std::clamp(requested, 1, 256);
+  g_thread_pool.resize(clamped);
+  std::cout << "info string Using " << clamped << " thread(s)\n";
+}
+
+std::filesystem::path resolve_nnue(const std::string& userPath) {
+  namespace fs = std::filesystem;
+
+  const auto exe = pathutil::exe_dir();
   std::error_code ec;
-  std::filesystem::path candidate(value);
-  if (candidate.is_absolute()) {
-    if (std::filesystem::exists(candidate, ec)) return candidate;
-    return {};
-  }
+  const auto cwd = fs::current_path(ec);
 
-  std::vector<std::filesystem::path> resolved;
-  std::unordered_set<std::string> seen;
+  std::vector<fs::path> candidates;
+  const fs::path user(userPath);
 
-  auto push_if_exists = [&](const std::filesystem::path& path) {
-    if (path.empty()) return;
-    std::error_code exists_ec;
-    if (!std::filesystem::exists(path, exists_ec)) return;
-    const std::string key = path.lexically_normal().generic_string();
-    if (seen.insert(key).second) {
-      resolved.push_back(path);
+  if (!user.empty()) {
+    candidates.push_back(user);
+    if (!cwd.empty()) candidates.push_back(cwd / user);
+
+    fs::path exe_probe = exe;
+    for (int depth = 0; depth < 5 && !exe_probe.empty(); ++depth) {
+      candidates.push_back(exe_probe / user);
+      candidates.push_back(exe_probe / "resources" / user);
+      exe_probe = exe_probe.parent_path();
     }
-  };
 
-  auto consider_base = [&](const std::filesystem::path& base, bool include_resources) {
-    if (base.empty()) return;
-    push_if_exists(base / candidate);
-    if (include_resources) {
-      push_if_exists(base / "resources" / candidate);
+    if (!g_engine_dir.empty()) {
+      fs::path probe = g_engine_dir;
+      for (int depth = 0; depth < 5 && !probe.empty(); ++depth) {
+        candidates.push_back(probe / user);
+        candidates.push_back(probe / "resources" / user);
+        probe = probe.parent_path();
+      }
     }
-  };
-
-  push_if_exists(candidate);
-
-  auto cwd = std::filesystem::current_path(ec);
-  if (!ec) {
-    consider_base(cwd, true);
   }
 
-  const char* env_resource_dir = std::getenv("SIRIOC_RESOURCE_DIR");
-  if (env_resource_dir && *env_resource_dir) {
-    consider_base(env_resource_dir, true);
-  }
-  const char* legacy_env_dir = std::getenv("SIRIO_RESOURCE_DIR");
-  if (legacy_env_dir && *legacy_env_dir) {
-    consider_base(legacy_env_dir, true);
+  const fs::path default_relative = fs::path("resources") / "nn-1c0000000000.nnue";
+  if (!cwd.empty()) candidates.push_back(cwd / default_relative);
+
+  fs::path exe_probe = exe;
+  for (int depth = 0; depth < 5 && !exe_probe.empty(); ++depth) {
+    candidates.push_back(exe_probe / default_relative);
+    exe_probe = exe_probe.parent_path();
   }
 
   if (!g_engine_dir.empty()) {
-    std::filesystem::path probe = g_engine_dir;
+    fs::path probe = g_engine_dir;
     for (int depth = 0; depth < 5 && !probe.empty(); ++depth) {
-      consider_base(probe, true);
+      candidates.push_back(probe / default_relative);
       probe = probe.parent_path();
     }
   }
 
-  if (!resolved.empty()) {
-    return resolved.front();
-  }
-
-  return {};
+  return pathutil::first_existing(candidates);
 }
 
-std::string format_source_kind(nnue::Metadata::SourceType type) {
-  using Source = nnue::Metadata::SourceType;
-  switch (type) {
-    case Source::File:
-      return "file";
-    case Source::Embedded:
-      return "<embedded>";
-    case Source::Memory:
-      return "memory";
-    case Source::Unknown:
-    default:
-      return "unknown";
+void try_load_secondary_nnue() {
+  if (g_nnue.secondary.empty()) {
+    if (g_secondary_loaded) {
+      eval_load_small_network(nullptr);
+      g_secondary_loaded = false;
+      g_loaded_secondary_path.clear();
+    }
+    return;
+  }
+
+  const auto resolved = resolve_nnue(g_nnue.secondary);
+  if (resolved.empty()) {
+    std::cout << "info string NNUE secondary file not found for EvalFileSmall=" << g_nnue.secondary
+              << "; using material eval\n";
+    eval_load_small_network(nullptr);
+    g_secondary_loaded = false;
+    g_loaded_secondary_path.clear();
+    return;
+  }
+
+  if (g_secondary_loaded && resolved == g_loaded_secondary_path) {
+    return;
+  }
+
+  if (eval_load_small_network(resolved.string().c_str()) != 0) {
+    std::cout << "info string NNUE secondary loaded: " << resolved.string() << "\n";
+    g_secondary_loaded = true;
+    g_loaded_secondary_path = resolved;
+  } else {
+    std::cout << "info string NNUE secondary failed: " << resolved.string() << "; using material eval\n";
+    eval_load_small_network(nullptr);
+    g_secondary_loaded = false;
+    g_loaded_secondary_path.clear();
   }
 }
 
-void report_primary_success(const nnue::Metadata& meta,
-                            const std::filesystem::path& resolved_path) {
-  const std::string display_path = !meta.source.empty()
-                                       ? meta.source
-                                       : (!resolved_path.empty() ? resolved_path.string()
-                                                                 : std::string{"<unknown>"});
+void try_load_nnue() {
+  if (!g_nnue.use) {
+    if (g_nnue.loaded || nnue::state.loaded) {
+      nnue::reset();
+    }
+    g_nnue.loaded = false;
+    g_loaded_nnue_path.clear();
+    std::cout << "info string NNUE disabled; using material eval\n";
+    try_load_secondary_nnue();
+    return;
+  }
 
-  std::cout << "info string NNUE evaluation using " << display_path;
-  std::ostringstream details;
-  bool has_details = false;
-  if (meta.size_bytes > 0) {
-    const std::uint64_t mib = meta.size_bytes / (1024ULL * 1024ULL);
-    details << (mib > 0 ? mib : 1) << "MiB";
-    has_details = true;
+  const auto resolved = resolve_nnue(g_nnue.primary);
+  if (resolved.empty()) {
+    std::cout << "info string NNUE: file not found for EvalFile="
+              << (g_nnue.primary.empty() ? std::string{"<default>"} : g_nnue.primary)
+              << "; using material eval\n";
+    nnue::reset();
+    g_nnue.loaded = false;
+    g_loaded_nnue_path.clear();
+    try_load_secondary_nnue();
+    return;
   }
-  if (!meta.dimensions.empty()) {
-    if (has_details) details << ", ";
-    details << meta.dimensions;
-    has_details = true;
+
+  const bool loaded = nnue::load(resolved.string());
+  if (!loaded) {
+    std::cout << "info string NNUE: failed to load " << resolved.string() << "; using material eval\n";
+    nnue::reset();
+    g_nnue.loaded = false;
+    g_loaded_nnue_path.clear();
+    try_load_secondary_nnue();
+    return;
   }
-  if (has_details) {
-    std::cout << " (" << details.str() << ')';
+
+  g_nnue.loaded = true;
+  g_loaded_nnue_path = resolved;
+
+  std::error_code ec;
+  const auto bytes = std::filesystem::file_size(resolved, ec);
+  std::uint64_t mib = 0;
+  if (!ec && bytes > 0) {
+    mib = bytes / (1024ULL * 1024ULL);
+    if (mib == 0) mib = 1;
+  }
+
+  std::cout << "info string NNUE evaluation using " << resolved.string();
+  if (mib > 0) {
+    std::cout << " (" << mib << "MiB)";
   }
   std::cout << "\n";
-  std::cout << "info string     source: " << format_source_kind(meta.source_type) << "\n";
+
+  try_load_secondary_nnue();
 }
 
 }  // namespace
@@ -367,122 +445,6 @@ std::string search_bestmove(Position& pos, int /*depth*/) {
 
 static core::Position g_pos;
 
-std::filesystem::path locate_bench_file() {
-  std::vector<std::filesystem::path> candidates;
-  if (!g_engine_dir.empty()) {
-    candidates.push_back(g_engine_dir / "resources" / "bench.fens");
-    const auto parent = g_engine_dir.parent_path();
-    if (!parent.empty()) {
-      candidates.push_back(parent / "resources" / "bench.fens");
-    }
-  }
-  candidates.emplace_back("resources/bench.fens");
-  candidates.emplace_back("../resources/bench.fens");
-
-  std::error_code ec;
-  for (const auto& candidate : candidates) {
-    if (std::filesystem::exists(candidate, ec) &&
-        std::filesystem::is_regular_file(candidate, ec)) {
-      return candidate;
-    }
-  }
-  return {};
-}
-
-void print_info_string(const std::string& message) {
-  std::cout << "info string " << message << "\n";
-  std::cout.flush();
-}
-
-struct BenchLimits {
-  int depth = 12;
-  int movetime_ms = 0;
-};
-
-BenchLimits parse_bench_limits(std::istringstream& is) {
-  BenchLimits limits;
-  std::string token;
-  while (is >> token) {
-    if (token == "depth") {
-      is >> limits.depth;
-    } else if (token == "movetime") {
-      is >> limits.movetime_ms;
-    }
-  }
-  return limits;
-}
-
-void cmd_bench(std::istringstream& is) {
-  const BenchLimits limits = parse_bench_limits(is);
-  if (limits.movetime_ms > 0) {
-    print_info_string("bench movetime option is currently ignored");
-  }
-  auto bench_path = locate_bench_file();
-  if (bench_path.empty()) {
-    print_info_string("Failed to open resources/bench.fens");
-    return;
-  }
-
-  std::ifstream bench_file(bench_path);
-  if (!bench_file.is_open()) {
-    print_info_string("Failed to open resources/bench.fens");
-    return;
-  }
-
-  std::uint64_t total_nodes = 0;
-  std::uint64_t total_time = 0;
-  int positions = 0;
-  std::string line;
-
-  while (std::getline(bench_file, line)) {
-    line = trim(line);
-    if (line.empty() || line[0] == '#') continue;
-
-    core::Position pos;
-    if (!pos.set_fen(line)) {
-      print_info_string("Invalid FEN in bench file: " + line);
-      continue;
-    }
-
-    const int requested_depth = limits.depth > 0 ? limits.depth : 1;
-
-    const auto start = std::chrono::steady_clock::now();
-    std::string best = core::search_bestmove(pos, requested_depth);
-    const auto finish = std::chrono::steady_clock::now();
-    std::uint64_t elapsed_ms =
-        static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count());
-    if (elapsed_ms == 0) elapsed_ms = 1;
-
-    const auto legal_moves = core::generate_legal(pos);
-    std::uint64_t nodes = static_cast<std::uint64_t>(legal_moves.size());
-
-    ++positions;
-    total_nodes += nodes;
-    total_time += elapsed_ms;
-
-    if (best.empty()) best = "0000";
-
-    std::cout << "bench position " << positions << " bestmove " << best << " nodes " << nodes
-              << " time " << elapsed_ms << "\n";
-    std::cout.flush();
-  }
-
-  if (positions == 0) {
-    std::cout << "bench summary positions 0 time 0 nodes 0 nps 0\n";
-    std::cout.flush();
-    return;
-  }
-
-  if (total_time == 0) total_time = 1;
-  const std::uint64_t nps = (total_nodes * 1000ULL) / total_time;
-
-  std::cout << "bench summary positions " << positions << " time " << total_time << " nodes "
-            << total_nodes << " nps " << nps << "\n";
-  std::cout.flush();
-
-  g_pos.set_startpos();
-}
-
 void init_options() {
   OptionsMap.clear();
   OptionsMap["Hash"] = Option{Option::SPIN, 1, 4096, 64, false, {}, {}};
@@ -491,110 +453,32 @@ void init_options() {
   if (detected_threads == 0) detected_threads = 1;
   int threads_default = static_cast<int>(std::min<unsigned int>(detected_threads, 256));
   OptionsMap["Threads"] = Option{Option::SPIN, 1, 256, threads_default, false, {}, {}};
+  g_thread_pool.resize(threads_default);
 
   OptionsMap["Ponder"] = Option{Option::CHECK, 0, 0, 0, false, {}, {}};
   OptionsMap["MultiPV"] = Option{Option::SPIN, 1, 256, 1, false, {}, {}};
-  OptionsMap["UseNNUE"] = Option{Option::CHECK, 0, 0, 0, true, {}, [] {
-                               // Actual loading handled elsewhere
-                             }};
+  OptionsMap["UseNNUE"] = Option{Option::CHECK, 0, 0, 0, true, {}, {}};
+
   Option eval_file{Option::STRING, 0, 0, 0, false, "", {}};
-  if (!resolve_nnue_path(kDefaultEvalFile).empty()) {
+  if (!resolve_nnue(kDefaultEvalFile).empty()) {
     eval_file.s = kDefaultEvalFile;
   }
+
   Option eval_file_small{Option::STRING, 0, 0, 0, false, "", {}};
-  if (!resolve_nnue_path(kDefaultEvalFileSmall).empty()) {
+  if (!resolve_nnue(kDefaultEvalFileSmall).empty()) {
     eval_file_small.s = kDefaultEvalFileSmall;
   }
-  OptionsMap["EvalFile"] = std::move(eval_file);
-  OptionsMap["EvalFileSmall"] = std::move(eval_file_small);
-}
 
-static void try_load_nnue() {
-  static std::string last_primary_request;
-  static std::string last_small_request;
-  static bool last_use_nnue = false;
-  static bool reported_primary_failure = false;
-  static bool reported_small_failure = false;
+  OptionsMap["EvalFile"] = eval_file;
+  OptionsMap["EvalFileSmall"] = eval_file_small;
 
-  auto it_use = OptionsMap.find("UseNNUE");
-  if (it_use == OptionsMap.end()) return;
-
-  const bool use_nnue = it_use->second.b;
-  if (!use_nnue) {
-    if (last_use_nnue) {
-      if (nnue::state.loaded) {
-        nnue::reset();
-      }
-      std::cout << "info string NNUE disabled by option\n";
-      reported_primary_failure = false;
-      reported_small_failure = false;
-    }
-    last_use_nnue = false;
-    last_primary_request.clear();
-    last_small_request.clear();
-    return;
-  }
-
-  last_use_nnue = true;
-
-  const auto it_file = OptionsMap.find("EvalFile");
-  const std::string requested_primary = it_file != OptionsMap.end() ? it_file->second.s : std::string{};
-  if (!nnue::state.loaded || requested_primary != last_primary_request) {
-    last_primary_request = requested_primary;
-    bool loaded = false;
-    std::filesystem::path resolved_primary;
-    if (!requested_primary.empty()) {
-      resolved_primary = resolve_nnue_path(requested_primary);
-      if (!resolved_primary.empty()) {
-        std::cout << "info string NNUE: trying main " << resolved_primary.string() << "\n";
-        loaded = nnue::load(resolved_primary.string());
-      } else {
-        std::cout << "info string NNUE: file not found " << requested_primary << "\n";
-      }
-    }
-    if (!loaded && requested_primary.empty() && nnue::has_embedded_default()) {
-      std::cout << "info string NNUE: trying embedded default\n";
-      loaded = nnue::load_default();
-    }
-    if (loaded) {
-      reported_primary_failure = false;
-      report_primary_success(nnue::state.meta, resolved_primary);
-    } else {
-      if (!reported_primary_failure) {
-        std::cout << "info string NNUE: no network loaded; using material eval\n";
-      }
-      reported_primary_failure = true;
-      nnue::reset();
-    }
-  }
-
-  const auto it_small = OptionsMap.find("EvalFileSmall");
-  const std::string requested_small = it_small != OptionsMap.end() ? it_small->second.s : std::string{};
-  if (requested_small != last_small_request) {
-    last_small_request = requested_small;
-    if (requested_small.empty()) {
-      eval_load_small_network(nullptr);
-      reported_small_failure = false;
-    } else {
-      const auto resolved_small = resolve_nnue_path(requested_small);
-      if (!resolved_small.empty()) {
-        std::cout << "info string NNUE: trying secondary " << resolved_small.string() << "\n";
-        const bool loaded_small = eval_load_small_network(resolved_small.string().c_str()) != 0;
-        if (loaded_small) {
-          std::cout << "info string NNUE secondary loaded: " << resolved_small.string() << "\n";
-          reported_small_failure = false;
-        } else {
-          std::cout << "info string NNUE secondary failed: " << resolved_small.string() << "\n";
-          reported_small_failure = true;
-        }
-      } else {
-        if (!reported_small_failure) {
-          std::cout << "info string NNUE secondary failed: " << requested_small << "\n";
-        }
-        reported_small_failure = true;
-      }
-    }
-  }
+  g_nnue.use = OptionsMap["UseNNUE"].b;
+  g_nnue.primary = OptionsMap["EvalFile"].s;
+  g_nnue.secondary = OptionsMap["EvalFileSmall"].s;
+  g_nnue.loaded = false;
+  g_loaded_nnue_path.clear();
+  g_secondary_loaded = false;
+  g_loaded_secondary_path.clear();
 }
 
 static void cmd_position(std::istringstream& is) {
@@ -674,19 +558,40 @@ void uci::loop() {
       }
       if (!name.empty()) {
         OptionsMap.set(name, value);
-        if (name == "EvalFile" || name == "EvalFileSmall" || name == "UseNNUE") {
+        if (name == "UseNNUE") {
+          g_nnue.use = OptionsMap.at("UseNNUE").b;
           try_load_nnue();
+        } else if (name == "EvalFile") {
+          g_nnue.primary = OptionsMap.at("EvalFile").s;
+          g_nnue.loaded = false;
+          try_load_nnue();
+        } else if (name == "EvalFileSmall") {
+          g_nnue.secondary = OptionsMap.at("EvalFileSmall").s;
+          try_load_secondary_nnue();
+        } else if (name == "Threads") {
+          configure_threads(OptionsMap.at("Threads").val);
         }
       }
     } else if (token == "ucinewgame") {
+      nnue::reset();
       nnue::state.loaded = false;
       nnue::state.meta = nnue::Metadata{};
+      g_nnue.loaded = false;
+      g_loaded_nnue_path.clear();
+      g_secondary_loaded = false;
+      g_loaded_secondary_path.clear();
+      if (g_nnue.use) {
+        try_load_nnue();
+      } else {
+        try_load_secondary_nnue();
+      }
     } else if (token == "position") {
       cmd_position(is);
     } else if (token == "go") {
       cmd_go(is);
     } else if (token == "bench") {
-      cmd_bench(is);
+      sirio::pyrrhic::run_bench();
+      continue;
     } else if (token == "stop") {
       // TODO: signal search stop
     } else if (token == "quit") {
@@ -696,6 +601,6 @@ void uci::loop() {
 }
 
 std::filesystem::path uci::resolve_nnue_path_for_tests(const std::string& value) {
-  return resolve_nnue_path(value);
+  return resolve_nnue(value);
 }
 
