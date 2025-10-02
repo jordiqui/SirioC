@@ -1,5 +1,6 @@
 #include "board.h"
 #include "bits.h"
+#include "zobrist.h"
 
 #include <string.h>
 
@@ -10,6 +11,7 @@ void board_init(Board* board) {
     memset(board, 0, sizeof(*board));
     board->en_passant_square = -1;
     board->side_to_move = COLOR_WHITE;
+    board->zobrist_key = 0ULL;
 }
 
 static void set_piece(Board* board, Square square, Piece piece, enum Color color) {
@@ -43,6 +45,7 @@ void board_set_start_position(Board* board) {
     board->en_passant_square = -1;
     board->halfmove_clock = 0;
     board->fullmove_number = 1;
+    board->zobrist_key = zobrist_compute_key(board);
 }
 
 Bitboard board_occupancy(const Board* board, enum Color color) {
@@ -117,14 +120,37 @@ void board_make_move(Board* board, const Move* move) {
 
     Piece piece = move->piece;
     enum Color color = board->side_to_move;
+    enum Color opponent = (color == COLOR_WHITE) ? COLOR_BLACK : COLOR_WHITE;
     Bitboard from_bb = 1ULL << move->from;
     Bitboard to_bb = 1ULL << move->to;
 
+    if (move->capture != PIECE_NONE) {
+        board->bitboards[move->capture + PIECE_TYPE_NB * opponent] &= ~to_bb;
+    }
+
     board->bitboards[piece + PIECE_TYPE_NB * color] &= ~from_bb;
-    board->bitboards[piece + PIECE_TYPE_NB * color] |= to_bb;
+    if (move->promotion != PIECE_NONE) {
+        board->bitboards[move->promotion + PIECE_TYPE_NB * color] |= to_bb;
+    } else {
+        board->bitboards[piece + PIECE_TYPE_NB * color] |= to_bb;
+    }
+
     board->squares[move->from] = PIECE_NONE;
-    board->squares[move->to] = piece;
-    board->side_to_move = (color == COLOR_WHITE) ? COLOR_BLACK : COLOR_WHITE;
+    board->squares[move->to] = (move->promotion != PIECE_NONE) ? move->promotion : piece;
+
+    uint64_t key = board->zobrist_key;
+    key ^= zobrist_side_key();
+    key ^= zobrist_piece_key(color, piece, move->from);
+    if (move->promotion != PIECE_NONE) {
+        key ^= zobrist_piece_key(color, move->promotion, move->to);
+    } else {
+        key ^= zobrist_piece_key(color, piece, move->to);
+    }
+    if (move->capture != PIECE_NONE) {
+        key ^= zobrist_piece_key(opponent, move->capture, move->to);
+    }
+    board->zobrist_key = key;
+    board->side_to_move = opponent;
 }
 
 void board_unmake_move(Board* board, const Move* move) {
@@ -133,14 +159,38 @@ void board_unmake_move(Board* board, const Move* move) {
     }
 
     enum Color color = (board->side_to_move == COLOR_WHITE) ? COLOR_BLACK : COLOR_WHITE;
+    enum Color opponent = board->side_to_move;
     Piece piece = move->piece;
     Bitboard from_bb = 1ULL << move->from;
     Bitboard to_bb = 1ULL << move->to;
 
-    board->bitboards[piece + PIECE_TYPE_NB * color] |= from_bb;
-    board->bitboards[piece + PIECE_TYPE_NB * color] &= ~to_bb;
+    if (move->promotion != PIECE_NONE) {
+        board->bitboards[move->promotion + PIECE_TYPE_NB * color] &= ~to_bb;
+        board->bitboards[piece + PIECE_TYPE_NB * color] |= from_bb;
+    } else {
+        board->bitboards[piece + PIECE_TYPE_NB * color] |= from_bb;
+        board->bitboards[piece + PIECE_TYPE_NB * color] &= ~to_bb;
+    }
+
+    if (move->capture != PIECE_NONE) {
+        board->bitboards[move->capture + PIECE_TYPE_NB * opponent] |= to_bb;
+    }
+
     board->squares[move->from] = piece;
     board->squares[move->to] = move->capture;
     board->side_to_move = color;
+
+    uint64_t key = board->zobrist_key;
+    key ^= zobrist_side_key();
+    key ^= zobrist_piece_key(color, piece, move->from);
+    if (move->promotion != PIECE_NONE) {
+        key ^= zobrist_piece_key(color, move->promotion, move->to);
+    } else {
+        key ^= zobrist_piece_key(color, piece, move->to);
+    }
+    if (move->capture != PIECE_NONE) {
+        key ^= zobrist_piece_key(opponent, move->capture, move->to);
+    }
+    board->zobrist_key = key;
 }
 

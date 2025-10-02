@@ -481,6 +481,7 @@ int main(int argc, char* argv[]) {
     board_init(&board);
     history_init(&history);
     transposition_init(&tt, 1 << 16);
+    tb_initialize();
     search_init(&context, &board, &tt, &history);
     board_set_start_position(&board);
     eval_init();

@@ -52,11 +52,14 @@ typedef struct Board {
     Square en_passant_square;
     int halfmove_clock;
     int fullmove_number;
+    uint64_t zobrist_key;
 } Board;
 
 typedef struct HistoryTable {
     int32_t history[COLOR_NB][PIECE_TYPE_NB][64];
 } HistoryTable;
+
+typedef struct TranspositionTable TranspositionTable;
 
 typedef struct SearchLimits {
     int depth;
@@ -75,6 +78,7 @@ typedef struct SearchLimits {
 typedef struct SearchContext {
     Board* board;
     HistoryTable* history;
+    TranspositionTable* tt;
     SearchLimits limits;
     Value best_value;
     Move best_move;
@@ -107,6 +111,12 @@ typedef struct TranspositionTable {
     TranspositionEntry* entries;
     size_t size;
 } TranspositionTable;
+
+enum {
+    TT_FLAG_EXACT = 0,
+    TT_FLAG_LOWER = 1,
+    TT_FLAG_UPPER = 2
+};
 
 #define VALUE_MATE 32000
 #define VALUE_INFINITE 31000
