@@ -2,15 +2,110 @@
 #include "bitboard.h"
 #include "incbin.h"
 #include "position.h"
+#include "uci.h"
 #include "util.h"
 
-#include <iostream>
+#include <algorithm>
+#include <cctype>
+#include <climits>
+#include <cstdio>
+#include <cstring>
+#include <filesystem>
 #include <fstream>
+#include <memory>
+#include <optional>
+#include <system_error>
+#include <vector>
+
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <unistd.h>
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
+#endif
 
 INCBIN(EmbeddedNNUE, EvalFile);
 
 #define AsVecI(x) *(VecI*)(&x)
 #define AsVecF(x) *(VecF*)(&x)
+
+namespace {
+
+std::filesystem::path executableDirectory() {
+#if defined(_WIN32)
+  wchar_t buf[MAX_PATH];
+  DWORD len = GetModuleFileNameW(nullptr, buf, MAX_PATH);
+  if (len == 0)
+    return std::filesystem::current_path();
+  std::wstring ws(buf, len);
+  auto pos = ws.find_last_of(L"\\/");
+  std::wstring dir = (pos == std::wstring::npos) ? std::wstring() : ws.substr(0, pos);
+  if (dir.empty())
+    return std::filesystem::current_path();
+  int utf8Len = WideCharToMultiByte(CP_UTF8, 0, dir.c_str(), -1, nullptr, 0, nullptr, nullptr);
+  if (utf8Len <= 1)
+    return std::filesystem::path(dir);
+  std::string utf8(utf8Len - 1, '\0');
+  WideCharToMultiByte(CP_UTF8, 0, dir.c_str(), -1, utf8.data(), utf8Len, nullptr, nullptr);
+  return std::filesystem::path(utf8);
+#else
+  char buf[PATH_MAX];
+#if defined(__APPLE__)
+  uint32_t size = sizeof(buf);
+  if (_NSGetExecutablePath(buf, &size) == 0)
+    return std::filesystem::path(buf).parent_path();
+#endif
+#if defined(__linux__)
+  ssize_t len = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+  if (len > 0) {
+    buf[len] = '\0';
+    return std::filesystem::path(buf).parent_path();
+  }
+#endif
+  return std::filesystem::current_path();
+#endif
+}
+
+bool hasNetworkExtension(const std::filesystem::path& path) {
+  auto ext = path.extension().string();
+  std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+  return ext == ".nnue" || ext == ".bin";
+}
+
+std::optional<std::filesystem::path> findNetworkInDirectory(const std::filesystem::path& dir) {
+  if (dir.empty())
+    return std::nullopt;
+  std::error_code ec;
+  if (!std::filesystem::exists(dir, ec) || !std::filesystem::is_directory(dir, ec))
+    return std::nullopt;
+  for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+    if (ec)
+      break;
+    if (!entry.is_regular_file(ec))
+      continue;
+    if (hasNetworkExtension(entry.path()))
+      return entry.path();
+  }
+  return std::nullopt;
+}
+
+bool readBinaryFile(const std::filesystem::path& path, std::vector<uint8_t>& buffer) {
+  std::ifstream in(path, std::ios::binary);
+  if (!in)
+    return false;
+  in.seekg(0, std::ios::end);
+  std::streampos size = in.tellg();
+  if (size <= 0)
+    return false;
+  buffer.resize(static_cast<size_t>(size));
+  in.seekg(0, std::ios::beg);
+  in.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+  return in.good();
+}
+
+} // namespace
 
 namespace NNUE {
 
@@ -42,6 +137,75 @@ namespace NNUE {
   // For every possible uint16 number, store the count of active bits,
   // and the index of each active bit
   alignas(Alignment) uint16_t nnzTable[256][8];
+
+  namespace {
+    bool useMaterialFallback = false;
+
+    bool initializeNetworkFromBuffer(const uint8_t* data, size_t size) {
+      if (!data || size < sizeof(Net))
+        return false;
+
+      if (!Weights)
+        Weights = static_cast<Net*>(Util::allocAlign(sizeof(Net)));
+
+      auto rawContent = std::make_unique<Net>();
+      std::memcpy(rawContent.get(), data, sizeof(Net));
+      std::memcpy(Weights, rawContent.get(), sizeof(Net));
+
+      for (int bucket = 0; bucket < OutputBuckets; bucket++)
+        for (int i = 0; i < L1; i += 4)
+          for (int j = 0; j < L2; ++j)
+            for (int k = 0; k < 4; k++)
+              Weights->L1WeightsAlt[bucket][i * L2 + j * 4 + k] = rawContent->L1Weights[bucket][i + k][j];
+
+      // Init NNZ table
+      std::memset(nnzTable, 0, sizeof(nnzTable));
+      for (int mask = 0; mask < 256; ++mask) {
+        int j = 0;
+        Bitboard bits = mask;
+        while (bits)
+          nnzTable[mask][j++] = popLsb(bits);
+      }
+
+      constexpr int weightsPerBlock = sizeof(__m128i) / sizeof(int16_t);
+      constexpr int NumRegs = sizeof(VecI) / 8;
+      __m128i regs[NumRegs];
+
+      __m128i* ftWeights = (__m128i*) Weights->FeatureWeights;
+      __m128i* ftBiases = (__m128i*) Weights->FeatureBiases;
+
+      for (int i = 0; i < KingBuckets * 768 * L1 / weightsPerBlock; i += NumRegs) {
+        for (int j = 0; j < NumRegs; j++)
+          regs[j] = ftWeights[i + j];
+
+        for (int j = 0; j < NumRegs; j++)
+          ftWeights[i + j] = regs[PackusOrder[j]];
+      }
+
+      for (int i = 0; i < L1 / weightsPerBlock; i += NumRegs) {
+        for (int j = 0; j < NumRegs; j++)
+          regs[j] = ftBiases[i + j];
+
+        for (int j = 0; j < NumRegs; j++)
+          ftBiases[i + j] = regs[PackusOrder[j]];
+      }
+
+      useMaterialFallback = false;
+      return true;
+    }
+
+    Score materialOnlyEval(const Position& pos) {
+      static constexpr int pieceValues[PIECE_TYPE_NB] = {0, 100, 320, 330, 500, 900, 0, 0};
+      int white = 0;
+      int black = 0;
+      for (PieceType pt = PAWN; pt <= QUEEN; pt = PieceType(pt + 1)) {
+        white += pieceValues[pt] * BitCount(pos.pieces(WHITE, pt));
+        black += pieceValues[pt] * BitCount(pos.pieces(BLACK, pt));
+      }
+      int diff = white - black;
+      return pos.sideToMove == WHITE ? diff : -diff;
+    }
+  }
 
 
   bool needRefresh(Color side, Square oldKing, Square newKing) {
@@ -101,19 +265,29 @@ namespace NNUE {
   }
 
   void Accumulator::addPiece(Square kingSq, Color side, Piece pc, Square sq) {
+    if (useMaterialFallback)
+      return;
     multiAdd<L1>((VecI*) colors[side], (VecI*) colors[side], featureAddress(kingSq, side, pc, sq));
   }
 
   void Accumulator::movePiece(Square kingSq, Color side, Piece pc, Square from, Square to) {
+    if (useMaterialFallback)
+      return;
     multiSubAdd<L1>((VecI*) colors[side], (VecI*) colors[side],
      featureAddress(kingSq, side, pc, from), featureAddress(kingSq, side, pc, to));
   }
 
   void Accumulator::removePiece(Square kingSq, Color side, Piece pc, Square sq) {
+    if (useMaterialFallback)
+      return;
     multiSub<L1>((VecI*) colors[side], (VecI*) colors[side], featureAddress(kingSq, side, pc, sq));
   }
 
   void Accumulator::doUpdates(Square kingSq, Color side, Accumulator& input) {
+    if (useMaterialFallback) {
+      updated[side] = true;
+      return;
+    }
     DirtyPieces dp = this->dirtyPieces;
     if (dp.type == DirtyPieces::CASTLING) 
     {
@@ -138,10 +312,20 @@ namespace NNUE {
   }
 
   void Accumulator::reset(Color side) {
+    if (useMaterialFallback) {
+      memset(colors[side], 0, sizeof(colors[side]));
+      updated[side] = true;
+      return;
+    }
     memcpy(colors[side], Weights->FeatureBiases, sizeof(Weights->FeatureBiases));
   }
 
   void Accumulator::refresh(Position& pos, Color side) {
+    if (useMaterialFallback) {
+      memset(colors[side], 0, sizeof(colors[side]));
+      updated[side] = true;
+      return;
+    }
     reset(side);
     const Square kingSq = pos.kingSquare(side);
     Bitboard occupied = pos.pieces();
@@ -160,60 +344,87 @@ namespace NNUE {
   }
 
   void loadWeights() {
-    
-    Weights = (Net*) Util::allocAlign(sizeof(Net));
-    
-    // dpbusd preprocessing:
-    Net* rawContent = new Net();
-    memcpy(rawContent, gEmbeddedNNUEData, sizeof(Net));
-    memcpy(Weights, rawContent, sizeof(Net));
-    for (int bucket = 0; bucket < OutputBuckets; bucket++)
-      for (int i = 0; i < L1; i += 4)
-        for (int j = 0; j < L2; ++j)
-          for (int k = 0; k < 4; k ++)
-            Weights->L1WeightsAlt[bucket][i * L2
-            + j * 4
-            + k] = rawContent->L1Weights[bucket][i + k][j];
-    delete rawContent;
+    auto tryLoad = [&](const std::filesystem::path& candidate, bool verbose) {
+      if (candidate.empty())
+        return false;
+      std::vector<uint8_t> buffer;
+      if (!readBinaryFile(candidate, buffer)) {
+        if (verbose) {
+          std::string pathStr = candidate.generic_string();
+          std::fprintf(stderr, "info string NNUE: failed to read %s\n", pathStr.c_str());
+        }
+        return false;
+      }
+      if (!initializeNetworkFromBuffer(buffer.data(), buffer.size())) {
+        if (verbose) {
+          std::string pathStr = candidate.generic_string();
+          std::fprintf(stderr, "info string NNUE: invalid network %s (expected %zu bytes)\n",
+                       pathStr.c_str(), sizeof(Net));
+        }
+        return false;
+      }
+      std::string pathStr = candidate.generic_string();
+      std::fprintf(stderr, "info string NNUE: loaded network from %s\n", pathStr.c_str());
+      return true;
+    };
 
-    // Init NNZ table
-    memset(nnzTable, 0, sizeof(nnzTable));
-    for (int i = 0; i < 256; i++) {
-      int j = 0;
-      Bitboard bits = i;
-      while (bits)
-        nnzTable[i][j++] = popLsb(bits);
+    bool loaded = false;
+    std::filesystem::path exeDir = executableDirectory();
+
+    auto evalOptionIt = UCI::Options.find("EvalFile");
+    std::string evalOption = (evalOptionIt != UCI::Options.end()) ? (std::string) evalOptionIt->second : std::string();
+
+    if (!evalOption.empty())
+      loaded = tryLoad(evalOption, true);
+
+    if (!loaded) {
+      std::vector<std::filesystem::path> candidates;
+      candidates.emplace_back(EvalFile);
+      if (!exeDir.empty()) {
+        candidates.emplace_back(exeDir / EvalFile);
+        candidates.emplace_back(exeDir / "resources" / EvalFile);
+      }
+      for (const auto& candidate : candidates) {
+        if (tryLoad(candidate, false)) {
+          loaded = true;
+          break;
+        }
+      }
     }
-    
-    // Transpose weights so that we don't need to permute after packus, because
-    // it interleaves each 128 block from a and each 128 block from b, alternately.
-    // Instead we want it to concatenate a and b
 
-    constexpr int weightsPerBlock = sizeof(__m128i) / sizeof(int16_t);
-    constexpr int NumRegs = sizeof(VecI) / 8;
-    __m128i regs[NumRegs];
-
-    __m128i* ftWeights = (__m128i*) Weights->FeatureWeights;
-    __m128i* ftBiases = (__m128i*) Weights->FeatureBiases;
-
-    for (int i = 0; i < KingBuckets * 768 * L1 / weightsPerBlock; i += NumRegs) {
-      for (int j = 0; j < NumRegs; j++)
-            regs[j] = ftWeights[i + j];
-
-        for (int j = 0; j < NumRegs; j++)
-            ftWeights[i + j] = regs[PackusOrder[j]];
+    if (!loaded && !exeDir.empty()) {
+      if (auto found = findNetworkInDirectory(exeDir / "resources"))
+        loaded = tryLoad(*found, false);
     }
 
-    for (int i = 0; i < L1 / weightsPerBlock; i += NumRegs) {
-      for (int j = 0; j < NumRegs; j++)
-            regs[j] = ftBiases[i + j];
+    if (!loaded && !exeDir.empty()) {
+      if (auto found = findNetworkInDirectory(exeDir))
+        loaded = tryLoad(*found, false);
+    }
 
-        for (int j = 0; j < NumRegs; j++)
-            ftBiases[i + j] = regs[PackusOrder[j]];
+    if (!loaded && initializeNetworkFromBuffer(gEmbeddedNNUEData, gEmbeddedNNUESize)) {
+      std::fprintf(stderr, "info string NNUE: using embedded network (%s)\n", EvalFile);
+      loaded = true;
+    }
+
+    if (!loaded) {
+      if (Weights && !useMaterialFallback) {
+        std::fprintf(stderr, "info string NNUE: keeping previously loaded network.\n");
+        return;
+      }
+      if (Weights) {
+        Util::freeAlign(Weights);
+        Weights = nullptr;
+      }
+      useMaterialFallback = true;
+      std::fprintf(stderr, "info string NNUE: no network found; using material eval.\n");
     }
   }
 
   Score evaluate(Position& pos, Accumulator& accumulator) {
+
+    if (useMaterialFallback)
+      return materialOnlyEval(pos);
 
     constexpr int divisor = (32 + OutputBuckets - 1) / OutputBuckets;
     int bucket = (BitCount(pos.pieces()) - 2) / divisor;
