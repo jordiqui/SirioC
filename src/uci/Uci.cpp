@@ -9,11 +9,13 @@
 #include "pyrrhic/types.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <optional>
 #include <sstream>
@@ -331,6 +333,122 @@ std::string search_bestmove(Position& pos, int /*depth*/) {
 
 static core::Position g_pos;
 
+std::filesystem::path locate_bench_file() {
+  std::vector<std::filesystem::path> candidates;
+  if (!g_engine_dir.empty()) {
+    candidates.push_back(g_engine_dir / "resources" / "bench.fens");
+    const auto parent = g_engine_dir.parent_path();
+    if (!parent.empty()) {
+      candidates.push_back(parent / "resources" / "bench.fens");
+    }
+  }
+  candidates.emplace_back("resources/bench.fens");
+  candidates.emplace_back("../resources/bench.fens");
+
+  std::error_code ec;
+  for (const auto& candidate : candidates) {
+    if (std::filesystem::exists(candidate, ec) &&
+        std::filesystem::is_regular_file(candidate, ec)) {
+      return candidate;
+    }
+  }
+  return {};
+}
+
+void print_info_string(const std::string& message) {
+  std::cout << "info string " << message << "\n";
+  std::cout.flush();
+}
+
+struct BenchLimits {
+  int depth = 12;
+  int movetime_ms = 0;
+};
+
+BenchLimits parse_bench_limits(std::istringstream& is) {
+  BenchLimits limits;
+  std::string token;
+  while (is >> token) {
+    if (token == "depth") {
+      is >> limits.depth;
+    } else if (token == "movetime") {
+      is >> limits.movetime_ms;
+    }
+  }
+  return limits;
+}
+
+void cmd_bench(std::istringstream& is) {
+  const BenchLimits limits = parse_bench_limits(is);
+  if (limits.movetime_ms > 0) {
+    print_info_string("bench movetime option is currently ignored");
+  }
+  auto bench_path = locate_bench_file();
+  if (bench_path.empty()) {
+    print_info_string("Failed to open resources/bench.fens");
+    return;
+  }
+
+  std::ifstream bench_file(bench_path);
+  if (!bench_file.is_open()) {
+    print_info_string("Failed to open resources/bench.fens");
+    return;
+  }
+
+  std::uint64_t total_nodes = 0;
+  std::uint64_t total_time = 0;
+  int positions = 0;
+  std::string line;
+
+  while (std::getline(bench_file, line)) {
+    line = trim(line);
+    if (line.empty() || line[0] == '#') continue;
+
+    core::Position pos;
+    if (!pos.set_fen(line)) {
+      print_info_string("Invalid FEN in bench file: " + line);
+      continue;
+    }
+
+    const int requested_depth = limits.depth > 0 ? limits.depth : 1;
+
+    const auto start = std::chrono::steady_clock::now();
+    std::string best = core::search_bestmove(pos, requested_depth);
+    const auto finish = std::chrono::steady_clock::now();
+    std::uint64_t elapsed_ms =
+        static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count());
+    if (elapsed_ms == 0) elapsed_ms = 1;
+
+    const auto legal_moves = core::generate_legal(pos);
+    std::uint64_t nodes = static_cast<std::uint64_t>(legal_moves.size());
+
+    ++positions;
+    total_nodes += nodes;
+    total_time += elapsed_ms;
+
+    if (best.empty()) best = "0000";
+
+    std::cout << "bench position " << positions << " bestmove " << best << " nodes " << nodes
+              << " time " << elapsed_ms << "\n";
+    std::cout.flush();
+  }
+
+  if (positions == 0) {
+    std::cout << "bench summary positions 0 time 0 nodes 0 nps 0\n";
+    std::cout.flush();
+    return;
+  }
+
+  if (total_time == 0) total_time = 1;
+  const std::uint64_t nps = (total_nodes * 1000ULL) / total_time;
+
+  std::cout << "bench summary positions " << positions << " time " << total_time << " nodes "
+            << total_nodes << " nps " << nps << "\n";
+  std::cout.flush();
+
+  g_pos.set_startpos();
+}
+
 void init_options() {
   OptionsMap.clear();
   OptionsMap["Hash"] = Option{Option::SPIN, 1, 4096, 64, false, {}, {}};
@@ -479,6 +597,7 @@ static void cmd_go(std::istringstream& is) {
   std::string bm = core::search_bestmove(g_pos, depth);
   if (bm.empty()) bm = "0000";
   std::cout << "bestmove " << bm << "\n";
+  std::cout.flush();
 }
 
 void uci::loop() {
@@ -493,12 +612,14 @@ void uci::loop() {
 
     if (token == "uci") {
       std::cout << "id name SirioC-0.1.0\n";
-      std::cout << "id author SirioC Team\n";
+      std::cout << "id author Jorge Ruiz credits Codex open IA\n";
       OptionsMap.printUci();
       std::cout << "uciok\n";
+      std::cout.flush();
     } else if (token == "isready") {
       try_load_nnue();
       std::cout << "readyok\n";
+      std::cout.flush();
     } else if (token == "setoption") {
       std::string word;
       std::string name;
@@ -530,6 +651,8 @@ void uci::loop() {
       cmd_position(is);
     } else if (token == "go") {
       cmd_go(is);
+    } else if (token == "bench") {
+      cmd_bench(is);
     } else if (token == "stop") {
       // TODO: signal search stop
     } else if (token == "quit") {

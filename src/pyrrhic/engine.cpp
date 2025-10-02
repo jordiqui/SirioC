@@ -24,8 +24,8 @@ std::string trim(std::string value) {
     return value;
 }
 
-constexpr const char* kEngineIdName = "SirioC-0.1.0 300925";
-constexpr const char* kEngineIdAuthor = "Jorge Ruiz and Codex Chatgpt creditos";
+constexpr const char* kEngineIdName = "SirioC-0.1.0";
+constexpr const char* kEngineIdAuthor = "Jorge Ruiz credits Codex open IA";
 
 }  // namespace
 
