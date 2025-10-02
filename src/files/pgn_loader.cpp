@@ -1,6 +1,9 @@
 #include "files/pgn_loader.h"
 
+#include <cstdio>
+#include <cstdlib>
 #include <fstream>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 
@@ -125,15 +128,33 @@ PgnGame load_pgn(const std::string& content) {
     return game;
 }
 
-PgnGame load_pgn_from_file(const std::string& path) {
+std::optional<PgnGame> try_load_pgn_from_file(const std::string& path, std::string* error_message) {
     std::ifstream input(path);
     if (!input.is_open()) {
-        throw std::runtime_error("Unable to open PGN file: " + path);
+        if (error_message) {
+            *error_message = "Unable to open PGN file: " + path;
+        }
+        return std::nullopt;
     }
 
     std::ostringstream buffer;
     buffer << input.rdbuf();
     return load_pgn(buffer.str());
+}
+
+PgnGame load_pgn_from_file(const std::string& path) {
+    std::string error;
+    auto game = try_load_pgn_from_file(path, &error);
+    if (game.has_value()) {
+        return *game;
+    }
+
+#if defined(__cpp_exceptions)
+    throw std::runtime_error(error);
+#else
+    std::fprintf(stderr, "PGN load error: %s\n", error.c_str());
+    std::abort();
+#endif
 }
 
 }  // namespace sirio::files
