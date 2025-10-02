@@ -12,7 +12,7 @@ set(SIRIOC_NNUE_PRIMARY_URL "https://tests.stockfishchess.org/api/nn/nn-1c000000
     CACHE STRING "URL to fetch the default (primary) NNUE network when auto-download is enabled")
 set(SIRIOC_NNUE_SMALL_URL "https://tests.stockfishchess.org/api/nn/nn-37f18f62d772.nnue"
     CACHE STRING "URL to fetch the small NNUE network when auto-download is enabled")
-option(SIRIOC_AUTO_DOWNLOAD_NNUE "Attempt to download default NNUE networks during configure if missing" ON)
+option(SIRIOC_AUTO_DOWNLOAD_NNUE "Attempt to download default NNUE networks during configure if missing" OFF)
 
 find_package(Threads REQUIRED)
 
