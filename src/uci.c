@@ -17,6 +17,7 @@
 #include "search.h"
 #include "transposition.h"
 #include "tb.h"
+#include "util/path.h"
 
 #define UCI_DEFAULT_EVAL_FILE "resources/nn-1c0000000000.nnue"
 #define UCI_DEFAULT_EVAL_FILE_SMALL "resources/nn-37f18f62d772.nnue"
@@ -36,6 +37,7 @@ typedef struct {
     int search_thread_running;
     int search_thread_active;
     pthread_t search_thread;
+    int nnue_initialized;
 } UciState;
 
 static void trim_whitespace(char* text) {
@@ -84,6 +86,56 @@ static void print_options(const UciState* state) {
     printf("option name Syzygy50MoveRule type check default %s\n", state->syzygy_50_move_rule ? "true" : "false");
     printf("option name SyzygyProbeLimit type spin default %d min 0 max 7\n", state->syzygy_probe_limit);
     printf("option name Move Overhead type spin default %d min 0 max 5000\n", state->move_overhead);
+}
+
+static bool load_nnue_files(UciState* state, const char* primary, const char* secondary, bool use_nnue) {
+    (void)state;
+    if (!use_nnue) {
+        eval_set_use_nnue(false);
+        eval_load_small_network(NULL);
+        printf("info string NNUE disabled; using material eval\n");
+        fflush(stdout);
+        return false;
+    }
+
+    const char* resolved_primary = NULL;
+    if (primary && *primary) {
+        resolved_primary = util_resolve_resource_cstr(primary);
+    }
+
+    bool ok_primary = resolved_primary && eval_load_network(resolved_primary);
+    if (!ok_primary) {
+        const char* label = (primary && *primary) ? primary : "<empty>";
+        printf("info string NNUE primary NOT FOUND or failed: %s; falling back to material\n", label);
+        fflush(stdout);
+        eval_set_use_nnue(false);
+        eval_load_small_network(NULL);
+        return false;
+    }
+
+    eval_set_use_nnue(true);
+    printf("info string NNUE evaluation using %s\n", resolved_primary);
+    fflush(stdout);
+
+    if (secondary && *secondary) {
+        const char* resolved_secondary = util_resolve_resource_cstr(secondary);
+        if (resolved_secondary) {
+            if (eval_load_small_network(resolved_secondary)) {
+                printf("info string NNUE secondary using %s\n", resolved_secondary);
+            } else {
+                printf("info string NNUE secondary failed: %s\n", secondary);
+                eval_load_small_network(NULL);
+            }
+        } else {
+            printf("info string NNUE secondary failed: %s\n", secondary);
+            eval_load_small_network(NULL);
+        }
+        fflush(stdout);
+    } else {
+        eval_load_small_network(NULL);
+    }
+
+    return true;
 }
 
 static char* next_token(char** cursor) {
@@ -387,28 +439,30 @@ static void handle_setoption(UciState* state, char* line) {
     trim_whitespace(name_ptr);
 
     if (strcmp(name_ptr, "UseNNUE") == 0 && option_value) {
-        if (strcmp(option_value, "true") == 0 || strcmp(option_value, "1") == 0) {
-            eval_set_use_nnue(true);
-        } else {
-            eval_set_use_nnue(false);
-        }
+        int enable = (strcmp(option_value, "true") == 0 || strcmp(option_value, "1") == 0);
+        eval_set_use_nnue(enable != 0);
+        load_nnue_files(state, state->eval_file, state->eval_file_small, enable != 0);
     } else if (strcmp(name_ptr, "EvalFile") == 0 && option_value) {
-        if (eval_load_network(option_value)) {
+        if (strcmp(option_value, "<empty>") == 0) {
+            option_value = "";
+        }
+        if (*option_value) {
             snprintf(state->eval_file, sizeof(state->eval_file), "%s", option_value);
         } else {
-            printf("info string Failed to load NNUE file %s\n", option_value);
+            state->eval_file[0] = '\0';
         }
+        load_nnue_files(state, state->eval_file, state->eval_file_small, eval_use_nnue());
     } else if (strcmp(name_ptr, "EvalFileSmall") == 0) {
-        if (option_value && *option_value) {
-            if (eval_load_small_network(option_value)) {
-                snprintf(state->eval_file_small, sizeof(state->eval_file_small), "%s", option_value);
-            } else {
-                printf("info string Failed to load secondary NNUE file %s\n", option_value);
-            }
+        const char* value = option_value;
+        if (value && strcmp(value, "<empty>") == 0) {
+            value = "";
+        }
+        if (value && *value) {
+            snprintf(state->eval_file_small, sizeof(state->eval_file_small), "%s", value);
         } else {
-            eval_load_small_network(NULL);
             state->eval_file_small[0] = '\0';
         }
+        load_nnue_files(state, state->eval_file, state->eval_file_small, eval_use_nnue());
     } else if (strcmp(name_ptr, "MultiPV") == 0 && option_value) {
         if (state && state->context) {
             int multipv = atoi(option_value);
@@ -683,7 +737,19 @@ static void handle_bench(UciState* state, char* args) {
         }
     }
 
+    int previous_use_nnue = eval_use_nnue();
+    if (!state->nnue_initialized || !previous_use_nnue) {
+        eval_set_use_nnue(true);
+        load_nnue_files(state, state->eval_file, state->eval_file_small, true);
+        state->nnue_initialized = 1;
+    }
+
     bench_run(state->context, &limits);
+
+    if (!previous_use_nnue) {
+        eval_set_use_nnue(false);
+        load_nnue_files(state, state->eval_file, state->eval_file_small, false);
+    }
 }
 
 static void uci_loop_impl(UciState* state) {
@@ -693,9 +759,17 @@ static void uci_loop_impl(UciState* state) {
             printf("id name SirioC-0.1.0 300925\n");
             printf("id author Jorge Ruiz and Codex Chatgpt creditos\n");
             print_options(state);
+            if (!state->nnue_initialized) {
+                load_nnue_files(state, state->eval_file, state->eval_file_small, eval_use_nnue());
+                state->nnue_initialized = 1;
+            }
             printf("uciok\n");
         } else if (strncmp(line, "isready", 7) == 0 && (line[7] == '\0' || isspace((unsigned char)line[7]))) {
             stop_search(state);
+            if (!state->nnue_initialized) {
+                load_nnue_files(state, state->eval_file, state->eval_file_small, eval_use_nnue());
+                state->nnue_initialized = 1;
+            }
             printf("readyok\n");
         } else if (strncmp(line, "ucinewgame", 10) == 0 && (line[10] == '\0' || isspace((unsigned char)line[10]))) {
             stop_search(state);
@@ -724,11 +798,7 @@ static void uci_state_init(UciState* state, SearchContext* context) {
     memset(state, 0, sizeof(*state));
     state->context = context;
     snprintf(state->eval_file, sizeof(state->eval_file), "%s", UCI_DEFAULT_EVAL_FILE);
-    if (eval_has_small_network()) {
-        snprintf(state->eval_file_small, sizeof(state->eval_file_small), "%s", UCI_DEFAULT_EVAL_FILE_SMALL);
-    } else {
-        state->eval_file_small[0] = '\0';
-    }
+    snprintf(state->eval_file_small, sizeof(state->eval_file_small), "%s", UCI_DEFAULT_EVAL_FILE_SMALL);
     const char* syzygy_path = tb_get_path();
     if (syzygy_path) {
         snprintf(state->syzygy_path, sizeof(state->syzygy_path), "%s", syzygy_path);
@@ -742,6 +812,7 @@ static void uci_state_init(UciState* state, SearchContext* context) {
     state->ponder_enabled = 0;
     state->search_thread_running = 0;
     state->search_thread_active = 0;
+    state->nnue_initialized = 0;
 }
 
 void uci_loop(SearchContext* context) {
@@ -787,7 +858,9 @@ int main(int argc, char* argv[]) {
     eval_init();
 
     if (run_bench && !run_uci) {
-        bench_run(&context, NULL);
+        UciState bench_state;
+        uci_state_init(&bench_state, &context);
+        handle_bench(&bench_state, NULL);
     }
     if (run_uci) {
         uci_loop(&context);

@@ -119,6 +119,7 @@ set(SIRIOC_C_ENGINE_SOURCES
     src/transposition.c
     src/uci.c
     src/util.c
+    src/util/path.cpp
     src/nn/accumulator.c
     src/nn/evaluate.c
     src/zobrist.cpp

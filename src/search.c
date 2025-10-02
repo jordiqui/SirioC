@@ -275,7 +275,11 @@ static Value search_alpha_beta(SearchContext* context,
         int child_length = 0;
         memset(child_line, 0, sizeof(child_line));
         board_make_move(context->board, &move);
-        Value score = -search_alpha_beta(context, depth - 1, ply + 1, -beta, -alpha, child_line, &child_length);
+        int next_depth = depth - 1;
+        if (next_depth < 0) {
+            next_depth = 0;
+        }
+        Value score = -search_alpha_beta(context, next_depth, ply + 1, -beta, -alpha, child_line, &child_length);
         board_unmake_move(context->board, &move);
 
         if (score > best) {
@@ -374,34 +378,80 @@ Move search_iterative_deepening(SearchContext* context, const SearchLimits* limi
     Value best_value = 0;
     const int max_depth = search_max_depth(limits);
     for (int depth = 1; depth <= max_depth; ++depth) {
-        Value alpha = -VALUE_INFINITE;
-        Value beta = VALUE_INFINITE;
-        if (depth > 1) {
-            const Value aspiration_window = 50;
-            alpha = aspiration_center - aspiration_window;
-            beta = aspiration_center + aspiration_window;
+        Value value = 0;
+        if (depth == 1) {
+            value = search_root(context, depth, -VALUE_INFINITE, VALUE_INFINITE);
+        } else {
+            Value alpha = aspiration_center - 16;
+            Value beta = aspiration_center + 16;
             if (alpha < -VALUE_INFINITE) {
                 alpha = -VALUE_INFINITE;
             }
             if (beta > VALUE_INFINITE) {
                 beta = VALUE_INFINITE;
             }
-        }
 
-        Value value = search_root(context, depth, alpha, beta);
-        while (!context->stop && depth > 1 && (value <= alpha || value >= beta)) {
-            if (value <= alpha) {
-                alpha = (Value)(alpha - 2 * 50);
-                if (alpha < -VALUE_INFINITE) {
-                    alpha = -VALUE_INFINITE;
+            Value local_alpha = alpha;
+            Value local_beta = beta;
+            int window = 16;
+            int retries = 0;
+            const int max_aspiration_retries = 6;
+
+            while (1) {
+                value = search_root(context, depth, local_alpha, local_beta);
+                if (context->stop) {
+                    break;
                 }
-            } else if (value >= beta) {
-                beta = (Value)(beta + 2 * 50);
-                if (beta > VALUE_INFINITE) {
-                    beta = VALUE_INFINITE;
+
+                if (value <= local_alpha) {
+                    ++retries;
+                    if (retries > max_aspiration_retries) {
+                        local_alpha = -VALUE_INFINITE;
+                        local_beta = VALUE_INFINITE;
+                        value = search_root(context, depth, local_alpha, local_beta);
+                        break;
+                    }
+                    Value new_alpha = value - (Value)(window * 2);
+                    Value lower_bound = -VALUE_INFINITE / 2;
+                    if (new_alpha < lower_bound) {
+                        new_alpha = lower_bound;
+                    }
+                    if (new_alpha < -VALUE_INFINITE) {
+                        new_alpha = -VALUE_INFINITE;
+                    }
+                    local_alpha = new_alpha;
+                } else if (value >= local_beta) {
+                    ++retries;
+                    if (retries > max_aspiration_retries) {
+                        local_alpha = -VALUE_INFINITE;
+                        local_beta = VALUE_INFINITE;
+                        value = search_root(context, depth, local_alpha, local_beta);
+                        break;
+                    }
+                    Value new_beta = value + (Value)(window * 2);
+                    Value upper_bound = VALUE_INFINITE / 2;
+                    if (new_beta > upper_bound) {
+                        new_beta = upper_bound;
+                    }
+                    if (new_beta > VALUE_INFINITE) {
+                        new_beta = VALUE_INFINITE;
+                    }
+                    local_beta = new_beta;
+                } else {
+                    break;
+                }
+
+                if (window < VALUE_INFINITE / 4) {
+                    window *= 2;
+                }
+
+                if (local_alpha < -VALUE_INFINITE) {
+                    local_alpha = -VALUE_INFINITE;
+                }
+                if (local_beta > VALUE_INFINITE) {
+                    local_beta = VALUE_INFINITE;
                 }
             }
-            value = search_root(context, depth, alpha, beta);
         }
 
         if (context->stop) {
@@ -504,7 +554,11 @@ Value search_root(SearchContext* context, int depth, Value alpha, Value beta) {
         Move child_line[64];
         int child_length = 0;
         board_make_move(context->board, &move);
-        Value score = -search_alpha_beta(context, depth - 1, 1, -beta, -alpha, child_line, &child_length);
+        int next_depth = depth - 1;
+        if (next_depth < 0) {
+            next_depth = 0;
+        }
+        Value score = -search_alpha_beta(context, next_depth, 1, -beta, -alpha, child_line, &child_length);
         board_unmake_move(context->board, &move);
 
         if (entry_count < 256) {
