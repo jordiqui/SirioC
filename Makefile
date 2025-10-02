@@ -4,7 +4,8 @@ else
         EXE := SirioC
 endif
 
-DEFAULT_NET = net89perm.bin
+DEFAULT_NET = nn-6877cd24400e.nnue
+DOWNLOAD_BASE_URL = https://raw.githubusercontent.com/official-stockfish/networks/master
 
 ifndef EVALFILE
 	EVALFILE = $(DEFAULT_NET)
@@ -148,9 +149,17 @@ clean:
 download-net:
 ifdef DOWNLOAD_NET
 	@if test -f "$(EVALFILE)"; then \
-		echo "File $(EVALFILE) already exists, skipping download."; \
-	else \
-		echo Downloading net; \
-		curl -sOL https://github.com/gab8192/SirioC-nets/releases/download/nets/$(EVALFILE); \
-	fi
+			echo "File $(EVALFILE) already exists, skipping download."; \
+		else \
+			echo "Downloading NNUE network $(notdir $(EVALFILE)) from official Stockfish repository..."; \
+			mkdir -p "$(dir $(EVALFILE))"; \
+			tmp_file="$(EVALFILE).tmp"; \
+			if curl -sSfL -o "$$tmp_file" "$(DOWNLOAD_BASE_URL)/$(notdir $(EVALFILE))"; then \
+				mv "$$tmp_file" "$(EVALFILE)"; \
+			else \
+				rm -f "$$tmp_file"; \
+				echo "Failed to download $(notdir $(EVALFILE)) from $(DOWNLOAD_BASE_URL)"; \
+				exit 1; \
+			fi; \
+		fi
 endif
