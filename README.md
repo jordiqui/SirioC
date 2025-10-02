@@ -81,6 +81,12 @@ CMake with `-DSIRIOC_EMBED_NNUE=ON` and ensure that
 `resources/sirio_default.nnue` exists at configure time. When no NNUE file is
 configured the engine falls back to its built-in material evaluator.
 
+The engine automatically searches for `sirio_default.nnue`/`sirio_small.nnue`
+next to the executable, in parent directories' `resources/` folders, and in any
+directory pointed to by the `SIRIOC_RESOURCE_DIR` environment variable. This
+allows packaged builds (for example from a `build/` tree) to pick up networks
+downloaded into the source tree without requiring manual `EvalFile` paths.
+
 ## Building
 
 The project uses CMake and requires a compiler with C++20 support.
