@@ -51,7 +51,10 @@ int main() {
         out << "nnue";
     }
 
-    g_engine_dir = temp_root;
+    const fs::path nested_dir = temp_root / "build" / "bin";
+    fs::create_directories(nested_dir);
+
+    g_engine_dir = nested_dir;
     init_options();
     expect(OptionsMap.contains("EvalFile"), "EvalFile option should be available");
 
@@ -75,9 +78,7 @@ int main() {
            "EvalFile should clear again when set to <empty>");
 
     g_engine_dir = original_engine_dir;
-    fs::remove(nnue_file);
-    fs::remove(resources_dir);
-    fs::remove(temp_root);
+    fs::remove_all(temp_root);
 
     std::cout << "All tests passed" << std::endl;
     return EXIT_SUCCESS;

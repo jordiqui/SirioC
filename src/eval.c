@@ -5,11 +5,19 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 
 #define SIRIO_DEFAULT_NETWORK "resources/sirio_default.nnue"
 #define SIRIO_DEFAULT_NETWORK_ALT "../resources/sirio_default.nnue"
 #define SIRIO_DEFAULT_SMALL_NETWORK "resources/sirio_small.nnue"
 #define SIRIO_DEFAULT_SMALL_NETWORK_ALT "../resources/sirio_small.nnue"
+#define SIRIO_DEFAULT_PRIMARY_NAME "sirio_default.nnue"
+#define SIRIO_DEFAULT_SMALL_NAME "sirio_small.nnue"
 #define SIRIO_SMALL_NETWORK_THRESHOLD 12
 
 static sirio_nn_model g_eval_model;
@@ -23,12 +31,84 @@ extern const size_t g_sirio_nnue_default_size;
 #endif
 
 static int try_load_network(sirio_nn_model* model, const char* primary, const char* fallback) {
-    if (sirio_nn_model_load(model, primary)) {
+    if (primary && sirio_nn_model_load(model, primary)) {
         return 1;
     }
     if (fallback && sirio_nn_model_load(model, fallback)) {
         return 1;
     }
+    return 0;
+}
+
+static int load_from_directory(sirio_nn_model* model, const char* directory, const char* file_name) {
+    if (!directory || !*directory || !file_name || !*file_name) {
+        return 0;
+    }
+
+    char buffer[PATH_MAX];
+    size_t dir_len = strlen(directory);
+    int needs_sep = dir_len > 0 && directory[dir_len - 1] != '/' && directory[dir_len - 1] != '\\';
+    int written;
+    if (needs_sep) {
+        written = snprintf(buffer, sizeof(buffer), "%s/%s", directory, file_name);
+    } else {
+        written = snprintf(buffer, sizeof(buffer), "%s%s", directory, file_name);
+    }
+    if (written <= 0 || (size_t)written >= sizeof(buffer)) {
+        return 0;
+    }
+
+    return sirio_nn_model_load(model, buffer);
+}
+
+static int try_load_default_locations(sirio_nn_model* model, const char* file_name) {
+    if (!file_name || !*file_name) {
+        return 0;
+    }
+
+    if (sirio_nn_model_load(model, file_name)) {
+        return 1;
+    }
+
+    const char* env_dirs[] = {
+        getenv("SIRIOC_RESOURCE_DIR"),
+        getenv("SIRIO_RESOURCE_DIR"),
+    };
+
+    for (size_t i = 0; i < sizeof(env_dirs) / sizeof(env_dirs[0]); ++i) {
+        if (load_from_directory(model, env_dirs[i], file_name)) {
+            return 1;
+        }
+
+        if (env_dirs[i] && *env_dirs[i]) {
+            char buffer[PATH_MAX];
+            int written = snprintf(buffer, sizeof(buffer), "%s/resources", env_dirs[i]);
+            if (written > 0 && (size_t)written < sizeof(buffer)) {
+                if (load_from_directory(model, buffer, file_name)) {
+                    return 1;
+                }
+            }
+        }
+    }
+
+    const char* prefixes[] = {
+        "./",
+        "resources/",
+        "./resources/",
+        "../",
+        "../resources/",
+        "../../",
+        "../../resources/",
+        "../../../",
+        "../../../resources/",
+    };
+
+    for (size_t i = 0; i < sizeof(prefixes) / sizeof(prefixes[0]); ++i) {
+        if (load_from_directory(model, prefixes[i], file_name)) {
+            return 1;
+        }
+    }
+
     return 0;
 }
 
@@ -41,6 +121,9 @@ static void eval_ensure_initialized(void) {
     sirio_nn_model_init(&g_small_model);
 
     int loaded_eval = try_load_network(&g_eval_model, SIRIO_DEFAULT_NETWORK, SIRIO_DEFAULT_NETWORK_ALT);
+    if (!loaded_eval) {
+        loaded_eval = try_load_default_locations(&g_eval_model, SIRIO_DEFAULT_PRIMARY_NAME);
+    }
 #ifdef SIRIOC_EMBED_NNUE
     if (!loaded_eval && g_sirio_nnue_default_size > 0 &&
         sirio_nn_model_load_buffer(&g_eval_model, g_sirio_nnue_default, g_sirio_nnue_default_size)) {
@@ -54,7 +137,8 @@ static void eval_ensure_initialized(void) {
             SIRIO_DEFAULT_NETWORK);
     }
 
-    if (!try_load_network(&g_small_model, SIRIO_DEFAULT_SMALL_NETWORK, SIRIO_DEFAULT_SMALL_NETWORK_ALT)) {
+    if (!try_load_network(&g_small_model, SIRIO_DEFAULT_SMALL_NETWORK, SIRIO_DEFAULT_SMALL_NETWORK_ALT) &&
+        !try_load_default_locations(&g_small_model, SIRIO_DEFAULT_SMALL_NAME)) {
         printf(
             "info string No secondary network loaded from %s; EvalFileSmall can be used to supply one\n",
             SIRIO_DEFAULT_SMALL_NETWORK);
