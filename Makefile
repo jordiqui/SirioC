@@ -72,17 +72,17 @@ endif
 	gcc $(FLAGS) -c $< -o $@
 
 make: download-net $(FILES)
-        g++ $(FLAGS) $(FILES) -o $(EXE) -fprofile-generate="sirio_pgo"
+	g++ $(FLAGS) $(FILES) -o $(EXE) -fprofile-generate="sirio_pgo"
 ifeq ($(OS),Windows_NT)
-        $(EXE) bench
+	$(EXE) bench
 else
-        ./$(EXE) bench
+	./$(EXE) bench
 endif
-        g++ $(FLAGS) $(FILES) -o $(EXE) -fprofile-use="sirio_pgo"
+	g++ $(FLAGS) $(FILES) -o $(EXE) -fprofile-use="sirio_pgo"
 ifeq ($(OS),Windows_NT)
-        powershell.exe -Command "Remove-Item -Recurse -Force sirio_pgo"
+	powershell.exe -Command "Remove-Item -Recurse -Force sirio_pgo"
 else
-        rm -rf sirio_pgo
+	rm -rf sirio_pgo
 endif
 
 nopgo: download-net $(OBJS)
@@ -90,13 +90,13 @@ nopgo: download-net $(OBJS)
 
 clean:
 	rm -f $(OBJS)
-	
+
 download-net:
 ifdef DOWNLOAD_NET
 	@if test -f "$(EVALFILE)"; then \
 		echo "File $(EVALFILE) already exists, skipping download."; \
 	else \
 		echo Downloading net; \
-                curl -sOL https://github.com/gab8192/SirioC-nets/releases/download/nets/$(EVALFILE); \
-        fi
+		curl -sOL https://github.com/gab8192/SirioC-nets/releases/download/nets/$(EVALFILE); \
+	fi
 endif
