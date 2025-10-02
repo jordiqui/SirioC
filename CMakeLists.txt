@@ -4,6 +4,7 @@ project(SirioC VERSION 1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 
 option(SIRIOC_BUILD_TESTS "Build the SirioC test suite" ON)
 
@@ -31,6 +32,8 @@ add_library(sirio_core
     src/nn/nnue_loader.cpp
     src/pyrrhic/board.cpp
     src/pyrrhic/engine.cpp
+    src/pyrrhic/bench.cpp
+    src/pyrrhic/path.cpp
     src/pyrrhic/tbchess.c
     src/pyrrhic/tbprobe.c
     src/pyrrhic/types.cpp
@@ -48,6 +51,22 @@ target_compile_features(sirio_core PUBLIC cxx_std_20)
 target_compile_options(sirio_core PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
     $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->)
+
+if (MSVC)
+    add_compile_options($<$<CONFIG:Release>:/O2 /Oi /Ot /GL /arch:AVX2 /fp:fast>)
+    add_link_options($<$<CONFIG:Release>:/LTCG>)
+else()
+    add_compile_options(
+        $<$<CONFIG:Release>:-O3>
+        $<$<CONFIG:Release>:-DNDEBUG>
+        $<$<CONFIG:Release>:-march=native>
+        $<$<CONFIG:Release>:-mtune=native>
+        $<$<CONFIG:Release>:-flto>
+        $<$<CONFIG:Release>:-fno-exceptions>
+        $<$<CONFIG:Release>:-fno-rtti>
+        $<$<CONFIG:Release>:-fomit-frame-pointer>
+    )
+endif()
 
 if (CMAKE_C_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID STREQUAL "GNU")
     target_compile_options(sirio_core PUBLIC -msse4.1 -mpopcnt)
