@@ -93,7 +93,7 @@ static bool load_nnue_files(UciState* state, const char* primary, const char* se
     if (!use_nnue) {
         eval_set_use_nnue(false);
         eval_load_small_network(NULL);
-        printf("info string NNUE disabled; using material eval\n");
+        printf("Fallback: info string NNUE primary NOT FOUND or failed: <disabled>; falling back to material\n");
         fflush(stdout);
         return false;
     }
@@ -106,7 +106,7 @@ static bool load_nnue_files(UciState* state, const char* primary, const char* se
     bool ok_primary = resolved_primary && eval_load_network(resolved_primary);
     if (!ok_primary) {
         const char* label = (primary && *primary) ? primary : "<empty>";
-        printf("info string NNUE primary NOT FOUND or failed: %s; falling back to material\n", label);
+        printf("Fallback: info string NNUE primary NOT FOUND or failed: %s; falling back to material\n", label);
         fflush(stdout);
         eval_set_use_nnue(false);
         eval_load_small_network(NULL);
@@ -114,7 +114,7 @@ static bool load_nnue_files(UciState* state, const char* primary, const char* se
     }
 
     eval_set_use_nnue(true);
-    printf("info string NNUE evaluation using %s\n", resolved_primary);
+    printf("NNUE OK: info string NNUE evaluation using %s\n", resolved_primary);
     fflush(stdout);
 
     if (secondary && *secondary) {
@@ -738,11 +738,9 @@ static void handle_bench(UciState* state, char* args) {
     }
 
     int previous_use_nnue = eval_use_nnue();
-    if (!state->nnue_initialized || !previous_use_nnue) {
-        eval_set_use_nnue(true);
-        load_nnue_files(state, state->eval_file, state->eval_file_small, true);
-        state->nnue_initialized = 1;
-    }
+    eval_set_use_nnue(true);
+    load_nnue_files(state, state->eval_file, state->eval_file_small, true);
+    state->nnue_initialized = 1;
 
     bench_run(state->context, &limits);
 

@@ -3,21 +3,22 @@
 #include <system_error>
 
 #ifdef _WIN32
-#include <windows.h>
+  #include <windows.h>
 #else
-#include <unistd.h>
-#include <sys/types.h>
+  #include <unistd.h>
 #endif
 
 namespace {
 namespace fs = std::filesystem;
 
-fs::path canonical_or_empty(const fs::path& p) {
+static bool exists_file(const fs::path& p) {
   std::error_code ec;
-  fs::path canonical = fs::canonical(p, ec);
-  if (ec) {
-    canonical = fs::weakly_canonical(p, ec);
-  }
+  return fs::is_regular_file(p, ec);
+}
+
+static fs::path weakly_canonical_or_empty(const fs::path& p) {
+  std::error_code ec;
+  auto canonical = fs::weakly_canonical(p, ec);
   if (ec) {
     canonical = fs::absolute(p, ec);
   }
@@ -27,40 +28,21 @@ fs::path canonical_or_empty(const fs::path& p) {
   return canonical;
 }
 
-bool exists_file(const fs::path& p) {
-  std::error_code ec;
-  return fs::is_regular_file(p, ec);
-}
-
 }  // namespace
 
 namespace util {
 
 fs::path exe_dir() {
 #ifdef _WIN32
-  char buf[MAX_PATH] = {0};
-  DWORD len = GetModuleFileNameA(nullptr, buf, MAX_PATH);
-  if (len == 0 || len >= MAX_PATH) {
-    std::error_code ec;
-    return fs::current_path(ec);
-  }
-  fs::path exe_path(buf);
-  fs::path canon = canonical_or_empty(exe_path);
-  if (canon.empty()) {
-    return exe_path.parent_path();
-  }
-  return canon.parent_path();
+  char buf[MAX_PATH]{};
+  GetModuleFileNameA(nullptr, buf, MAX_PATH);
+  return weakly_canonical_or_empty(fs::path(buf)).parent_path();
 #else
-  char buf[4096] = {0};
+  char buf[4096]{};
   ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-  if (n > 0 && n < static_cast<ssize_t>(sizeof(buf))) {
+  if (n > 0) {
     buf[n] = '\0';
-    fs::path exe_path(buf);
-    fs::path canon = canonical_or_empty(exe_path);
-    if (!canon.empty()) {
-      return canon.parent_path();
-    }
-    return exe_path.parent_path();
+    return weakly_canonical_or_empty(fs::path(buf)).parent_path();
   }
   std::error_code ec;
   return fs::current_path(ec);
@@ -68,34 +50,26 @@ fs::path exe_dir() {
 }
 
 fs::path resolve_resource(const std::string& relOrAbs) {
-  if (relOrAbs.empty()) {
-    return {};
-  }
-
-  fs::path candidate(relOrAbs);
-  if (exists_file(candidate)) {
-    return canonical_or_empty(candidate);
+  fs::path p(relOrAbs);
+  if (exists_file(p)) {
+    return weakly_canonical_or_empty(p);
   }
 
   const fs::path base = exe_dir();
-  const fs::path base_candidates[] = {
-      base / relOrAbs,
-      base / ".." / relOrAbs,
-  };
 
-  for (const fs::path& try_path : base_candidates) {
-    if (exists_file(try_path)) {
-      return canonical_or_empty(try_path);
-    }
+  fs::path try1 = base / p;
+  if (exists_file(try1)) {
+    return weakly_canonical_or_empty(try1);
   }
 
-  std::error_code cwd_ec;
-  fs::path cwd = fs::current_path(cwd_ec);
-  if (!cwd_ec) {
-    fs::path cwd_candidate = cwd / relOrAbs;
-    if (exists_file(cwd_candidate)) {
-      return canonical_or_empty(cwd_candidate);
-    }
+  fs::path try2 = base / ".." / p;
+  if (exists_file(try2)) {
+    return weakly_canonical_or_empty(try2);
+  }
+
+  fs::path try3 = fs::current_path() / p;
+  if (exists_file(try3)) {
+    return weakly_canonical_or_empty(try3);
   }
 
   return {};
@@ -131,4 +105,3 @@ const char* util_resolve_resource_cstr(const char* rel_or_abs) {
 }
 
 }  // extern "C"
-
