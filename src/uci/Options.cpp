@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <string>
 #include <utility>
+#include <vector>
 
 Options OptionsMap;
 
@@ -46,5 +47,21 @@ void Options::set(const std::string& name, const std::string& value) {
     }
   }
   if (o.on_change) o.on_change();
+}
+
+void Options::printUci() const {
+  std::vector<std::string> keys;
+  keys.reserve(size());
+  for (const auto& entry : *this) {
+    keys.push_back(entry.first);
+  }
+  std::sort(keys.begin(), keys.end());
+
+  for (const auto& key : keys) {
+    const auto it = find(key);
+    if (it != end()) {
+      std::cout << it->second.uciDecl(key) << "\n";
+    }
+  }
 }
 
