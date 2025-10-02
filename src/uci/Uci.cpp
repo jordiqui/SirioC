@@ -4,6 +4,10 @@
 #include "../eval.h"
 #include "../nn/nnue.h"
 
+extern "C" {
+#include "../nn/nnue_paths.h"
+}
+
 #include "files/fen.h"
 #include "pyrrhic/bench.hpp"
 #include "pyrrhic/board.h"
@@ -122,12 +126,22 @@ void configure_threads(int requested) {
 std::filesystem::path resolve_nnue(const std::string& userPath) {
   namespace fs = std::filesystem;
 
+  std::string query = trim(userPath);
+  if (!query.empty() && query.front() == '<' && query.back() == '>') {
+    query = trim(query.substr(1, query.size() - 2));
+  }
+  if (query == "<default>" || query == "<empty>") {
+    query.clear();
+  }
+  if (query.empty()) {
+    query = kDefaultEvalFile;
+  }
   const auto exe = pathutil::exe_dir();
   std::error_code ec;
   const auto cwd = fs::current_path(ec);
 
   std::vector<fs::path> candidates;
-  const fs::path user(userPath);
+  const fs::path user(query);
 
   if (!user.empty()) {
     candidates.push_back(user);
@@ -150,29 +164,42 @@ std::filesystem::path resolve_nnue(const std::string& userPath) {
     }
   }
 
-  const fs::path default_relative = fs::path("resources") / "nn-1c0000000000.nnue";
-
   if (!g_engine_dir.empty()) {
     fs::path probe = g_engine_dir;
     for (int depth = 0; depth < 5 && !probe.empty(); ++depth) {
-      candidates.push_back(probe / default_relative);
+      candidates.push_back(probe / user);
+      candidates.push_back(probe / "resources" / user);
       probe = probe.parent_path();
     }
   }
 
-  if (!cwd.empty()) candidates.push_back(cwd / default_relative);
+  if (!cwd.empty()) {
+    candidates.push_back(cwd / fs::path("resources") / user);
+  }
 
   fs::path exe_probe = exe;
   for (int depth = 0; depth < 5 && !exe_probe.empty(); ++depth) {
-    candidates.push_back(exe_probe / default_relative);
+    candidates.push_back(exe_probe / fs::path("resources") / user);
     exe_probe = exe_probe.parent_path();
   }
 
-  return pathutil::first_existing(candidates);
+  auto resolved = pathutil::first_existing(candidates);
+  if (!resolved.empty()) {
+    return resolved;
+  }
+
+  char buffer[4096];
+  if (sirio_nnue_locate(query.c_str(), buffer, sizeof(buffer))) {
+    return fs::path(buffer);
+  }
+
+  return {};
 }
 
 void try_load_secondary_nnue() {
-  if (g_nnue.secondary.empty()) {
+  const std::string requested = g_nnue.secondary.empty() ? kDefaultEvalFileSmall : g_nnue.secondary;
+
+  if (requested.empty()) {
     if (g_secondary_loaded) {
       eval_load_small_network(nullptr);
       g_secondary_loaded = false;
@@ -181,9 +208,9 @@ void try_load_secondary_nnue() {
     return;
   }
 
-  const auto resolved = resolve_nnue(g_nnue.secondary);
+  const auto resolved = resolve_nnue(requested);
   if (resolved.empty()) {
-    std::cout << "info string NNUE secondary file not found for EvalFileSmall=" << g_nnue.secondary
+    std::cout << "info string NNUE secondary file not found for EvalFileSmall=" << requested
               << "; using material eval\n";
     eval_load_small_network(nullptr);
     g_secondary_loaded = false;
@@ -221,6 +248,14 @@ void try_load_nnue() {
 
   const auto resolved = resolve_nnue(g_nnue.primary);
   if (resolved.empty()) {
+    if (nnue::has_embedded_default() && nnue::load_default()) {
+      g_nnue.loaded = true;
+      g_loaded_nnue_path.clear();
+      std::cout << "info string NNUE evaluation using embedded default network\n";
+      try_load_secondary_nnue();
+      return;
+    }
+
     std::cout << "info string NNUE: file not found for EvalFile="
               << (g_nnue.primary.empty() ? std::string{"<default>"} : g_nnue.primary)
               << "; using material eval\n";
@@ -233,6 +268,14 @@ void try_load_nnue() {
 
   const bool loaded = nnue::load(resolved.string());
   if (!loaded) {
+    if (nnue::has_embedded_default() && nnue::load_default()) {
+      g_nnue.loaded = true;
+      g_loaded_nnue_path.clear();
+      std::cout << "info string NNUE evaluation using embedded default network\n";
+      try_load_secondary_nnue();
+      return;
+    }
+
     std::cout << "info string NNUE: failed to load " << resolved.string() << "; using material eval\n";
     nnue::reset();
     g_nnue.loaded = false;

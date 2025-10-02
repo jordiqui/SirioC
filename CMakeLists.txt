@@ -35,6 +35,7 @@ add_library(sirio_core
     src/files/fen.cpp
     src/files/pgn_loader.cpp
     src/nn/evaluator.cpp
+    src/nn/nnue_paths.c
     src/nn/nnue_loader.cpp
     src/pyrrhic/board.cpp
     src/pyrrhic/engine.cpp
@@ -164,6 +165,7 @@ set(SIRIOC_C_ENGINE_SOURCES
     src/util/path.cpp
     src/nn/accumulator.c
     src/nn/evaluate.c
+    src/nn/nnue_paths.c
     src/zobrist.cpp
     vendor/fathom/tbprobe.c
 )
