@@ -27,6 +27,10 @@ void transposition_store(TranspositionTable* table, uint64_t key, Value value, M
     }
     size_t index = key % table->size;
     TranspositionEntry* entry = &table->entries[index];
+    if (entry->key != key && entry->key != 0 && entry->depth > depth) {
+        return;
+    }
+
     entry->key = key;
     entry->value = value;
     entry->best_move = move;

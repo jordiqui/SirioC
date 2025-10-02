@@ -1,5 +1,10 @@
 CC ?= gcc
+CXX ?= g++
 CFLAGS ?= -O2 -std=c11
+CXXFLAGS ?= -O2 -std=c++20
+CFLAGS += -I../vendor/fathom
+CXXFLAGS += -I../vendor/fathom
+
 SRCS = \
     attacks.c \
     bench.c \
@@ -20,14 +25,25 @@ SRCS = \
     transposition.c \
     uci.c \
     util.c \
-    zobrist.c \
     nn/accumulator.c \
     nn/evaluate.c
 
-OBJS = $(SRCS:.c=.o)
+CPPSRCS = \
+    zobrist.cpp
+
+VENDOR_SRCS = \
+    ../vendor/fathom/tbprobe.c
+
+OBJS = $(SRCS:.c=.o) $(CPPSRCS:.cpp=.o) $(VENDOR_SRCS:../vendor/fathom/%.c=%.fathom.o)
+
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+%.fathom.o: ../vendor/fathom/%.c
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 SirioC-0.1.0: $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $(OBJS)
+	$(CXX) $(CFLAGS) $(CXXFLAGS) -o $@ $(OBJS)
 
 bench: SirioC-0.1.0
 	@printf "uci\nisready\nucinewgame\nposition startpos\ngo depth 1\nquit\n" | ./SirioC-0.1.0 --uci > .sirio_bench.log

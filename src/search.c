@@ -3,6 +3,7 @@
 #include "board.h"
 #include "move.h"
 #include "movepick.h"
+#include "tb.h"
 
 #include <time.h>
 
@@ -47,15 +48,64 @@ static Value search_alpha_beta(SearchContext* context, int depth, Value alpha, V
         return eval_position(context->board);
     }
 
+    const uint64_t position_key = context->board ? context->board->zobrist_key : 0ULL;
+    Value original_alpha = alpha;
+    Value original_beta = beta;
+
+    if (depth >= tb_get_probe_depth()) {
+        Value tb_value = tb_probe(context->board);
+        if (tb_value != VALUE_NONE) {
+            if (context->tt) {
+                Move null_move = move_create(0, 0, PIECE_NONE, PIECE_NONE, PIECE_NONE, 0);
+                transposition_store(context->tt, position_key, tb_value, null_move, depth, TT_FLAG_EXACT);
+            }
+            return tb_value;
+        }
+    }
+
+    const TranspositionEntry* entry = NULL;
+    if (context->tt) {
+        entry = transposition_probe(context->tt, position_key);
+        if (entry && entry->depth >= depth) {
+            if (entry->flags == TT_FLAG_EXACT) {
+                return entry->value;
+            }
+            if (entry->flags == TT_FLAG_LOWER && entry->value > alpha) {
+                alpha = entry->value;
+            } else if (entry->flags == TT_FLAG_UPPER && entry->value < beta) {
+                beta = entry->value;
+            }
+            if (alpha >= beta) {
+                return entry->value;
+            }
+        }
+    }
+
     MoveList moves;
     movegen_generate_legal_moves(context->board, &moves);
     if (moves.size == 0) {
         return eval_position(context->board);
     }
 
+    if (entry && !move_is_null(&entry->best_move)) {
+        for (size_t i = 0; i < moves.size; ++i) {
+            Move* current = &moves.moves[i];
+            if (current->from == entry->best_move.from && current->to == entry->best_move.to &&
+                current->piece == entry->best_move.piece && current->promotion == entry->best_move.promotion) {
+                if (i != 0) {
+                    Move temp = moves.moves[0];
+                    moves.moves[0] = *current;
+                    *current = temp;
+                }
+                break;
+            }
+        }
+    }
+
     movepick_sort(&moves);
 
     Value best = -VALUE_INFINITE;
+    Move best_move = move_create(0, 0, PIECE_NONE, PIECE_NONE, PIECE_NONE, 0);
     for (size_t i = 0; i < moves.size; ++i) {
         Move move = moves.moves[i];
         board_make_move(context->board, &move);
@@ -64,6 +114,7 @@ static Value search_alpha_beta(SearchContext* context, int depth, Value alpha, V
 
         if (score > best) {
             best = score;
+            best_move = move;
         }
         if (score > alpha) {
             alpha = score;
@@ -76,6 +127,16 @@ static Value search_alpha_beta(SearchContext* context, int depth, Value alpha, V
         }
     }
 
+    if (context->tt) {
+        int flag = TT_FLAG_EXACT;
+        if (best <= original_alpha) {
+            flag = TT_FLAG_UPPER;
+        } else if (best >= original_beta) {
+            flag = TT_FLAG_LOWER;
+        }
+        transposition_store(context->tt, position_key, best, best_move, depth, flag);
+    }
+
     return best;
 }
 
@@ -85,6 +146,7 @@ void search_init(SearchContext* context, Board* board, TranspositionTable* tt, H
     }
     context->board = board;
     context->history = history;
+    context->tt = tt;
     context->best_value = VALUE_NONE;
     context->best_move = move_create(0, 0, PIECE_NONE, PIECE_NONE, PIECE_NONE, 0);
     context->pv_count = 0;
@@ -95,7 +157,6 @@ void search_init(SearchContext* context, Board* board, TranspositionTable* tt, H
     context->nodes = 0;
     context->depth_completed = 0;
     context->last_search_time_ms = 0;
-    (void)tt;
 }
 
 static int search_max_depth(const SearchLimits* limits) {
@@ -187,6 +248,24 @@ Value search_root(SearchContext* context, int depth, Value alpha, Value beta) {
         return context->best_value;
     }
 
+    const uint64_t position_key = context->board ? context->board->zobrist_key : 0ULL;
+
+    if (depth >= tb_get_probe_depth()) {
+        Move tb_move = move_create(0, 0, PIECE_NONE, PIECE_NONE, PIECE_NONE, 0);
+        Value tb_value = VALUE_NONE;
+        if (tb_probe_root_position(context->board, &tb_move, &tb_value)) {
+            context->best_move = tb_move;
+            context->best_value = tb_value;
+            context->pv_count = 1;
+            context->pv_moves[0] = tb_move;
+            context->pv_values[0] = tb_value;
+            if (context->tt) {
+                transposition_store(context->tt, position_key, tb_value, tb_move, depth, TT_FLAG_EXACT);
+            }
+            return tb_value;
+        }
+    }
+
     Value original_alpha = alpha;
     Value original_beta = beta;
 
@@ -197,6 +276,22 @@ Value search_root(SearchContext* context, int depth, Value alpha, Value beta) {
 
     RootEntry entries[256];
     size_t entry_count = 0;
+
+    const TranspositionEntry* tt_entry = context->tt ? transposition_probe(context->tt, position_key) : NULL;
+    if (tt_entry && !move_is_null(&tt_entry->best_move)) {
+        for (size_t i = 0; i < moves.size; ++i) {
+            Move* current = &moves.moves[i];
+            if (current->from == tt_entry->best_move.from && current->to == tt_entry->best_move.to &&
+                current->piece == tt_entry->best_move.piece && current->promotion == tt_entry->best_move.promotion) {
+                if (i != 0) {
+                    Move temp = moves.moves[0];
+                    moves.moves[0] = *current;
+                    *current = temp;
+                }
+                break;
+            }
+        }
+    }
 
     Value best_score = -VALUE_INFINITE;
     Move best_move = move_create(0, 0, PIECE_NONE, PIECE_NONE, PIECE_NONE, 0);
@@ -250,6 +345,16 @@ Value search_root(SearchContext* context, int depth, Value alpha, Value beta) {
 
     context->best_move = best_move;
     context->best_value = best_score;
+
+    if (context->tt) {
+        int flag = TT_FLAG_EXACT;
+        if (best_score <= original_alpha) {
+            flag = TT_FLAG_UPPER;
+        } else if (best_score >= original_beta) {
+            flag = TT_FLAG_LOWER;
+        }
+        transposition_store(context->tt, position_key, best_score, best_move, depth, flag);
+    }
 
     if (best_score <= original_alpha) {
         return original_alpha;
