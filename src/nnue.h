@@ -85,4 +85,6 @@ namespace NNUE {
   void loadWeights();
 
   Score evaluate(Position& pos, Accumulator& accumulator);
+
+  bool usingMaterialFallback();
 }

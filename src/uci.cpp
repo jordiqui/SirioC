@@ -90,6 +90,10 @@ namespace {
 
     newGame();
 
+    if (NNUE::usingMaterialFallback())
+      std::cerr << "info string bench: running without NNUE weights; place '" << EvalFile
+                << "' next to the executable or set the EvalFile option for optimal speed." << std::endl;
+
     for (int i = 0; i < posCount; i++)
     {
       Search::Settings searchSettings;
@@ -273,7 +277,7 @@ void UCI::loop(int argc, char* argv[]) {
 
     else if (token == "uci") {
       std::cout << "id name SirioC " << engineVersion
-        << "\nid author Gabriele Lombardo"
+        << "\nid author Jorge Ruiz (credits: Codex ChatGPT)"
         << Options
         << "\n" << paramsToUci()
         << "uciok" << std::endl;
