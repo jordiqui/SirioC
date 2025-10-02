@@ -1,3 +1,5 @@
+#include "files/fen.h"
+#include "files/pgn_loader.h"
 #include "pyrrhic/engine.h"
 #include "uci/Uci.h"
 
@@ -104,20 +106,39 @@ int main(int argc, char* argv[]) {
         }
         if (arg == "--fen" && index + 1 < argc) {
             const std::string fen = decode_fen_argument(argv[++index]);
+#if defined(__cpp_exceptions)
             try {
                 engine.set_position(fen);
             } catch (const std::exception& error) {
                 std::cerr << "Failed to parse FEN: " << error.what() << std::endl;
                 return 1;
             }
+#else
+            std::string error;
+            if (!sirio::files::try_parse_fen(fen, &error)) {
+                std::cerr << "Failed to parse FEN: " << error << std::endl;
+                return 1;
+            }
+            engine.set_position(fen);
+#endif
         } else if (arg == "--pgn" && index + 1 < argc) {
             const std::string path = argv[++index];
+#if defined(__cpp_exceptions)
             try {
                 engine.load_game_from_file(path);
             } catch (const std::exception& error) {
                 std::cerr << "Failed to load PGN: " << error.what() << std::endl;
                 return 1;
             }
+#else
+            std::string error;
+            auto game = sirio::files::try_load_pgn_from_file(path, &error);
+            if (!game.has_value()) {
+                std::cerr << "Failed to load PGN: " << error << std::endl;
+                return 1;
+            }
+            engine.load_game(*game);
+#endif
         } else if (arg == "--print") {
             std::cout << engine.board().pretty();
             run_cli = false;

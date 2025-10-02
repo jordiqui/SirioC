@@ -3,16 +3,20 @@
 #include "pyrrhic/types.h"
 
 #include <cctype>
+#include <charconv>
+#include <cstdio>
+#include <cstdlib>
 #include <sstream>
-#include <stdexcept>
 #include <string>
+#include <system_error>
 #include <vector>
 
 namespace sirio::files {
 
 namespace {
 
-void parse_piece_placement(const std::string& placement, pyrrhic::Board& board) {
+bool parse_piece_placement(const std::string& placement, pyrrhic::Board& board,
+                           std::string& error) {
     int rank = 7;
     int file = 0;
     for (char symbol : placement) {
@@ -29,35 +33,73 @@ void parse_piece_placement(const std::string& placement, pyrrhic::Board& board) 
 
         const auto piece = pyrrhic::piece_from_char(symbol);
         if (!piece.has_value()) {
-            throw std::runtime_error("Invalid piece symbol in FEN");
+            error = "Invalid piece symbol in FEN";
+            return false;
         }
+
+        if (file < 0 || file > 7 || rank < 0 || rank > 7) {
+            error = "Invalid piece placement coordinates";
+            return false;
+        }
+
         const int square = pyrrhic::make_square(file, rank);
         board.set_piece(square, piece);
         ++file;
     }
+
+    return true;
 }
 
-std::optional<int> parse_en_passant(const std::string& token) {
+bool parse_en_passant(const std::string& token, std::optional<int>& square, std::string& error) {
     if (token == "-" || token.empty()) {
-        return std::nullopt;
+        square.reset();
+        return true;
     }
 
     if (token.size() != 2) {
-        throw std::runtime_error("Invalid en passant square in FEN");
+        error = "Invalid en passant square in FEN";
+        return false;
     }
 
     const int file = token[0] - 'a';
     const int rank = token[1] - '1';
     if (file < 0 || file > 7 || rank < 0 || rank > 7) {
-        throw std::runtime_error("Invalid en passant coordinates");
+        error = "Invalid en passant coordinates";
+        return false;
     }
 
-    return pyrrhic::make_square(file, rank);
+    square = pyrrhic::make_square(file, rank);
+    return true;
+}
+
+bool parse_integer_field(const std::string& token, int& value, std::string& error) {
+    if (token.empty()) {
+        error = "Empty integer field in FEN";
+        return false;
+    }
+
+    int result = 0;
+    const char* begin = token.data();
+    const char* end = begin + token.size();
+    const auto parsed = std::from_chars(begin, end, result);
+    if (parsed.ec != std::errc{} || parsed.ptr != end) {
+        error = "Invalid integer field in FEN";
+        return false;
+    }
+
+    value = result;
+    return true;
+}
+
+void assign_error(std::string* output, const std::string& error) {
+    if (output) {
+        *output = error;
+    }
 }
 
 }  // namespace
 
-pyrrhic::Board parse_fen(const std::string& fen) {
+std::optional<pyrrhic::Board> try_parse_fen(const std::string& fen, std::string* error_message) {
     std::istringstream stream(fen);
     std::vector<std::string> tokens;
     std::string token;
@@ -66,25 +108,71 @@ pyrrhic::Board parse_fen(const std::string& fen) {
     }
 
     if (tokens.size() < 4) {
-        throw std::runtime_error("FEN string must contain at least four fields");
+        assign_error(error_message, "FEN string must contain at least four fields");
+        return std::nullopt;
     }
 
     pyrrhic::Board board;
     board.clear();
-    parse_piece_placement(tokens[0], board);
 
-    board.set_side_to_move(tokens[1] == "b" ? pyrrhic::Color::Black : pyrrhic::Color::White);
+    std::string error;
+    if (!parse_piece_placement(tokens[0], board, error)) {
+        assign_error(error_message, error);
+        return std::nullopt;
+    }
+
+    if (tokens[1] == "b") {
+        board.set_side_to_move(pyrrhic::Color::Black);
+    } else if (tokens[1] == "w") {
+        board.set_side_to_move(pyrrhic::Color::White);
+    } else {
+        assign_error(error_message, "Invalid side to move in FEN");
+        return std::nullopt;
+    }
+
     board.set_castling_rights(tokens[2]);
-    board.set_en_passant_square(parse_en_passant(tokens[3]));
+
+    std::optional<int> en_passant_square;
+    if (!parse_en_passant(tokens[3], en_passant_square, error)) {
+        assign_error(error_message, error);
+        return std::nullopt;
+    }
+    board.set_en_passant_square(en_passant_square);
 
     if (tokens.size() >= 5) {
-        board.set_halfmove_clock(std::stoi(tokens[4]));
+        int halfmove = 0;
+        if (!parse_integer_field(tokens[4], halfmove, error)) {
+            assign_error(error_message, error);
+            return std::nullopt;
+        }
+        board.set_halfmove_clock(halfmove);
     }
+
     if (tokens.size() >= 6) {
-        board.set_fullmove_number(std::stoi(tokens[5]));
+        int fullmove = 0;
+        if (!parse_integer_field(tokens[5], fullmove, error)) {
+            assign_error(error_message, error);
+            return std::nullopt;
+        }
+        board.set_fullmove_number(fullmove);
     }
 
     return board;
+}
+
+pyrrhic::Board parse_fen(const std::string& fen) {
+    std::string error;
+    auto board = try_parse_fen(fen, &error);
+    if (board.has_value()) {
+        return *board;
+    }
+
+#if defined(__cpp_exceptions)
+    throw std::runtime_error(error);
+#else
+    std::fprintf(stderr, "FEN parse error: %s\n", error.c_str());
+    std::abort();
+#endif
 }
 
 std::string to_fen(const pyrrhic::Board& board) {

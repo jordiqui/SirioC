@@ -181,12 +181,22 @@ void Engine::run_cli(std::istream& input, std::ostream& output) {
             std::string fen;
             std::getline(command, fen);
             fen = trim(fen);
+#if defined(__cpp_exceptions)
             try {
                 set_position(fen);
                 output << "Position updated." << std::endl;
             } catch (const std::exception& error) {
                 output << "Failed to parse FEN: " << error.what() << std::endl;
             }
+#else
+            std::string error;
+            if (!sirio::files::try_parse_fen(fen, &error)) {
+                output << "Failed to parse FEN: " << error << std::endl;
+            } else {
+                set_position(fen);
+                output << "Position updated." << std::endl;
+            }
+#endif
             continue;
         }
 
@@ -240,12 +250,23 @@ void Engine::run_cli(std::istream& input, std::ostream& output) {
         if (token == "load") {
             std::string path;
             command >> path;
+#if defined(__cpp_exceptions)
             try {
                 load_game_from_file(path);
                 output << "Loaded PGN with " << game_.moves.size() << " moves." << std::endl;
             } catch (const std::exception& error) {
                 output << "Failed to load PGN: " << error.what() << std::endl;
             }
+#else
+            std::string error;
+            auto game = sirio::files::try_load_pgn_from_file(path, &error);
+            if (!game.has_value()) {
+                output << "Failed to load PGN: " << error << std::endl;
+            } else {
+                load_game(*game);
+                output << "Loaded PGN with " << game_.moves.size() << " moves." << std::endl;
+            }
+#endif
             continue;
         }
 
