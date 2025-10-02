@@ -4,7 +4,7 @@ else
         EXE := SirioC
 endif
 
-DEFAULT_NET = nn-6877cd24400e.nnue
+DEFAULT_NET = nn-1c0000000000.nnue
 DOWNLOAD_BASE_URL = https://raw.githubusercontent.com/official-stockfish/networks/master
 
 ifndef EVALFILE

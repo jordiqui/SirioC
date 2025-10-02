@@ -20,7 +20,7 @@ You can remove the `nopgo` flag to enable profile guided optimization.
 ## Neural network
 SirioC evaluates positions with a neural network trained on Lc0 data using the fastchess training framework.
 
-If the engine prints `info string NNUE: no network found`, download the default weights with `make download-net` or place the requested `.nnue/.bin` file (default: `nn-6877cd24400e.nnue`) next to the executable and/or set the `EvalFile` UCI option. The `make download-net` helper fetches networks from the [official Stockfish networks repository](https://github.com/official-stockfish/networks), so you can override `EVALFILE` to any other filename published there. Running the engine without weights falls back to a simple material evaluation and bench performance will be noticeably slower.
+If the engine prints `info string NNUE: no network found`, download the default weights with `make download-net` or place the requested `.nnue/.bin` file (default: `nn-1c0000000000.nnue`) next to the executable and/or set the `EvalFile` UCI option. The `make download-net` helper fetches networks from the [official Stockfish networks repository](https://github.com/official-stockfish/networks), so you can override `EVALFILE` to any other filename published there. Running the engine without weights falls back to a simple material evaluation and bench performance will be noticeably slower.
 
 
 ## Credits
