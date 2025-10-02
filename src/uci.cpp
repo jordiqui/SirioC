@@ -15,6 +15,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <limits>
 
 namespace {
 
@@ -234,12 +235,29 @@ void UCI::loop(int argc, char* argv[]) {
   Position pos;
   pos.setToFen(StartFEN);
 
+  bool receivedInteractiveInput = argc > 1;
+  bool autoBenchPending = false;
+  bool autoBenchDone = false;
+
   for (int i = 1; i < argc; ++i)
     cmd += std::string(argv[i]) + " ";
 
   do {
-    if (argc == 1 && !std::getline(std::cin, cmd))
-      cmd = "quit";
+    if (argc == 1)
+    {
+      if (std::getline(std::cin, cmd))
+        receivedInteractiveInput = true;
+      else
+      {
+        if (!receivedInteractiveInput && !autoBenchDone)
+        {
+          autoBenchPending = true;
+          cmd = "bench";
+        }
+        else
+          cmd = "quit";
+      }
+    }
 
     std::istringstream is(cmd);
 
@@ -261,7 +279,22 @@ void UCI::loop(int argc, char* argv[]) {
         << "uciok" << std::endl;
     }
     else if (token == "qc")         qc(pos);
-    else if (token == "bench")      bench();
+    else if (token == "bench")
+    {
+      bench();
+
+      if (autoBenchPending)
+      {
+        autoBenchPending = false;
+        autoBenchDone = true;
+
+#ifdef _WIN32
+        std::cin.clear();
+        std::cout << std::endl << "Press Enter to exit..." << std::endl;
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+#endif
+      }
+    }
     else if (token == "benccch")      benccch(is);
     else if (token == "setoption")  setoption(is);
     else if (token == "go")         go(pos, is);
