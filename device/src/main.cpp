@@ -1,4 +1,4 @@
-// Obsidian.cpp : This file contains the 'main' function. Program execution begins and ends there.
+// SirioC.cpp : This file contains the 'main' function. Program execution begins and ends there.
 //
 
 #include "cuckoo.h"
@@ -13,7 +13,7 @@
 
 int main(int argc, char** argv)
 {
-  std::cout << "Obsidian " << engineVersion << " by Gabriele Lombardo" << std::endl;
+  std::cout << "SirioC " << engineVersion << " by Codex Chatgpt" << std::endl;
 
   Zobrist::init();
 

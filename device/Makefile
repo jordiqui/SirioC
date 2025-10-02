@@ -1,7 +1,7 @@
 ifeq ($(OS),Windows_NT)
-	EXE := Obsidian.exe
+        EXE := SirioC.exe
 else
-	EXE := Obsidian
+        EXE := SirioC
 endif
 
 DEFAULT_NET = net89perm.bin
@@ -72,17 +72,17 @@ endif
 	gcc $(FLAGS) -c $< -o $@
 
 make: download-net $(FILES)
-	g++ $(FLAGS) $(FILES) -o $(EXE) -fprofile-generate="obs_pgo"
+        g++ $(FLAGS) $(FILES) -o $(EXE) -fprofile-generate="sirio_pgo"
 ifeq ($(OS),Windows_NT)
-	$(EXE) bench
+        $(EXE) bench
 else
-	./$(EXE) bench
+        ./$(EXE) bench
 endif
-	g++ $(FLAGS) $(FILES) -o $(EXE) -fprofile-use="obs_pgo"
+        g++ $(FLAGS) $(FILES) -o $(EXE) -fprofile-use="sirio_pgo"
 ifeq ($(OS),Windows_NT)
-	powershell.exe -Command "Remove-Item -Recurse -Force obs_pgo"
+        powershell.exe -Command "Remove-Item -Recurse -Force sirio_pgo"
 else
-	rm -rf obs_pgo
+        rm -rf sirio_pgo
 endif
 
 nopgo: download-net $(OBJS)
@@ -97,6 +97,6 @@ ifdef DOWNLOAD_NET
 		echo "File $(EVALFILE) already exists, skipping download."; \
 	else \
 		echo Downloading net; \
-		curl -sOL https://github.com/gab8192/Obsidian-nets/releases/download/nets/$(EVALFILE); \
-	fi
+                curl -sOL https://github.com/gab8192/SirioC-nets/releases/download/nets/$(EVALFILE); \
+        fi
 endif
