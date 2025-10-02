@@ -5,7 +5,7 @@ You can find the latest news, binaries and documentation on the official website
 
 ## Building
 ```
-git clone https://github.com/gab8192/SirioC
+git clone https://github.com/jordiqui/SirioC -b device
 cd SirioC
 make -j nopgo build=ARCH
 ```
@@ -18,7 +18,7 @@ SirioC evaluates positions with a neural network trained on Lc0 data using the f
 
 
 ## Credits
-* Credits to Codex Chatgpt for ongoing development support.
+* Credits to Codex ChatGPT and to the anonymous users who test the engine on their hardware.
 * To Styxdoto (or Styx), he has an incredible machine with 128 threads and he has donated CPU time
 * To Witek902, for letting me in his OpenBench instance, allowing me to use massive hardware for my tests
 * To fireandice, for training the neural network of SirioC 9.0
