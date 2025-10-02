@@ -2,24 +2,14 @@
 
 #include "board.h"
 #include "move.h"
+#include "util/path.h"
 
 #include <ctype.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef _WIN32
-#include <windows.h>
-#elif defined(__APPLE__)
-#include <mach-o/dyld.h>
-#include <unistd.h>
-#else
-#include <unistd.h>
-#endif
-
-#ifndef PATH_MAX
-#define PATH_MAX 4096
-#endif
+#include <time.h>
 
 static void bench_trim(char* text) {
     if (!text) {
@@ -40,52 +30,6 @@ static void bench_trim(char* text) {
     if (start != text) {
         memmove(text, start, strlen(start) + 1);
     }
-}
-
-static int bench_get_executable_directory(char* buffer, size_t size) {
-    if (!buffer || size == 0) {
-        return 0;
-    }
-#ifdef _WIN32
-    DWORD length = GetModuleFileNameA(NULL, buffer, (DWORD)size);
-    if (length == 0 || length >= size) {
-        return 0;
-    }
-    while (length > 0) {
-        char c = buffer[length - 1];
-        if (c == '\\' || c == '/') {
-            buffer[length - 1] = '\0';
-            return 1;
-        }
-        --length;
-    }
-    buffer[0] = '\0';
-    return 0;
-#elif defined(__APPLE__)
-    uint32_t path_size = (uint32_t)size;
-    if (_NSGetExecutablePath(buffer, &path_size) != 0 || path_size == 0) {
-        return 0;
-    }
-    buffer[path_size] = '\0';
-    char* slash = strrchr(buffer, '/');
-    if (!slash) {
-        return 0;
-    }
-    *slash = '\0';
-    return 1;
-#else
-    ssize_t length = readlink("/proc/self/exe", buffer, size - 1);
-    if (length <= 0 || (size_t)length >= size) {
-        return 0;
-    }
-    buffer[length] = '\0';
-    char* slash = strrchr(buffer, '/');
-    if (!slash) {
-        return 0;
-    }
-    *slash = '\0';
-    return 1;
-#endif
 }
 
 void bench_run(SearchContext* context, const SearchLimits* limits) {
@@ -109,49 +53,19 @@ void bench_run(SearchContext* context, const SearchLimits* limits) {
         bench_limits = *limits;
     }
 
-    const char* paths[] = {
-        "resources/bench.fens",
-        "./resources/bench.fens",
-        "../resources/bench.fens",
-        "../../resources/bench.fens",
-        "../../../resources/bench.fens",
-    };
-    FILE* file = NULL;
-    for (size_t i = 0; i < sizeof(paths) / sizeof(paths[0]); ++i) {
-        file = fopen(paths[i], "r");
-        if (file) {
-            break;
-        }
-    }
-
-    if (!file) {
-        char exe_dir[PATH_MAX];
-        if (bench_get_executable_directory(exe_dir, sizeof(exe_dir))) {
-            const char* suffixes[] = { "resources/bench.fens",
-                                       "../resources/bench.fens",
-                                       "../../resources/bench.fens" };
-            for (size_t i = 0; i < sizeof(suffixes) / sizeof(suffixes[0]); ++i) {
-                char candidate[PATH_MAX];
-                int written = snprintf(candidate, sizeof(candidate), "%s/%s", exe_dir, suffixes[i]);
-                if (written > 0 && (size_t)written < sizeof(candidate)) {
-                    file = fopen(candidate, "r");
-                    if (file) {
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
+    const char* resolved_path = util_resolve_resource_cstr("resources/bench.fens");
+    FILE* file = resolved_path ? fopen(resolved_path, "r") : NULL;
     if (!file) {
         printf("info string Failed to open resources/bench.fens\n");
         fflush(stdout);
+        board_set_start_position(context->board);
         return;
     }
 
     uint64_t total_nodes = 0;
     uint64_t total_time = 0;
     int positions = 0;
+    clock_t bench_start = clock();
 
     char line[512];
     while (fgets(line, sizeof(line), file)) {
@@ -201,24 +115,26 @@ void bench_run(SearchContext* context, const SearchLimits* limits) {
 
     fclose(file);
 
-    if (positions == 0) {
-        printf("bench summary positions 0 time 0 nodes 0 nps 0\n");
-        fflush(stdout);
-        board_set_start_position(context->board);
-        return;
+    clock_t bench_end = clock();
+    uint64_t elapsed_ms = 0;
+    if (bench_end > bench_start) {
+        elapsed_ms = (uint64_t)((bench_end - bench_start) * 1000 / CLOCKS_PER_SEC);
+    }
+    if (elapsed_ms == 0) {
+        elapsed_ms = total_time;
+    }
+    if (elapsed_ms == 0) {
+        elapsed_ms = 1;
     }
 
-    if (total_time == 0) {
-        total_time = 1;
-    }
+    uint64_t nps = (total_nodes * 1000ULL) / elapsed_ms;
 
-    uint64_t nps = (total_nodes * 1000ULL) / total_time;
-
-    printf("bench summary positions %d time %" PRIu64 " nodes %" PRIu64 " nps %" PRIu64 "\n",
+    printf("info string bench: positions=%d nodes=%" PRIu64 " time=%" PRIu64 " nps=%" PRIu64 "\n",
            positions,
-           total_time,
            total_nodes,
+           elapsed_ms,
            nps);
+    printf("bestmove 0000\n");
     fflush(stdout);
 
     board_set_start_position(context->board);

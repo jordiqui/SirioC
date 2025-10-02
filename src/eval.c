@@ -121,7 +121,6 @@ static int load_legacy_material_weights(sirio_nn_model* model, const char* path)
         return 0;
     }
 
-    printf("info string Loaded legacy material weights from %s\n", path);
     return 1;
 }
 
@@ -325,11 +324,7 @@ int eval_load_network(const char* path) {
     if (!path || !*path) {
         return 0;
     }
-    int ok = sirio_nn_model_load(&g_eval_model, path);
-    if (ok) {
-        printf("info string Primary NNUE network loaded from %s\n", path);
-    }
-    return ok;
+    return sirio_nn_model_load(&g_eval_model, path);
 }
 
 int eval_load_network_from_buffer(const void* data, size_t size) {
@@ -349,14 +344,9 @@ int eval_load_small_network(const char* path) {
     if (!path || !*path) {
         sirio_nn_model_free(&g_small_model);
         sirio_nn_model_init(&g_small_model);
-        printf("info string Secondary NNUE network cleared\n");
         return 1;
     }
-    int ok = sirio_nn_model_load(&g_small_model, path);
-    if (ok) {
-        printf("info string Secondary NNUE network loaded from %s\n", path);
-    }
-    return ok;
+    return sirio_nn_model_load(&g_small_model, path);
 }
 
 void eval_set_use_nnue(bool use_nnue) {
