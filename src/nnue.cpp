@@ -207,6 +207,9 @@ namespace NNUE {
     }
   }
 
+  bool usingMaterialFallback() {
+    return useMaterialFallback;
+  }
 
   bool needRefresh(Color side, Square oldKing, Square newKing) {
     // Crossed half?
@@ -418,6 +421,8 @@ namespace NNUE {
       }
       useMaterialFallback = true;
       std::fprintf(stderr, "info string NNUE: no network found; using material eval.\n");
+      if (std::strlen(EvalFile))
+        std::fprintf(stderr, "info string NNUE: place %s next to the executable or set the EvalFile option.\n", EvalFile);
     }
   }
 

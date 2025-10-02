@@ -19,7 +19,7 @@ int main(int argc, char** argv)
   std::fprintf(stderr, "info string CPU features: %s\n", cpu.toString().c_str());
   requireSupportedOrExit(cpu);
 
-  std::cout << "SirioC " << engineVersion << " by Gabriele Lombardo" << std::endl;
+  std::cout << "SirioC " << engineVersion << " by Jorge Ruiz (credits: Codex ChatGPT)" << std::endl;
 
   Zobrist::init();
 
