@@ -47,6 +47,84 @@ static int try_load_network(sirio_nn_model* model, const char* primary, const ch
     return 0;
 }
 
+static int load_legacy_material_weights(sirio_nn_model* model, const char* path) {
+    if (!model || !path || !*path) {
+        return 0;
+    }
+
+    FILE* file = fopen(path, "r");
+    if (!file) {
+        return 0;
+    }
+
+    // Start from defaults so missing entries inherit sane values.
+    sirio_nn_model_init(model);
+
+    char line[256];
+    int seen_entry = 0;
+    while (fgets(line, sizeof(line), file)) {
+        char* cursor = line;
+        while (*cursor == ' ' || *cursor == '\t') {
+            ++cursor;
+        }
+        if (*cursor == '\0' || *cursor == '\n' || *cursor == '#') {
+            continue;
+        }
+
+        char* equals = strchr(cursor, '=');
+        if (!equals) {
+            continue;
+        }
+
+        *equals = '\0';
+        const char* key = cursor;
+        char* value_str = equals + 1;
+        while (*value_str == ' ' || *value_str == '\t') {
+            ++value_str;
+        }
+
+        char* endptr = NULL;
+        long value = strtol(value_str, &endptr, 10);
+        if (endptr == value_str) {
+            continue;
+        }
+
+        if (strcmp(key, "pawn") == 0) {
+            sirio_nn_model_set_weight(model, 0, (int)value);
+            seen_entry = 1;
+        } else if (strcmp(key, "knight") == 0) {
+            sirio_nn_model_set_weight(model, 1, (int)value);
+            seen_entry = 1;
+        } else if (strcmp(key, "bishop") == 0) {
+            sirio_nn_model_set_weight(model, 2, (int)value);
+            seen_entry = 1;
+        } else if (strcmp(key, "rook") == 0) {
+            sirio_nn_model_set_weight(model, 3, (int)value);
+            seen_entry = 1;
+        } else if (strcmp(key, "queen") == 0) {
+            sirio_nn_model_set_weight(model, 4, (int)value);
+            seen_entry = 1;
+        } else if (strcmp(key, "king") == 0) {
+            // The king entry is ignored by the material evaluator, but
+            // we still treat it as a valid entry to keep compatibility.
+            sirio_nn_model_set_weight(model, 5, (int)value);
+            seen_entry = 1;
+        } else if (strcmp(key, "bias") == 0) {
+            sirio_nn_model_set_bias(model, (int)value);
+            seen_entry = 1;
+        }
+    }
+
+    fclose(file);
+
+    if (!seen_entry) {
+        return 0;
+    }
+
+    printf("info string Loaded legacy material weights from %s\n", path);
+    return 1;
+}
+
 static int load_from_directory(sirio_nn_model* model, const char* directory, const char* file_name) {
     if (!directory || !*directory || !file_name || !*file_name) {
         return 0;
@@ -197,6 +275,12 @@ static void eval_ensure_initialized(void) {
     int loaded_eval = try_load_network(&g_eval_model, SIRIO_DEFAULT_NETWORK, SIRIO_DEFAULT_NETWORK_ALT);
     if (!loaded_eval) {
         loaded_eval = try_load_default_locations(&g_eval_model, SIRIO_DEFAULT_PRIMARY_NAME);
+    }
+    if (!loaded_eval) {
+        loaded_eval = load_legacy_material_weights(&g_eval_model, "resources/network.dat");
+    }
+    if (!loaded_eval) {
+        loaded_eval = load_legacy_material_weights(&g_eval_model, "../resources/network.dat");
     }
 #ifdef SIRIOC_EMBED_NNUE
     if (!loaded_eval && g_sirio_nnue_default_size > 0 &&

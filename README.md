@@ -63,7 +63,10 @@ SirioC does not ship binary NNUE weights. To use HalfKP evaluation, download a
 compatible network (for example, from the [official Stockfish testing
 server](https://tests.stockfishchess.org/nns/)) and point the `EvalFile` option
 to its location. Stockfish-provided networks are distributed under the CC0
-license, so they can be redistributed with SirioC-compatible builds.
+license, so they can be redistributed with SirioC-compatible builds. If the
+neural weights are absent, SirioC now falls back to the legacy
+`resources/network.dat` material weights to keep the engine operational, but
+loading an `.nnue` file is strongly recommended for best strength.
 
 A convenience script, `scripts/download_nnue.sh`, fetches the current
 Stockfish main network (`sirio_default.nnue`) and the compact "small" network
