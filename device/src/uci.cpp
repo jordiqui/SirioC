@@ -254,8 +254,8 @@ void UCI::loop(int argc, char* argv[]) {
     }
 
     else if (token == "uci") {
-      std::cout << "id name Obsidian " << engineVersion
-        << "\nid author Gabriele Lombardo"
+      std::cout << "id name SirioC " << engineVersion
+        << "\nid author Codex Chatgpt"
         << Options
         << "\n" << paramsToUci()
         << "uciok" << std::endl;
