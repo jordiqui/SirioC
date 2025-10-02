@@ -50,3 +50,23 @@ const TranspositionEntry* transposition_probe(const TranspositionTable* table, u
     return NULL;
 }
 
+int transposition_hashfull(const TranspositionTable* table) {
+    if (table == NULL || table->entries == NULL || table->size == 0) {
+        return 0;
+    }
+    size_t filled = 0;
+    for (size_t i = 0; i < table->size; ++i) {
+        if (table->entries[i].key != 0) {
+            ++filled;
+        }
+    }
+    if (table->size == 0) {
+        return 0;
+    }
+    uint64_t scaled = (filled * 1000ULL) / table->size;
+    if (scaled > 1000ULL) {
+        scaled = 1000ULL;
+    }
+    return (int)scaled;
+}
+
