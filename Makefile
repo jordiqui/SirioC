@@ -24,10 +24,14 @@ OBJS := $(OBJS:.c=.o)
 
 OPTIMIZE = -O3 -fno-stack-protector -fno-math-errno -funroll-loops -fno-exceptions -flto -flto-partition=one
 
-FLAGS = -s -pthread -std=c++17 -DNDEBUG -DEvalFile=\"$(EVALFILE)\" $(OPTIMIZE)
+COMMON_FLAGS = -s -pthread -DNDEBUG -DEvalFile=\"$(EVALFILE)\" $(OPTIMIZE)
+
+CXXFLAGS += -std=c++17 $(COMMON_FLAGS)
+CFLAGS += $(COMMON_FLAGS)
 
 ifeq ($(OS),Windows_NT)
-	FLAGS += -static
+    CXXFLAGS += -static
+    CFLAGS += -static
 endif
 
 ifeq ($(build),)
@@ -35,50 +39,59 @@ ifeq ($(build),)
 endif
 
 ifeq ($(build), native)
-    FLAGS += -march=native
+    CXXFLAGS += -march=native
+    CFLAGS += -march=native
 else ifeq ($(findstring sse2, $(build)), sse2)
-	FLAGS += $(MSSE2)
+        CXXFLAGS += $(MSSE2)
+        CFLAGS += $(MSSE2)
 else ifeq ($(findstring ssse3, $(build)), ssse3)
-	FLAGS += $(MSSSE3)
+        CXXFLAGS += $(MSSSE3)
+        CFLAGS += $(MSSSE3)
 else ifeq ($(findstring avx2, $(build)), avx2)
-	FLAGS += $(MAVX2)
+        CXXFLAGS += $(MAVX2)
+        CFLAGS += $(MAVX2)
 else ifeq ($(findstring avx512, $(build)), avx512)
-	FLAGS += $(MAVX512)
+        CXXFLAGS += $(MAVX512)
+        CFLAGS += $(MAVX512)
 endif
 
 ifeq ($(build), native)
-	PROPS = $(shell echo | $(CC) -march=native -E -dM -)
-	ifneq ($(findstring __BMI2__, $(PROPS)),)
-		ifeq ($(findstring __znver1, $(PROPS)),)
-			ifeq ($(findstring __znver2, $(PROPS)),)
-				FLAGS += -DUSE_PEXT
-			else ifeq ($(shell uname), Linux)
-				ifneq ($(findstring AMD EPYC 7B, $(shell lscpu)),)
-					FLAGS += -DUSE_PEXT
-				endif
-			endif
-		endif
-	endif
+        PROPS = $(shell echo | $(CC) -march=native -E -dM -)
+        ifneq ($(findstring __BMI2__, $(PROPS)),)
+                ifeq ($(findstring __znver1, $(PROPS)),)
+                        ifeq ($(findstring __znver2, $(PROPS)),)
+                                CXXFLAGS += -DUSE_PEXT
+                                CFLAGS += -DUSE_PEXT
+                        else ifeq ($(shell uname), Linux)
+                                ifneq ($(findstring AMD EPYC 7B, $(shell lscpu)),)
+                                        CXXFLAGS += -DUSE_PEXT
+                                        CFLAGS += -DUSE_PEXT
+                                endif
+                        endif
+                endif
+        endif
 else ifeq ($(findstring avx512, $(build)), avx512)
-	FLAGS += -DUSE_PEXT -mbmi2
+        CXXFLAGS += -DUSE_PEXT -mbmi2
+        CFLAGS += -DUSE_PEXT -mbmi2
 else ifeq ($(findstring pext, $(build)), pext)
-	FLAGS += -DUSE_PEXT -mbmi2
+        CXXFLAGS += -DUSE_PEXT -mbmi2
+        CFLAGS += -DUSE_PEXT -mbmi2
 endif
 
 %.o: %.cpp
-	g++ $(FLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 %.o: %.c
-	gcc $(FLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 make: download-net $(FILES)
-	g++ $(FLAGS) $(FILES) -o $(EXE) -fprofile-generate="sirio_pgo"
+	$(CXX) $(CXXFLAGS) $(FILES) -o $(EXE) -fprofile-generate="sirio_pgo" $(LDFLAGS)
 ifeq ($(OS),Windows_NT)
 	$(EXE) bench
 else
 	./$(EXE) bench
 endif
-	g++ $(FLAGS) $(FILES) -o $(EXE) -fprofile-use="sirio_pgo"
+	$(CXX) $(CXXFLAGS) $(FILES) -o $(EXE) -fprofile-use="sirio_pgo" $(LDFLAGS)
 ifeq ($(OS),Windows_NT)
 	powershell.exe -Command "Remove-Item -Recurse -Force sirio_pgo"
 else
@@ -86,7 +99,7 @@ else
 endif
 
 nopgo: download-net $(OBJS)
-	g++ $(FLAGS) $(OBJS) -o $(EXE)
+	$(CXX) $(CXXFLAGS) $(OBJS) -o $(EXE) $(LDFLAGS)
 
 clean:
 	rm -f $(OBJS)
