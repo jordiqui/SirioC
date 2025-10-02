@@ -8,6 +8,12 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 
 option(SIRIOC_BUILD_TESTS "Build the SirioC test suite" ON)
 
+set(SIRIOC_NNUE_PRIMARY_URL "https://tests.stockfishchess.org/api/nn/nn-1c0000000000.nnue"
+    CACHE STRING "URL to fetch the default (primary) NNUE network when auto-download is enabled")
+set(SIRIOC_NNUE_SMALL_URL "https://tests.stockfishchess.org/api/nn/nn-37f18f62d772.nnue"
+    CACHE STRING "URL to fetch the small NNUE network when auto-download is enabled")
+option(SIRIOC_AUTO_DOWNLOAD_NNUE "Attempt to download default NNUE networks during configure if missing" ON)
+
 find_package(Threads REQUIRED)
 
 set(_sirio_embed_default OFF)
@@ -72,6 +78,42 @@ if (CMAKE_C_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID STREQUAL "GNU")
     target_compile_options(sirio_core PUBLIC -msse4.1 -mpopcnt)
 elseif (MSVC)
     target_compile_options(sirio_core PUBLIC /arch:AVX)
+endif()
+
+if(SIRIOC_AUTO_DOWNLOAD_NNUE)
+    set(_sirio_resources_dir "${CMAKE_CURRENT_SOURCE_DIR}/resources")
+    set(_sirio_primary_nnue "${_sirio_resources_dir}/nn-1c0000000000.nnue")
+    set(_sirio_small_nnue "${_sirio_resources_dir}/nn-37f18f62d772.nnue")
+
+    file(MAKE_DIRECTORY "${_sirio_resources_dir}")
+
+    function(_sirio_try_download_nnue url destination label)
+        if(EXISTS "${destination}")
+            return()
+        endif()
+
+        message(STATUS "Downloading ${label} NNUE network from ${url}")
+        file(DOWNLOAD "${url}" "${destination}"
+             STATUS download_status
+             SHOW_PROGRESS
+             TLS_VERIFY ON)
+        list(GET download_status 0 download_code)
+        if(NOT download_code EQUAL 0)
+            list(GET download_status 1 download_error)
+            file(REMOVE "${destination}")
+            message(WARNING "Failed to download ${label} NNUE network (${download_error})."
+                            " Use scripts/download_nnue.sh or disable SIRIOC_AUTO_DOWNLOAD_NNUE to skip this step.")
+        else()
+            message(STATUS "Saved ${label} NNUE network to ${destination}")
+        endif()
+    endfunction()
+
+    _sirio_try_download_nnue("${SIRIOC_NNUE_PRIMARY_URL}" "${_sirio_primary_nnue}" "primary")
+    _sirio_try_download_nnue("${SIRIOC_NNUE_SMALL_URL}" "${_sirio_small_nnue}" "small")
+
+    unset(_sirio_resources_dir)
+    unset(_sirio_primary_nnue)
+    unset(_sirio_small_nnue)
 endif()
 
 if(SIRIOC_EMBED_NNUE)

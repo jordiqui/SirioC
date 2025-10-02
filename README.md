@@ -76,6 +76,11 @@ Stockfish main network (`nn-1c0000000000.nnue`) and the compact "small" network
 ./scripts/download_nnue.sh
 ```
 
+If you prefer an automated setup, CMake now attempts to download both networks
+during configuration. Pass `-DSIRIOC_AUTO_DOWNLOAD_NNUE=OFF` to skip the
+download step (for example in offline environments) or override the source URLs
+with `-DSIRIOC_NNUE_PRIMARY_URL=...` / `-DSIRIOC_NNUE_SMALL_URL=...`.
+
 After the files are available, set `EvalFile`/`EvalFileSmall` accordingly.
 When the small network is configured, SirioC automatically switches to it in
 positions with 12 or fewer pieces to improve accuracy in simplified endgames.
