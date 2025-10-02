@@ -30,6 +30,10 @@ void threadsChanged(const Option& o) {
   //NNUE::loadWeights(count > 32); // CCC and TCEC
 }
 
+void evalFileChanged(const Option&) {
+  NNUE::loadWeights();
+}
+
 void syzygyPathChanged(const Option& o) {
   std::string str = o;
   tb_init(str.c_str());
@@ -97,6 +101,7 @@ void init() {
   Options["Threads"]           = Option(1, 1, 1024, threadsChanged);
   Options["Move Overhead"]     = Option(10, 0, 1000);
   Options["SyzygyPath"]        = Option("", syzygyPathChanged);
+  Options["EvalFile"]          = Option("", evalFileChanged);
   Options["Minimal"]           = Option("false");
   Options["MultiPV"]           = Option(1, 1, MAX_MOVES);
   Options["UCI_Opponent"]      = Option("", refreshContempt);

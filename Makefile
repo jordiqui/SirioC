@@ -46,25 +46,54 @@ ifeq ($(OS),Windows_NT)
     CFLAGS += -static
 endif
 
+# Enlazado robusto (evita dependencias dinámicas de MinGW si usas GCC/Clang)
+LDFLAGS += -Wl,--gc-sections
+# Si usas Clang/LLD, puedes activar estático de C++ en entornos CI/MSYS2:
+# LDFLAGS += -static -static-libgcc -static-libstdc++
+
 ifeq ($(build),)
 	build = native
 endif
 
 ifeq ($(build), native)
+    ARCH_NAME := native
     CXXFLAGS += -march=native
     CFLAGS += -march=native
+else ifeq ($(build), x86-64-sse41-popcnt)
+    ARCH_NAME := sse41-popcnt
+    CFLAGS    += -msse4.1 -mpopcnt -mno-avx -mno-avx2 -mno-bmi -mno-bmi2 -mno-fma -mno-f16c
 else ifeq ($(findstring sse2, $(build)), sse2)
+        ARCH_NAME := sse2
         CXXFLAGS += $(MSSE2)
         CFLAGS += $(MSSE2)
 else ifeq ($(findstring ssse3, $(build)), ssse3)
+        ARCH_NAME := ssse3
         CXXFLAGS += $(MSSSE3)
         CFLAGS += $(MSSSE3)
 else ifeq ($(findstring avx2, $(build)), avx2)
+        ARCH_NAME := avx2
         CXXFLAGS += $(MAVX2)
         CFLAGS += $(MAVX2)
 else ifeq ($(findstring avx512, $(build)), avx512)
+        ARCH_NAME := avx512
         CXXFLAGS += $(MAVX512)
         CFLAGS += $(MAVX512)
+endif
+
+# --- SirioC: Ivy-safe target (SSE4.1 + POPCNT, sin AVX2/BMI2/FMA) ---
+ifeq ($(build),x86-64-sse41-popcnt)
+    ARCH_NAME := sse41-popcnt
+    CXXFLAGS  += -msse4.1 -mpopcnt -mno-avx -mno-avx2 -mno-bmi -mno-bmi2 -mno-fma -mno-f16c
+    # Marca de compilación para enlazar selects/dispatch a este perfil
+    CXXFLAGS  += -DSIRIOC_REQUIRE_SSE41=1
+endif
+
+# Fallback seguro si alguien pasa un build no soportado
+ifeq ($(ARCH_NAME),)
+    $(warning Unknown build '$(build)'; falling back to sse2)
+    ARCH_NAME := sse2
+    CXXFLAGS  += -msse2 -DSIRIOC_REQUIRE_SSE2=1
+    CFLAGS    += -msse2 -DSIRIOC_REQUIRE_SSE2=1
 endif
 
 ifeq ($(build), native)

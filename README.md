@@ -9,7 +9,11 @@ git clone https://github.com/jordiqui/SirioC -b device
 cd SirioC
 make -j nopgo build=ARCH
 ```
-ARCH choice: native, sse2, ssse3, avx2, avx2-pext, avx512. `native` is recommended however.
+ARCH choice: native, sse2, ssse3, x86-64-sse41-popcnt, avx2, avx2-pext, avx512. `native` is recommended however.
+Recommended presets:
+
+* Ivy Bridge or similar (SSE4.1 + POPCNT, sin AVX2/BMI2): `make -j nopgo build=x86-64-sse41-popcnt`
+* Universal Windows 64-bit build: `make -j nopgo build=sse2`
 You can remove the `nopgo` flag to enable profile guided optimization.
 
 
