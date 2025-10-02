@@ -1,20 +1,28 @@
 # SirioC (pyrrhic edition)
 
-This repository contains a fresh, fully documented rewrite of SirioC that adopts
-Berserk's directory layout. The goal of the new code base is to offer a compact,
-readable engine skeleton that can be extended with stronger search heuristics or
-neural evaluation in the future. Instead of porting the historical sources, the
-engine has been rebuilt from the ground up with modern C++ and a modular
-architecture.
+This repository contains a fresh, fully documented rewrite of SirioC that now
+organises the code base around a modular `src/engine` hierarchy inspired by the
+structures used in Berserk and Obsidian. The goal of the new layout is to offer
+a compact, readable engine skeleton that can be extended with stronger search
+heuristics or neural evaluation in the future. Instead of porting the
+historical sources, the engine has been rebuilt from the ground up with modern
+C++ and a layered architecture.
 
 ```
 .
 ├── .github/           GitHub actions and automation hooks
 ├── resources/        Sample assets such as opening books or PGN collections
 ├── src/
+│   ├── engine/
+│   │   ├── core/     Board representation, move logic, and zobrist keys
+│   │   ├── eval/     Classical evaluation terms
+│   │   ├── nn/       NNUE helpers shared between C and C++ front-ends
+│   │   ├── search/   Search implementation, threading, TT, and bench harness
+│   │   ├── tb/       Syzygy tablebase glue code
+│   │   └── util/     Cross-language utilities (logging, filesystem helpers)
 │   ├── files/        PGN/FEN parsing utilities
-│   ├── nn/           Lightweight evaluation helpers
-│   └── pyrrhic/      Core engine logic and CLI entry point
+│   ├── pyrrhic/      Core C++ engine logic and CLI entry point
+│   └── uci/          Modern UCI front-end for the C++ library
 └── test/             Self-contained regression checks
 ```
 

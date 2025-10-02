@@ -3,7 +3,7 @@
 Este documento recopila, en formato de lista de comprobación, las tareas principales pendientes en el proyecto. Se agrupan por área funcional para facilitar su seguimiento.
 
 ## NNUE
-- [ ] Crear `src/nn/nnue_loader.{h,cpp}` con soporte de carga desde archivo/memoria y mensajes `info string`.
+- [ ] Crear `src/engine/nn/nnue_loader.{h,cpp}` con soporte de carga desde archivo/memoria y mensajes `info string`.
 - [ ] Añadir soporte para `EvalFileSmall` y selección automática según el número de piezas.
 - [ ] Proporcionar un script de descarga de redes (CC0) y/o posibilidad de incrustación (embed) opcional.
 

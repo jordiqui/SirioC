@@ -28,15 +28,15 @@ unset(_sirio_build_type)
 unset(_sirio_embed_default)
 
 add_library(sirio_core
-    src/bits.c
-    src/eval.c
-    src/nn/accumulator.c
-    src/nn/evaluate.c
+    src/engine/core/bits.c
+    src/engine/eval/eval.c
+    src/engine/nn/accumulator.c
+    src/engine/nn/evaluate.c
     src/files/fen.cpp
     src/files/pgn_loader.cpp
-    src/nn/evaluator.cpp
-    src/nn/nnue_paths.c
-    src/nn/nnue_loader.cpp
+    src/engine/nn/evaluator.cpp
+    src/engine/nn/nnue_paths.c
+    src/engine/nn/nnue_loader.cpp
     src/pyrrhic/board.cpp
     src/pyrrhic/engine.cpp
     src/pyrrhic/bench.cpp
@@ -44,13 +44,20 @@ add_library(sirio_core
     src/pyrrhic/tbchess.c
     src/pyrrhic/tbprobe.c
     src/pyrrhic/types.cpp
-    src/nn/nnue.cpp
+    src/engine/nn/nnue.cpp
     src/uci/Options.cpp
     src/uci/Uci.cpp)
 
 target_include_directories(sirio_core PUBLIC
     src
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/nn
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine/eval
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine/nn
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine/search
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine/tb
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine/uci
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine/util
 )
 
 target_compile_features(sirio_core PUBLIC cxx_std_20)
@@ -143,35 +150,45 @@ add_executable(sirioc_cpp src/pyrrhic/main.cpp)
 target_link_libraries(sirioc_cpp PRIVATE sirio_core)
 
 set(SIRIOC_C_ENGINE_SOURCES
-    src/SirioC.c
-    src/attacks.c
-    src/bench.c
-    src/bits.c
-    src/board.c
-    src/eval.c
-    src/history.c
-    src/move.c
-    src/movegen.c
-    src/movepick.c
-    src/perft.c
-    src/random.c
-    src/search.c
-    src/see.c
-    src/tb.c
-    src/thread.c
-    src/transposition.c
-    src/uci.c
-    src/util.c
-    src/util/path.cpp
-    src/nn/accumulator.c
-    src/nn/evaluate.c
-    src/nn/nnue_paths.c
-    src/zobrist.cpp
+    src/engine/SirioC.c
+    src/engine/core/attacks.c
+    src/engine/search/bench.c
+    src/engine/core/bits.c
+    src/engine/core/board.c
+    src/engine/eval/eval.c
+    src/engine/core/history.c
+    src/engine/core/move.c
+    src/engine/core/movegen.c
+    src/engine/core/movepick.c
+    src/engine/search/perft.c
+    src/engine/core/random.c
+    src/engine/search/search.c
+    src/engine/search/see.c
+    src/engine/tb/tb.c
+    src/engine/search/thread.c
+    src/engine/search/transposition.c
+    src/engine/uci/uci.c
+    src/engine/util/util.c
+    src/engine/util/path.cpp
+    src/engine/nn/accumulator.c
+    src/engine/nn/evaluate.c
+    src/engine/nn/nnue_paths.c
+    src/engine/core/zobrist.cpp
     vendor/fathom/tbprobe.c
 )
 
 add_executable(sirioc ${SIRIOC_C_ENGINE_SOURCES})
-target_include_directories(sirioc PRIVATE src vendor/fathom)
+target_include_directories(sirioc PRIVATE
+    src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine/eval
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine/nn
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine/search
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine/tb
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine/uci
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine/util
+    vendor/fathom)
 target_link_libraries(sirioc PRIVATE Threads::Threads)
 if (UNIX)
     target_link_libraries(sirioc PRIVATE m)
