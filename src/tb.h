@@ -17,6 +17,7 @@ void tb_set_50_move_rule(int enabled);
 int tb_get_50_move_rule(void);
 void tb_set_probe_limit(int limit);
 int tb_get_probe_limit(void);
+uint64_t tb_get_hits(void);
 
 #ifdef __cplusplus
 } /* extern "C" */

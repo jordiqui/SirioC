@@ -30,6 +30,9 @@ typedef struct {
     int syzygy_50_move_rule;
     int syzygy_probe_limit;
     int move_overhead;
+    int hash_size_mb;
+    int threads;
+    int ponder_enabled;
     int search_thread_running;
     int search_thread_active;
     pthread_t search_thread;
@@ -58,7 +61,24 @@ static void trim_whitespace(char* text) {
 static void print_options(const UciState* state) {
     printf("option name UseNNUE type check default %s\n", eval_use_nnue() ? "true" : "false");
     printf("option name EvalFile type string default %s\n", state->eval_file);
-    printf("option name EvalFileSmall type string default %s\n", state->eval_file_small[0] ? state->eval_file_small : "");
+    const char* small_value = state->eval_file_small[0] ? state->eval_file_small : "<empty>";
+    printf("option name EvalFileSmall type string default %s\n", small_value);
+    int multipv = 1;
+    if (state && state->context && state->context->multipv > 0) {
+        multipv = state->context->multipv;
+    }
+    printf("option name MultiPV type spin default %d min 1 max 256\n", multipv);
+    printf("option name Ponder type check default %s\n", state->ponder_enabled ? "true" : "false");
+    int threads = state ? state->threads : 1;
+    if (threads <= 0) {
+        threads = 1;
+    }
+    printf("option name Threads type spin default %d min 1 max 256\n", threads);
+    int hash_mb = state ? state->hash_size_mb : 64;
+    if (hash_mb <= 0) {
+        hash_mb = 64;
+    }
+    printf("option name Hash type spin default %d min 1 max 4096\n", hash_mb);
     printf("option name SyzygyPath type string default %s\n", state->syzygy_path);
     printf("option name SyzygyProbeDepth type spin default %d min 0 max 64\n", state->syzygy_probe_depth);
     printf("option name Syzygy50MoveRule type check default %s\n", state->syzygy_50_move_rule ? "true" : "false");
@@ -108,6 +128,69 @@ static uint64_t compute_nps(uint64_t nodes, uint64_t elapsed_ms) {
 }
 
 static void emit_multipv_info(const UciState* state);
+
+static void uci_format_score(Value value, char* buffer, size_t size) {
+    if (size == 0) {
+        return;
+    }
+    const int mate_threshold = VALUE_MATE - 100;
+    if (value >= mate_threshold || value <= -mate_threshold) {
+        int mate_in = (VALUE_MATE - abs(value) + 1) / 2;
+        if (mate_in < 1) {
+            mate_in = 1;
+        }
+        if (value > 0) {
+            snprintf(buffer, size, "mate %d", mate_in);
+        } else {
+            snprintf(buffer, size, "mate -%d", mate_in);
+        }
+    } else {
+        snprintf(buffer, size, "cp %d", value);
+    }
+}
+
+static void uci_format_pv(const SearchContext* context, size_t index, char* buffer, size_t size) {
+    if (!context || index >= context->pv_count || size == 0) {
+        if (size > 0) {
+            buffer[0] = '\0';
+        }
+        return;
+    }
+
+    buffer[0] = '\0';
+    size_t length = (size_t)context->pv_lengths[index];
+    if (length == 0) {
+        return;
+    }
+
+    size_t written = 0;
+    for (size_t i = 0; i < length; ++i) {
+        char move_buffer[16];
+        move_to_uci(&context->pv_table[index][i], move_buffer, sizeof(move_buffer));
+        if (move_buffer[0] == '\0') {
+            snprintf(move_buffer, sizeof(move_buffer), "0000");
+        }
+        size_t move_len = strlen(move_buffer);
+        if (written != 0) {
+            if (written + 1 < size) {
+                buffer[written++] = ' ';
+            } else {
+                break;
+            }
+        }
+        if (written + move_len >= size) {
+            size_t available = size - written - 1;
+            if (available > 0) {
+                memcpy(buffer + written, move_buffer, available);
+                written += available;
+            }
+            break;
+        }
+        memcpy(buffer + written, move_buffer, move_len);
+        written += move_len;
+    }
+    buffer[written < size ? written : size - 1] = '\0';
+}
 
 typedef struct {
     UciState* state;
@@ -169,27 +252,47 @@ static void emit_multipv_info(const UciState* state) {
     }
 
     const SearchContext* context = state->context;
-    const uint64_t elapsed = context->last_search_time_ms ? context->last_search_time_ms : 1;
+    uint64_t elapsed = context->last_search_time_ms;
+    if (elapsed == 0) {
+        elapsed = 1;
+    }
     const uint64_t nodes = context->nodes;
     const uint64_t nps = compute_nps(nodes, elapsed);
-    const int depth = context->depth_completed > 0 ? context->depth_completed : context->limits.depth;
+    int depth = context->depth_completed > 0 ? context->depth_completed : context->limits.depth;
+    if (depth <= 0) {
+        depth = 1;
+    }
+    int seldepth = context->seldepth > 0 ? context->seldepth : depth;
+    int hashfull = transposition_hashfull(context->tt);
+    uint64_t tb_hits = tb_get_hits();
+
+    if (context->pv_count == 0) {
+        return;
+    }
 
     for (size_t index = 0; index < context->pv_count; ++index) {
-        char pv_buffer[16];
-        move_to_uci(&context->pv_moves[index], pv_buffer, sizeof(pv_buffer));
+        char score_buffer[32];
+        char pv_buffer[512];
+        uci_format_score(context->pv_values[index], score_buffer, sizeof(score_buffer));
+        uci_format_pv(context, index, pv_buffer, sizeof(pv_buffer));
         if (pv_buffer[0] == '\0') {
             snprintf(pv_buffer, sizeof(pv_buffer), "0000");
         }
-        printf("info multipv %zu depth %d score cp %d time %" PRIu64 " nodes %" PRIu64
-               " nps %" PRIu64 " pv %s\n",
+        printf("info depth %d seldepth %d multipv %zu score %s nodes %" PRIu64
+               " nps %" PRIu64 " hashfull %d tbhits %" PRIu64 " time %" PRIu64
+               " pv %s\n",
+               depth,
+               seldepth,
                index + 1,
-               depth > 0 ? depth : 1,
-               context->pv_values[index],
-               elapsed,
+               score_buffer,
                nodes,
                nps,
+               hashfull,
+               tb_hits,
+               elapsed,
                pv_buffer);
     }
+    fflush(stdout);
 }
 
 static void handle_position(UciState* state, char* args) {
@@ -306,6 +409,49 @@ static void handle_setoption(UciState* state, char* line) {
             eval_load_small_network(NULL);
             state->eval_file_small[0] = '\0';
         }
+    } else if (strcmp(name_ptr, "MultiPV") == 0 && option_value) {
+        if (state && state->context) {
+            int multipv = atoi(option_value);
+            if (multipv < 1) {
+                multipv = 1;
+            } else if (multipv > 256) {
+                multipv = 256;
+            }
+            state->context->multipv = multipv;
+        }
+    } else if (strcmp(name_ptr, "Ponder") == 0 && option_value) {
+        if (strcmp(option_value, "true") == 0 || strcmp(option_value, "1") == 0) {
+            state->ponder_enabled = 1;
+        } else {
+            state->ponder_enabled = 0;
+        }
+    } else if (strcmp(name_ptr, "Threads") == 0 && option_value) {
+        int threads = atoi(option_value);
+        if (threads < 1) {
+            threads = 1;
+        } else if (threads > 256) {
+            threads = 256;
+        }
+        state->threads = threads;
+    } else if (strcmp(name_ptr, "Hash") == 0 && option_value) {
+        int mb = atoi(option_value);
+        if (mb < 1) {
+            mb = 1;
+        } else if (mb > 4096) {
+            mb = 4096;
+        }
+        state->hash_size_mb = mb;
+        if (state->context && state->context->tt) {
+            stop_search(state);
+            size_t bytes = (size_t)mb * 1024ULL * 1024ULL;
+            size_t entry_size = sizeof(TranspositionEntry);
+            size_t entries = bytes / entry_size;
+            if (entries < 1024) {
+                entries = 1024;
+            }
+            transposition_free(state->context->tt);
+            transposition_init(state->context->tt, entries);
+        }
     } else if (strcmp(name_ptr, "SyzygyPath") == 0 && option_value) {
         snprintf(state->syzygy_path, sizeof(state->syzygy_path), "%s", option_value);
         tb_set_path(option_value);
@@ -346,21 +492,21 @@ static void handle_setoption(UciState* state, char* line) {
 }
 
 static void handle_go(UciState* state, char* args) {
+    if (!state || !state->context) {
+        return;
+    }
+
     SearchLimits limits = { .depth = 0,
                             .movetime_ms = 0,
                             .nodes = 0,
                             .infinite = 0,
-                            .multipv = 1,
+                            .multipv = state->context->multipv > 0 ? state->context->multipv : 1,
                             .wtime_ms = 0,
                             .btime_ms = 0,
                             .winc_ms = 0,
                             .binc_ms = 0,
                             .moves_to_go = 0,
-                            .ponder = 0 };
-
-    if (state && state->context) {
-        limits.multipv = state->context->multipv > 0 ? state->context->multipv : 1;
-    }
+                            .ponder = state->ponder_enabled };
 
     if (args) {
         char* cursor = args;
@@ -388,6 +534,12 @@ static void handle_go(UciState* state, char* args) {
                 limits.ponder = 1;
             } else if (strcmp(token, "multipv") == 0) {
                 limits.multipv = parse_numeric_token(&cursor);
+            } else if (strcmp(token, "searchmoves") == 0) {
+                /* searchmoves not yet supported; skip remaining tokens on the line */
+                while ((token = next_token(&cursor)) != NULL) {
+                    (void)token;
+                }
+                break;
             }
         }
     }
@@ -397,17 +549,17 @@ static void handle_go(UciState* state, char* args) {
     }
 
     if (!limits.infinite && limits.movetime_ms > 0) {
-        int overhead = state->context ? state->context->move_overhead : state->move_overhead;
+        int overhead = state->context->move_overhead;
         if (limits.movetime_ms > overhead) {
             limits.movetime_ms -= overhead;
         } else {
-            limits.movetime_ms = 0;
+            limits.movetime_ms = 1;
         }
     }
 
     if (limits.depth <= 0 && limits.movetime_ms <= 0 && limits.nodes <= 0 && !limits.infinite &&
         limits.wtime_ms <= 0 && limits.btime_ms <= 0) {
-        limits.depth = 1;
+        limits.depth = 64;
     }
 
     if (!limits.infinite && limits.movetime_ms <= 0) {
@@ -415,21 +567,24 @@ static void handle_go(UciState* state, char* args) {
         if (moves_to_go <= 0) {
             moves_to_go = 30;
         }
-        int color = state && state->context && state->context->board
-                        ? state->context->board->side_to_move
-                        : COLOR_WHITE;
+
+        enum Color color = state->context->board ? state->context->board->side_to_move : COLOR_WHITE;
         int remaining_time = (color == COLOR_WHITE) ? limits.wtime_ms : limits.btime_ms;
         int increment = (color == COLOR_WHITE) ? limits.winc_ms : limits.binc_ms;
+
         if (remaining_time > 0) {
-            int overhead = state->context ? state->context->move_overhead : state->move_overhead;
             long budget = remaining_time / moves_to_go;
             if (budget < 0) {
                 budget = 0;
             }
-            budget += increment;
+            if (increment > 0) {
+                budget += increment;
+            }
             if (budget > remaining_time) {
                 budget = remaining_time;
             }
+
+            int overhead = state->context->move_overhead;
             if (overhead > 0 && budget > overhead) {
                 budget -= overhead;
             }
@@ -451,10 +606,7 @@ static void handle_go(UciState* state, char* args) {
     }
 
     stop_search(state);
-
-    if (state && state->context) {
-        state->context->stop = 0;
-    }
+    state->context->stop = 0;
 
     UciSearchThreadData* data = (UciSearchThreadData*)malloc(sizeof(UciSearchThreadData));
     if (!data) {
@@ -585,6 +737,9 @@ static void uci_state_init(UciState* state, SearchContext* context) {
     state->syzygy_50_move_rule = tb_get_50_move_rule();
     state->syzygy_probe_limit = tb_get_probe_limit();
     state->move_overhead = context ? context->move_overhead : 10;
+    state->hash_size_mb = 64;
+    state->threads = 1;
+    state->ponder_enabled = 0;
     state->search_thread_running = 0;
     state->search_thread_active = 0;
 }
@@ -618,7 +773,14 @@ int main(int argc, char* argv[]) {
 
     board_init(&board);
     history_init(&history);
-    transposition_init(&tt, 1 << 16);
+    const int default_hash_mb = 64;
+    size_t bytes = (size_t)default_hash_mb * 1024ULL * 1024ULL;
+    size_t entry_size = sizeof(TranspositionEntry);
+    size_t entries = bytes / entry_size;
+    if (entries < 1024) {
+        entries = 1024;
+    }
+    transposition_init(&tt, entries);
     tb_initialize();
     search_init(&context, &board, &tt, &history);
     board_set_start_position(&board);
