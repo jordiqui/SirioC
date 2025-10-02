@@ -4,34 +4,38 @@ CFLAGS ?= -O2 -std=c11
 CXXFLAGS ?= -O2 -std=c++20
 CFLAGS += -I../vendor/fathom
 CXXFLAGS += -I../vendor/fathom
+CFLAGS += -Iengine -Iengine/core -Iengine/eval -Iengine/nn -Iengine/search -Iengine/tb -Iengine/uci -Iengine/util
+CXXFLAGS += -Iengine -Iengine/core -Iengine/eval -Iengine/nn -Iengine/search -Iengine/tb -Iengine/uci -Iengine/util
 CFLAGS += -pthread
 CXXFLAGS += -pthread
 
 SRCS = \
-    attacks.c \
-    bench.c \
-    SirioC.c \
-    bits.c \
-    board.c \
-    eval.c \
-    history.c \
-    move.c \
-    movegen.c \
-    movepick.c \
-    perft.c \
-    random.c \
-    search.c \
-    see.c \
-    tb.c \
-    thread.c \
-    transposition.c \
-    uci.c \
-    util.c \
-    nn/accumulator.c \
-    nn/evaluate.c
+    engine/SirioC.c \
+    engine/core/attacks.c \
+    engine/search/bench.c \
+    engine/core/bits.c \
+    engine/core/board.c \
+    engine/eval/eval.c \
+    engine/core/history.c \
+    engine/core/move.c \
+    engine/core/movegen.c \
+    engine/core/movepick.c \
+    engine/search/perft.c \
+    engine/core/random.c \
+    engine/search/search.c \
+    engine/search/see.c \
+    engine/tb/tb.c \
+    engine/search/thread.c \
+    engine/search/transposition.c \
+    engine/uci/uci.c \
+    engine/util/util.c \
+    engine/nn/accumulator.c \
+    engine/nn/evaluate.c \
+    engine/nn/nnue_paths.c
 
 CPPSRCS = \
-    zobrist.cpp
+    engine/core/zobrist.cpp \
+    engine/util/path.cpp
 
 VENDOR_SRCS = \
     ../vendor/fathom/tbprobe.c

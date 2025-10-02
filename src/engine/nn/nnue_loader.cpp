@@ -1,6 +1,6 @@
 #include "nnue_loader.h"
 
-#include "../eval.h"
+#include "../eval/eval.h"
 
 #include <filesystem>
 #include <fstream>

@@ -1,6 +1,6 @@
 #include "evaluate.h"
 #include "accumulator.h"
-#include "../board.h"
+#include "../core/board.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -8,7 +8,7 @@
 #include <string.h>
 #include <limits.h>
 
-#include "../bits.h"
+#include "../core/bits.h"
 
 static const int DEFAULT_WEIGHTS[SIRIO_NN_PIECE_TYPES] = {100, 320, 330, 500, 900, 0};
 static const int DEFAULT_BIAS = 0;

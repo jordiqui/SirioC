@@ -1,11 +1,11 @@
 #include "Uci.h"
 
 #include "Options.h"
-#include "../eval.h"
-#include "../nn/nnue.h"
+#include "../engine/eval/eval.h"
+#include "../engine/nn/nnue.h"
 
 extern "C" {
-#include "../nn/nnue_paths.h"
+#include "../engine/nn/nnue_paths.h"
 }
 
 #include "files/fen.h"
