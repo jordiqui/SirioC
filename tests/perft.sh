@@ -27,7 +27,7 @@ send "position $pos\ngo perft $depth\n"
 expect {
   "Nodes searched: $result" {}
   timeout {puts "TIMEOUT: Expected $result nodes"; exit 1}
-  eof {puts "EOF: Stockfish crashed"; exit 2}
+  eof {puts "EOF: SirioC crashed"; exit 2}
 }
 send "quit\n"
 expect eof

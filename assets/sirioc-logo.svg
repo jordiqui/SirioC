@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#001f3f"/>
+      <stop offset="100%" stop-color="#0074D9"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="#0a0a1a" rx="64"/>
+  <circle cx="256" cy="256" r="180" fill="url(#grad)" opacity="0.85"/>
+  <path d="M256 120l60 104h-44l64 112h-56l-24 56-24-56h-56l64-112h-44z" fill="#f5f7ff"/>
+  <text x="256" y="430" font-family="'Segoe UI', sans-serif" font-size="64" text-anchor="middle" fill="#f5f7ff" letter-spacing="8">SirioC</text>
+</svg>

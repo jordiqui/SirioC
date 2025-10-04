@@ -2,22 +2,23 @@
 # Visit https://bit.ly/cffinit to generate yours today!
 
 cff-version: 1.2.0
-title: Stockfish
+title: SirioC
 message: >-
   Please cite this software using the metadata from this
   file.
 type: software
 authors:
-  - name: The Stockfish developers (see AUTHORS file)
-repository-code: 'https://github.com/official-stockfish/Stockfish'
-url: 'https://stockfishchess.org/'
-repository-artifact: 'https://stockfishchess.org/download/'
-abstract: Stockfish is a free and strong UCI chess engine.
+  - name: Jorge Ruiz
+    affiliation: SirioC Project
+  - name: Codex ChatGPT
+    affiliation: SirioC Project
+date-released: 2025-04-10
+repository-code: 'https://github.com/SirioC/SirioC'
+abstract: SirioC is a free and academically maintained UCI chess engine written in modern C++.
 keywords:
   - chess
   - artificial intelligence (AI)
   - tree search
-  - alpha-beta search
-  - neural networks (NN)
   - efficiently updatable neural networks (NNUE)
+  - computer chess
 license: GPL-3.0

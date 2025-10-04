@@ -1,12 +1,12 @@
-# Contributing to Stockfish
+# Contributing to SirioC
 
-Welcome to the Stockfish project! We are excited that you are interested in
-contributing. This document outlines the guidelines and steps to follow when
-making contributions to Stockfish.
+Welcome to the SirioC project! We appreciate your interest in advancing our
+academic UCI chess engine. This guide outlines how to build the project, report
+issues, and submit improvements in a manner consistent with our standards.
 
 ## Table of Contents
 
-- [Building Stockfish](#building-stockfish)
+- [Building SirioC](#building-sirioc)
 - [Making Contributions](#making-contributions)
   - [Reporting Issues](#reporting-issues)
   - [Submitting Pull Requests](#submitting-pull-requests)
@@ -14,83 +14,64 @@ making contributions to Stockfish.
 - [Community and Communication](#community-and-communication)
 - [License](#license)
 
-## Building Stockfish
+## Building SirioC
 
-In case you do not have a C++ compiler installed, you can follow the
-instructions from our wiki.
+SirioC is implemented in modern C++ and builds on Windows, macOS, and Linux. If
+you require a compiler toolchain, consult the documentation for your platform or
+the instructions provided in the repository wiki. On Unix-like systems the
+standard build process is:
 
-- [Ubuntu][ubuntu-compiling-link]
-- [Windows][windows-compiling-link]
-- [macOS][macos-compiling-link]
+```bash
+cd src
+make -j profile-build
+```
+
+Running `make help` lists all supported targets together with the intended CPU
+architectures and optimisation profiles.
 
 ## Making Contributions
 
 ### Reporting Issues
 
-If you find a bug, please open an issue on the
-[issue tracker][issue-tracker-link]. Be sure to include relevant information
-like your operating system, build environment, and a detailed description of the
-problem.
+Bug reports should be filed via the issue tracker with the following
+information:
 
-_Please note that Stockfish's development is not focused on adding new features.
-Thus any issue regarding missing features will potentially be closed without
-further discussion._
+- Operating system and compiler version.
+- Exact build configuration and command line used.
+- Minimal steps to reproduce the problem.
+- Expected behaviour versus observed behaviour.
 
 ### Submitting Pull Requests
 
-- Functional changes need to be tested on fishtest. See
-  [Creating my First Test][creating-my-first-test] for more details.
-  The accompanying pull request should include a link to the test results and
-  the new bench.
-
-- Non-functional changes (e.g. refactoring, code style, documentation) do not
-  need to be tested on fishtest, unless they might impact performance.
-
-- Provide a clear and concise description of the changes in the pull request
-  description.
-
-_First time contributors should add their name to [AUTHORS](./AUTHORS)._
-
-_Stockfish's development is not focused on adding new features. Thus any pull
-request introducing new features will potentially be closed without further
-discussion._
+- Functional changes must be validated through Sequential Probability Ratio
+  Tests (SPRT) executed in the [FastChess](https://github.com/fastchess/fastchess)
+  framework. Provide a summary of the testing conditions and results in the pull
+  request description.
+- Non-functional changes (refactoring, documentation, tooling) should explain
+  why they are performance neutral; add tests if behaviour could be affected.
+- Each pull request must include a concise summary of the motivation and the
+  technical approach.
+- First-time contributors are encouraged to add their names to the
+  [`AUTHORS`](AUTHORS) file.
 
 ## Code Style
 
-Changes to Stockfish C++ code should respect our coding style defined by
-[.clang-format](.clang-format). You can format your changes by running
-`make format`. This requires clang-format version 18 to be installed on your system.
-
-## Navigate
-
-For experienced Git users who frequently use git blame, it is recommended to
-configure the blame.ignoreRevsFile setting.
-This setting is useful for excluding noisy formatting commits.
-
-```bash
-git config blame.ignoreRevsFile .git-blame-ignore-revs
-```
+SirioC follows the formatting rules specified in [.clang-format](.clang-format).
+You can automatically format your changes by running `make format`, which
+requires `clang-format` version 18.
 
 ## Community and Communication
 
-- Join the [Stockfish discord][discord-link] to discuss ideas, issues, and
-  development.
-- Participate in the [Stockfish GitHub discussions][discussions-link] for
-  broader conversations.
+- Join our forthcoming community channels to discuss research directions and
+  implementation details.
+- Share empirical results and theoretical insights to encourage collaborative
+  progress.
 
 ## License
 
-By contributing to Stockfish, you agree that your contributions will be licensed
-under the GNU General Public License v3.0. See [Copying.txt][copying-link] for
-more details.
+By contributing to SirioC you agree that your work will be released under the
+GNU General Public License v3.0. The full license text is available in
+[Copying.txt](Copying.txt).
 
-Thank you for contributing to Stockfish and helping us make it even better!
+Thank you for contributing to SirioC and helping us refine the engine.
 
-[copying-link]:           https://github.com/official-stockfish/Stockfish/blob/master/Copying.txt
-[discord-link]:           https://discord.gg/GWDRS3kU6R
-[discussions-link]:       https://github.com/official-stockfish/Stockfish/discussions/new
-[creating-my-first-test]: https://github.com/official-stockfish/fishtest/wiki/Creating-my-first-test#create-your-test
-[issue-tracker-link]:     https://github.com/official-stockfish/Stockfish/issues
-[ubuntu-compiling-link]:  https://github.com/official-stockfish/Stockfish/wiki/Developers#user-content-installing-a-compiler-1
-[windows-compiling-link]: https://github.com/official-stockfish/Stockfish/wiki/Developers#user-content-installing-a-compiler
-[macos-compiling-link]:   https://github.com/official-stockfish/Stockfish/wiki/Developers#user-content-installing-a-compiler-2
