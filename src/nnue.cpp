@@ -140,10 +140,45 @@ namespace NNUE {
 
   namespace {
     bool useMaterialFallback = false;
+    bool reportedCompressedFormat = false;
+
+    bool looksLikeCompressedFormat(const uint8_t* data, size_t size) {
+      if (!data || size < 4)
+        return false;
+
+      // Version constant used by Stockfish NNUE files with compressed payloads
+      constexpr uint32_t StockfishVersion = 0x7AF32F20u;
+      uint32_t header = 0;
+      std::memcpy(&header, data, sizeof(header));
+      if (header == StockfishVersion)
+        return true;
+
+      static constexpr char kCompressedMagic[] = "COMPRESSED_LEB128";
+      const size_t magicLen = sizeof(kCompressedMagic) - 1;
+      if (size < magicLen)
+        return false;
+      const size_t searchLimit = std::min<size_t>(size - magicLen, 256);
+      for (size_t i = 0; i <= searchLimit; ++i) {
+        if (std::memcmp(data + i, kCompressedMagic, magicLen) == 0)
+          return true;
+      }
+      return false;
+    }
 
     bool initializeNetworkFromBuffer(const uint8_t* data, size_t size) {
       if (!data || size < sizeof(Net))
         return false;
+
+      if (size != sizeof(Net)) {
+        if (looksLikeCompressedFormat(data, size))
+          if (!reportedCompressedFormat) {
+            std::fprintf(stderr,
+                          "info string NNUE: unsupported compressed network format (expected uncompressed %zu bytes).\n",
+                          sizeof(Net));
+            reportedCompressedFormat = true;
+          }
+        return false;
+      }
 
       if (!Weights)
         Weights = static_cast<Net*>(Util::allocAlign(sizeof(Net)));
