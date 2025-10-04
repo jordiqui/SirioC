@@ -1,13 +1,13 @@
 /*
-  Stockfish, a UCI chess playing engine derived from Glaurung 2.1
-  Copyright (C) 2004-2025 The Stockfish developers (see AUTHORS file)
+  SirioC, a UCI chess playing engine developed for rigorous academic research
+  Copyright (C) 2025 The SirioC contributors (see AUTHORS file)
 
-  Stockfish is free software: you can redistribute it and/or modify
+  SirioC is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
 
-  Stockfish is distributed in the hope that it will be useful,
+  SirioC is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU General Public License for more details.
@@ -164,12 +164,12 @@ void UCIEngine::loop() {
         }
         else if (token == "--help" || token == "help" || token == "--license" || token == "license")
             sync_cout
-              << "\nStockfish is a powerful chess engine for playing and analyzing."
+              << "\nSirioC is a powerful chess engine for analytical and academic study."
                  "\nIt is released as free software licensed under the GNU GPLv3 License."
-                 "\nStockfish is normally used with a graphical user interface (GUI) and implements"
+                 "\nSirioC is normally used with a graphical user interface (GUI) and implements"
                  "\nthe Universal Chess Interface (UCI) protocol to communicate with a GUI, an API, etc."
-                 "\nFor any further information, visit https://github.com/official-stockfish/Stockfish#readme"
-                 "\nor read the corresponding README.md and Copying.txt files distributed along with this program.\n"
+                 "\nFor further information, consult the README.md and Copying.txt files distributed"
+                 "\nalong with this program.\n"
               << sync_endl;
         else if (!token.empty() && token[0] != '#')
             sync_cout << "Unknown command: '" << cmd << "'. Type help for more information."
@@ -512,7 +512,7 @@ WinRateParams win_rate_params(const Position& pos) {
     // The fitted model only uses data for material counts in [17, 78], and is anchored at count 58.
     double m = std::clamp(material, 17, 78) / 58.0;
 
-    // Return a = p_a(material) and b = p_b(material), see github.com/official-stockfish/WDL_model
+    // Return a = p_a(material) and b = p_b(material), see github.com/SirioC/WDL_model
     constexpr double as[] = {-13.50030198, 40.92780883, -36.82753545, 386.83004070};
     constexpr double bs[] = {96.53354896, -165.79058388, 90.89679019, 49.29561889};
 

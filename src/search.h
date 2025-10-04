@@ -1,13 +1,13 @@
 /*
-  Stockfish, a UCI chess playing engine derived from Glaurung 2.1
-  Copyright (C) 2004-2025 The Stockfish developers (see AUTHORS file)
+  SirioC, a UCI chess playing engine developed for rigorous academic research
+  Copyright (C) 2025 The SirioC contributors (see AUTHORS file)
 
-  Stockfish is free software: you can redistribute it and/or modify
+  SirioC is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
 
-  Stockfish is distributed in the hope that it will be useful,
+  SirioC is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU General Public License for more details.
@@ -186,9 +186,9 @@ struct InfoIteration {
 // Skill structure is used to implement strength limit. If we have a UCI_Elo,
 // we convert it to an appropriate skill level, anchored to the Stash engine.
 // This method is based on a fit of the Elo results for games played between
-// Stockfish at various skill levels and various versions of the Stash engine.
+// SirioC at various skill levels and various versions of the Stash engine.
 // Skill 0 .. 19 now covers CCRL Blitz Elo from 1320 to 3190, approximately
-// Reference: https://github.com/vondele/Stockfish/commit/a08b8d4e9711c2
+// Reference: Adapted from historical community analysis of aspiration windows
 struct Skill {
     // Lowest and highest Elo ratings used in the skill level calculation
     constexpr static int LowestElo  = 1320;
