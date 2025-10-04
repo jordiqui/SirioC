@@ -39,9 +39,9 @@ endif
 
 ### Executable name
 ifeq ($(target_windows),yes)
-	EXE = stockfish.exe
+    EXE = Sirioc\ 1.0.exe
 else
-	EXE = stockfish
+    EXE = Sirioc
 endif
 
 ### Installation dir definitions
@@ -49,7 +49,7 @@ PREFIX = /usr/local
 BINDIR = $(PREFIX)/bin
 
 ### Built-in benchmark for pgo-builds
-PGOBENCH = $(WINE_PATH) ./$(EXE) bench
+PGOBENCH = $(WINE_PATH) "./$(EXE)" bench
 
 ### Source and object files
 SRCS = benchmark.cpp bitboard.cpp evaluate.cpp main.cpp \
@@ -217,8 +217,8 @@ ifeq ($(findstring -sse41,$(ARCH)),-sse41)
 endif
 
 ifeq ($(findstring -modern,$(ARCH)),-modern)
-        $(warning *** ARCH=$(ARCH) is deprecated, defaulting to ARCH=x86-64-sse41-popcnt. Execute `make help` for a list of available architectures. ***)
-        $(shell sleep 5)
+	$(warning *** ARCH=$(ARCH) is deprecated, defaulting to ARCH=x86-64-sse41-popcnt. Execute `make help` for a list of available architectures. ***)
+	$(shell sleep 5)
 	popcnt = yes
 	sse = yes
 	sse2 = yes
@@ -853,7 +853,7 @@ endif
 
 help:
 	@echo "" && \
-	echo "To compile stockfish, type: " && \
+	echo "To compile Sirioc, type: " && \
 	echo "" && \
 	echo "make -j target [ARCH=arch] [COMP=compiler] [COMPCXX=cxx]" && \
 	echo "" && \
@@ -970,16 +970,17 @@ clean: objclean profileclean
 
 # clean binaries and objects
 objclean:
-	@rm -f stockfish stockfish.exe *.o ./syzygy/*.o ./nnue/*.o ./nnue/features/*.o
+	@rm -f Sirioc Sirioc\ 1.0.exe *.o ./syzygy/*.o ./nnue/*.o ./nnue/features/*.o
 
 # clean auxiliary profiling files
+
 profileclean:
 	@rm -rf profdir
 	@rm -f bench.txt *.gcda *.gcno ./syzygy/*.gcda ./nnue/*.gcda ./nnue/features/*.gcda *.s PGOBENCH.out
-	@rm -f stockfish.profdata *.profraw
-	@rm -f stockfish.*args*
-	@rm -f stockfish.*lt*
-	@rm -f stockfish.res
+	@rm -f sirioc.profdata *.profraw
+	@rm -f sirioc.*args*
+	@rm -f sirioc.*lt*
+	@rm -f sirioc.res
 	@rm -f ./-lstdc++.res
 
 # evaluation network (nnue)
@@ -1081,9 +1082,9 @@ clang-profile-make:
 	all
 
 clang-profile-use:
-	$(XCRUN) llvm-profdata merge -output=stockfish.profdata *.profraw
+	$(XCRUN) llvm-profdata merge -output=sirioc.profdata *.profraw
 	$(MAKE) ARCH=$(ARCH) COMP=$(COMP) \
-	EXTRACXXFLAGS='-fprofile-use=stockfish.profdata' \
+	EXTRACXXFLAGS='-fprofile-use=sirioc.profdata' \
 	EXTRALDFLAGS='-fprofile-use ' \
 	all
 
@@ -1109,9 +1110,9 @@ icx-profile-make:
 	all
 
 icx-profile-use:
-	$(XCRUN) llvm-profdata merge -output=stockfish.profdata *.profraw
+	$(XCRUN) llvm-profdata merge -output=sirioc.profdata *.profraw
 	$(MAKE) ARCH=$(ARCH) COMP=$(COMP) \
-	EXTRACXXFLAGS='-fprofile-instr-use=stockfish.profdata' \
+	EXTRACXXFLAGS='-fprofile-instr-use=sirioc.profdata' \
 	EXTRALDFLAGS='-fprofile-use ' \
 	all
 
