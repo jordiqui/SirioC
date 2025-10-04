@@ -79,6 +79,28 @@ Running `make help` lists every supported target and the associated
 optimisations. Detailed instructions for Windows, macOS, and Linux environments
 are available in the project wiki (forthcoming).
 
+## NUMA configuration
+
+SirioC incluye una lógica NUMA avanzada que replica los datos de NNUE por nodo y
+enlaza los hilos de búsqueda de acuerdo con la topología detectada. Puedes
+controlar este comportamiento mediante las opciones UCI `Threads` y `NumaPolicy`:
+
+- `auto` (valor por defecto) decide si conviene fijar la afinidad basándose en el
+  número de hilos y en la afinidad aplicada por el sistema operativo.
+- `system` fuerza la lectura de la topología NUMA del sistema y enlaza los hilos
+  siempre que sea posible.
+- `hardware` actúa como `system`, pero ignora las restricciones de afinidad que
+  pueda tener el proceso.
+- `none` desactiva por completo el enlace NUMA.
+- Cadenas personalizadas, p. ej. `0-11:12-23`, definen explícitamente cómo
+  agrupar los núcleos en nodos; son útiles para repartir la carga en máquinas
+  multi-socket.
+
+Al modificar `NumaPolicy`, el motor vuelve a analizar la topología y emite un
+resumen de la asignación de hilos por nodo. No es necesario ajustar `EvalFile`:
+la infraestructura `LazyNumaReplicated` duplica automáticamente la red NNUE en
+cada nodo NUMA cuando resulta necesario.
+
 ## Terms of use
 
 SirioC is distributed under the terms of the GNU General Public License version
