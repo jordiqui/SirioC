@@ -1,77 +1,80 @@
-#pragma once
+/*
+  Stockfish, a UCI chess playing engine derived from Glaurung 2.1
+  Copyright (C) 2004-2025 The Stockfish developers (see AUTHORS file)
+
+  Stockfish is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  Stockfish is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef MOVEPICK_H_INCLUDED
+#define MOVEPICK_H_INCLUDED
 
 #include "history.h"
 #include "movegen.h"
-#include "search.h"
+#include "types.h"
 
+namespace Stockfish {
+
+class Position;
+
+// The MovePicker class is used to pick one pseudo-legal move at a time from the
+// current position. The most important method is next_move(), which emits one
+// new pseudo-legal move on every call, until there are no moves left, when
+// Move::none() is returned. In order to improve the efficiency of the alpha-beta
+// algorithm, MovePicker attempts to return the moves which are most likely to get
+// a cut-off first.
 class MovePicker {
-public:
 
-  enum SearchType {
-    PVS, QSEARCH, PROBCUT
-  };
+   public:
+    MovePicker(const MovePicker&)            = delete;
+    MovePicker& operator=(const MovePicker&) = delete;
+    MovePicker(const Position&,
+               Move,
+               Depth,
+               const ButterflyHistory*,
+               const LowPlyHistory*,
+               const CapturePieceToHistory*,
+               const PieceToHistory**,
+               const PawnHistory*,
+               int);
+    MovePicker(const Position&, Move, int, const CapturePieceToHistory*);
+    Move next_move();
+    void skip_quiet_moves();
 
-  enum Stage {
-    PLAY_TT,
-    GEN_CAPTURES,
-    PLAY_GOOD_CAPTURES,
-    PLAY_KILLER,
-    PLAY_COUNTER,
-    GEN_QUIETS,
-    PLAY_QUIETS,
-    PLAY_BAD_CAPTURES,
+   private:
+    template<typename Pred>
+    Move select(Pred);
+    template<GenType>
+    void     score();
+    ExtMove* begin() { return cur; }
+    ExtMove* end() { return endMoves; }
 
-    QS_PLAY_TT,
-    QS_GEN_CAPTURES,
-    QS_PLAY_CAPTURES,
-    QS_GEN_QUIET_CHECKS,
-    QS_PLAY_QUIET_CHECKS,
-
-    IN_CHECK_PLAY_TT,
-    IN_CHECK_GEN_CAPTURES,
-    IN_CHECK_PLAY_CAPTURES,
-    IN_CHECK_GEN_QUIETS,
-    IN_CHECK_PLAY_QUIETS
-  };
-
-  // Constructor for pvs and probcut
-  MovePicker(
-    SearchType _searchType, Position& _pos,
-    Move _ttMove, Move _killerMove, Move _counterMove,
-    MainHistory& _mainHist, PawnHistory& _pawnHist, CaptureHistory& _capHist,
-    int _seeMargin,
-    Search::SearchInfo* _ss);
-
-  Move nextMove(bool skipQuiets);
-
-  bool genQuietChecks = false;
-
-private:
-  SearchType searchType;
-  Position& pos;
-
-  Move ttMove = MOVE_NONE;
-  Move killerMove = MOVE_NONE;
-  Move counterMove = MOVE_NONE;
-
-  MainHistory& mainHist;
-  PawnHistory& pawnHist;
-  CaptureHistory& capHist;
-
-  int seeMargin;
-
-  Search::SearchInfo* ss;
-
-  Stage stage;
-
-  MoveList moves;
-
-  int capIndex = 0, badCapIndex = 0, quietIndex = 0;
-  int capCount = 0, badCapCount = 0;
-
-  void scoreCaptures();
-
-  void scoreQuiets();
+    const Position&              pos;
+    const ButterflyHistory*      mainHistory;
+    const LowPlyHistory*         lowPlyHistory;
+    const CapturePieceToHistory* captureHistory;
+    const PieceToHistory**       continuationHistory;
+    const PawnHistory*           pawnHistory;
+    Move                         ttMove;
+    ExtMove *                    cur, *endMoves, *endBadCaptures, *beginBadQuiets, *endBadQuiets;
+    int                          stage;
+    int                          threshold;
+    Depth                        depth;
+    int                          ply;
+    bool                         skipQuiets = false;
+    ExtMove                      moves[MAX_MOVES];
 };
 
-ENABLE_INCR_OPERATORS_ON(MovePicker::Stage);
+}  // namespace Stockfish
+
+#endif  // #ifndef MOVEPICK_H_INCLUDED

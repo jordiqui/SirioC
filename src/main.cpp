@@ -1,46 +1,44 @@
-// SirioC.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
+/*
+  Stockfish, a UCI chess playing engine derived from Glaurung 2.1
+  Copyright (C) 2004-2025 The Stockfish developers (see AUTHORS file)
 
-#include "cpu_features.h"
-#include "cuckoo.h"
-#include "threads.h"
-#include "tt.h"
-#include "uci.h"
+  Stockfish is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
 
-#include <cstdio>
-#include <iomanip>
+  Stockfish is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <iostream>
-#include <sstream>
-#include <vector>
 
-int main(int argc, char** argv)
-{
-  auto cpu = detectCpuFeatures();
-  std::fprintf(stderr, "info string CPU features: %s\n", cpu.toString().c_str());
-  requireSupportedOrExit(cpu);
+#include "bitboard.h"
+#include "misc.h"
+#include "position.h"
+#include "types.h"
+#include "uci.h"
+#include "tune.h"
 
-  std::cout << "SirioC " << engineVersion << " by Jorge Ruiz (credits: Codex ChatGPT)" << std::endl;
+using namespace Stockfish;
 
-  Zobrist::init();
+int main(int argc, char* argv[]) {
 
-  Bitboards::init();
+    std::cout << engine_info() << std::endl;
 
-  positionInit();
+    Bitboards::init();
+    Position::init();
 
-  Cuckoo::init();
+    UCIEngine uci(argc, argv);
 
-  Search::init();
+    Tune::init(uci.engine_options());
 
-  UCI::init();
+    uci.loop();
 
-  Threads::setThreadCount(UCI::Options["Threads"]);
-  TT::resize(UCI::Options["Hash"]);
-
-  NNUE::loadWeights();
-
-  UCI::loop(argc, argv);
-
-  Threads::setThreadCount(0);
-
-  return 0;
+    return 0;
 }
