@@ -19,6 +19,7 @@
 #include "benchmark.h"
 #include "numa.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -450,7 +451,7 @@ BenchmarkSetup setup_benchmark(std::istream& is) {
     int desiredTimeS;
 
     if (!(is >> setup.threads))
-        setup.threads = get_hardware_concurrency();
+        setup.threads = std::max<int>(1, static_cast<int>(get_hardware_concurrency()));
     else
         setup.originalInvocation += std::to_string(setup.threads);
 
@@ -509,4 +510,4 @@ BenchmarkSetup setup_benchmark(std::istream& is) {
     return setup;
 }
 
-}  // namespace Stockfish
+}  // namespace Stockfish::Benchmark
