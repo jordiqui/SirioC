@@ -44,12 +44,18 @@ else
     EXE = Sirioc
 endif
 
+EXE_PATH = $(subst \,,$(EXE))
+
 ### Installation dir definitions
 PREFIX = /usr/local
 BINDIR = $(PREFIX)/bin
 
 ### Built-in benchmark for pgo-builds
+ codex/rename-executable-to-sirioc-1.0.exe-356y11
+PGOBENCH = $(WINE_PATH) "./$(EXE_PATH)" bench
+=======
 PGOBENCH = $(WINE_PATH) "./$(EXE)" bench
+ device
 
 ### Source and object files
 SRCS = benchmark.cpp bitboard.cpp evaluate.cpp main.cpp \
@@ -957,12 +963,12 @@ profile-build: net config-sanity objclean profileclean
 	$(MAKE) ARCH=$(ARCH) COMP=$(COMP) profileclean
 
 strip:
-	$(STRIP) $(EXE)
+	$(STRIP) "$(EXE_PATH)"
 
 install:
 	-mkdir -p -m 755 $(BINDIR)
-	-cp $(EXE) $(BINDIR)
-	$(STRIP) $(BINDIR)/$(EXE)
+	-cp "$(EXE_PATH)" $(BINDIR)
+	$(STRIP) "$(BINDIR)/$(EXE_PATH)"
 
 # clean all
 clean: objclean profileclean
@@ -1069,7 +1075,7 @@ config-sanity: net
 	 test "$(comp)" = "aarch64-linux-android21-clang")
 
 $(EXE): $(OBJS)
-	+$(CXX) -o $@ $(OBJS) $(LDFLAGS)
+	+$(CXX) -o "$(EXE_PATH)" $(OBJS) $(LDFLAGS)
 
 # Force recompilation to ensure version info is up-to-date
 misc.o: FORCE
