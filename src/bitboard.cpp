@@ -1,385 +1,228 @@
+/*
+  Stockfish, a UCI chess playing engine derived from Glaurung 2.1
+  Copyright (C) 2004-2025 The Stockfish developers (see AUTHORS file)
+
+  Stockfish is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  Stockfish is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include "bitboard.h"
 
-#include <immintrin.h>
-#include <iostream>
+#include <algorithm>
+#include <bitset>
+#include <initializer_list>
 
+#include "misc.h"
 
-/*
-* The 2 squares diagonal to the pawn, which he can capture
-*/
-Bitboard pawn_attacks[COLOR_NB][SQUARE_NB];
+namespace Stockfish {
 
+uint8_t PopCnt16[1 << 16];
+uint8_t SquareDistance[SQUARE_NB][SQUARE_NB];
 
-// attacks
+Bitboard LineBB[SQUARE_NB][SQUARE_NB];
+Bitboard BetweenBB[SQUARE_NB][SQUARE_NB];
+Bitboard PseudoAttacks[PIECE_TYPE_NB][SQUARE_NB];
+Bitboard PawnAttacks[COLOR_NB][SQUARE_NB];
 
-Bitboard RookMasks[SQUARE_NB];
-Bitboard BishopMasks[SQUARE_NB];
+alignas(64) Magic Magics[SQUARE_NB][2];
 
-#if defined(USE_PEXT)
+namespace {
 
-Bitboard* BishopAttacks[SQUARE_NB];
-Bitboard* RookAttacks[SQUARE_NB];
+Bitboard RookTable[0x19000];   // To store rook attacks
+Bitboard BishopTable[0x1480];  // To store bishop attacks
 
-Bitboard BishopTable[5248];
-Bitboard RookTable[102400];
+void init_magics(PieceType pt, Bitboard table[], Magic magics[][2]);
 
-#else
+// Returns the bitboard of target square for the given step
+// from the given square. If the step is off the board, returns empty bitboard.
+Bitboard safe_destination(Square s, int step) {
+    Square to = Square(s + step);
+    return is_ok(to) && distance(s, to) <= 2 ? square_bb(to) : Bitboard(0);
+}
+}
 
-Bitboard BishopAttacks[64][512];
-Bitboard RookAttacks[64][4096];
+// Returns an ASCII representation of a bitboard suitable
+// to be printed to standard output. Useful for debugging.
+std::string Bitboards::pretty(Bitboard b) {
 
-#endif
+    std::string s = "+---+---+---+---+---+---+---+---+\n";
 
-
-Bitboard king_attacks[SQUARE_NB];
-
-Bitboard knight_attacks[SQUARE_NB];
-
-
-// other stuff
-
-Bitboard BETWEEN_BB[SQUARE_NB][SQUARE_NB];
-Bitboard LINE_BB[SQUARE_NB][SQUARE_NB];
-
-
-// print bitboard
-void printBitboard(Bitboard bitboard)
-{
-  // loop over board ranks
-  for (Rank y = RANK_8; y >= RANK_1; --y)
-  {
-    // print rank
-    std::cout << "  " << (y + 1) << " ";
-
-    // loop over board files
-    for (File x = FILE_A; x < FILE_NB; ++x)
+    for (Rank r = RANK_8; r >= RANK_1; --r)
     {
-      // init board square
-      Square square = makeSquare(x, y);
+        for (File f = FILE_A; f <= FILE_H; ++f)
+            s += b & make_square(f, r) ? "| X " : "|   ";
 
-      // print bit indexed by board square
-      std::cout << " " << (bitboard & square ? 1 : 0);
+        s += "| " + std::to_string(1 + r) + "\n+---+---+---+---+---+---+---+---+\n";
     }
+    s += "  a   b   c   d   e   f   g   h\n";
 
-    std::cout << std::endl;
-  }
-
-  // print files
-  std::cout << "\n     a b c d e f g h" << std::endl;
-
-  // print bitboard as decimal
-  std::cout << "     bitboard: " << bitboard << std::endl;
+    return s;
 }
 
-// square encoding
 
-int RookRelevantBits[64] = {
-    12, 11, 11, 11, 11, 11, 11, 12,
-    11, 10, 10, 10, 10, 10, 10, 11,
-    11, 10, 10, 10, 10, 10, 10, 11,
-    11, 10, 10, 10, 10, 10, 10, 11,
-    11, 10, 10, 10, 10, 10, 10, 11,
-    11, 10, 10, 10, 10, 10, 10, 11,
-    11, 10, 10, 10, 10, 10, 10, 11,
-    12, 11, 11, 11, 11, 11, 11, 12
-};
+// Initializes various bitboard tables. It is called at
+// startup and relies on global objects to be already zero-initialized.
+void Bitboards::init() {
 
-int BishopRelevantBits[64] = {
-    6, 5, 5, 5, 5, 5, 5, 6,
-    5, 5, 5, 5, 5, 5, 5, 5,
-    5, 5, 7, 7, 7, 7, 5, 5,
-    5, 5, 7, 9, 9, 7, 5, 5,
-    5, 5, 7, 9, 9, 7, 5, 5,
-    5, 5, 7, 7, 7, 7, 5, 5,
-    5, 5, 5, 5, 5, 5, 5, 5,
-    6, 5, 5, 5, 5, 5, 5, 6
-};
+    for (unsigned i = 0; i < (1 << 16); ++i)
+        PopCnt16[i] = uint8_t(std::bitset<16>(i).count());
 
-// set occupancies
-Bitboard set_occupancy(int index, int bits_in_mask, Bitboard attack_mask)
-{
-    // occupancy map
-    Bitboard occupancy = 0ULL;
+    for (Square s1 = SQ_A1; s1 <= SQ_H8; ++s1)
+        for (Square s2 = SQ_A1; s2 <= SQ_H8; ++s2)
+            SquareDistance[s1][s2] = std::max(distance<File>(s1, s2), distance<Rank>(s1, s2));
 
-    // loop over the range of bits within attack mask
-    for (int count = 0; count < bits_in_mask; count++)
+    init_magics(ROOK, RookTable, Magics);
+    init_magics(BISHOP, BishopTable, Magics);
+
+    for (Square s1 = SQ_A1; s1 <= SQ_H8; ++s1)
     {
-        // get LS1B index of attacks mask
-        Square square = popLsb(attack_mask);
+        PawnAttacks[WHITE][s1] = pawn_attacks_bb<WHITE>(square_bb(s1));
+        PawnAttacks[BLACK][s1] = pawn_attacks_bb<BLACK>(square_bb(s1));
 
-        // make sure occupancy is on board
-        if (index & (1 << count))
-            // populate occupancy map
-            occupancy |= square;
+        for (int step : {-9, -8, -7, -1, 1, 7, 8, 9})
+            PseudoAttacks[KING][s1] |= safe_destination(s1, step);
+
+        for (int step : {-17, -15, -10, -6, 6, 10, 15, 17})
+            PseudoAttacks[KNIGHT][s1] |= safe_destination(s1, step);
+
+        PseudoAttacks[QUEEN][s1] = PseudoAttacks[BISHOP][s1] = attacks_bb<BISHOP>(s1, 0);
+        PseudoAttacks[QUEEN][s1] |= PseudoAttacks[ROOK][s1]  = attacks_bb<ROOK>(s1, 0);
+
+        for (PieceType pt : {BISHOP, ROOK})
+            for (Square s2 = SQ_A1; s2 <= SQ_H8; ++s2)
+            {
+                if (PseudoAttacks[pt][s1] & s2)
+                {
+                    LineBB[s1][s2] = (attacks_bb(pt, s1, 0) & attacks_bb(pt, s2, 0)) | s1 | s2;
+                    BetweenBB[s1][s2] =
+                      (attacks_bb(pt, s1, square_bb(s2)) & attacks_bb(pt, s2, square_bb(s1)));
+                }
+                BetweenBB[s1][s2] |= s2;
+            }
     }
-
-    // return occupancy map
-    return occupancy;
 }
 
-Bitboard gen_king_attacks(Square sqr) {
-  Bitboard attacks = 0;
-  File xLeft   = (File) std::max<int>(fileOf(sqr) - 1, 0);
-  File xRight  = (File) std::min<int>(fileOf(sqr) + 1, 7);
-  Rank yTop    = (Rank) std::max<int>(rankOf(sqr) - 1, 0);
-  Rank yBottom = (Rank) std::min<int>(rankOf(sqr) + 1, 7);
+namespace {
 
-  for (Rank y = yTop; y <= yBottom; ++y) {
-    for (File x = xLeft; x <= xRight; ++x) {
-      Square dest = makeSquare(x, y);
-      if (sqr != dest)
-        attacks |= dest;
-    }
-  }
-  return attacks;
-}
+Bitboard sliding_attack(PieceType pt, Square sq, Bitboard occupied) {
 
-struct Direction {
-  int offX, offY;
-};
+    Bitboard  attacks             = 0;
+    Direction RookDirections[4]   = {NORTH, SOUTH, EAST, WEST};
+    Direction BishopDirections[4] = {NORTH_EAST, SOUTH_EAST, SOUTH_WEST, NORTH_WEST};
 
-const Direction KnightDirs[] = {
-    {2, 1}, {2, -1}, {-2, 1}, {-2, -1},
-    {1, 2}, {1, -2}, {-1, 2}, {-1, -2} };
-
-constexpr Direction RookDirs[]   = { {0, 1}, {0, -1}, {1, 0}, {-1, 0} };
-constexpr Direction BishopDirs[] = { {1, 1}, {1, -1}, {-1, 1}, {-1, -1} };
-
-Bitboard gen_knight_attacks(Square sqr) {
-  Bitboard attacks = 0;
-  File x = fileOf(sqr);
-  Rank y = rankOf(sqr);
-  for (int i = 0; i < 8; i++) {
-    File destX = x + KnightDirs[i].offX;
-    Rank destY = y + KnightDirs[i].offY;
-    if (destX >= 0 && destX < 8 && destY >= 0 && destY < 8) {
-      attacks |= makeSquare(destX, destY);
-    }
-  }
-  return attacks;
-}
-
-/*
-*/
-Bitboard gen_pawn_attacks(Color pawnColor, Square sqr) {
-  if (pawnColor == WHITE && rankOf(sqr) == RANK_8)
-    return 0;
-  if (pawnColor == BLACK && rankOf(sqr) == RANK_1)
-    return 0;
-
-  Bitboard attacks = 0;
-
-  if (fileOf(sqr) != FILE_A) { // then we can attack towards west
-    attacks |= (pawnColor == WHITE ? (sqr + 7) : (sqr - 9));
-  }
-  if (fileOf(sqr) != FILE_H) { // then we can attack towards east
-    attacks |= (pawnColor == WHITE ? (sqr + 9) : (sqr - 7));
-  }
-  return attacks;
-}
-
-Bitboard sliding_attack(const Direction* dirs, Square s1, Bitboard occupied)
-{
-  Bitboard attack = 0;
-
-  for (int i = 0; i < 4; i++) {
-
-    File destX = fileOf(s1);
-    Rank destY = rankOf(s1);
-
-    while (true)
+    for (Direction d : (pt == ROOK ? RookDirections : BishopDirections))
     {
-      destX += dirs[i].offX;
-      destY += dirs[i].offY;
-
-      if (destX < 0 || destX > 7 || destY < 0 || destY > 7)
-        break;
-
-      attack |= makeSquare(destX, destY);
-
-      if (occupied & makeSquare(destX, destY))
-        break;
-    }
-  }
-
-  return attack;
-}
-
-typedef uint32_t(AttackIndexFunc)(Square, Bitboard);
-
-uint32_t attack_index_bishop(Square sq, Bitboard occupied) {
-#if defined(USE_PEXT)
-  return (uint32_t)_pext_u64(occupied, BishopMasks[sq]);
-#else
-  return (occupied & BishopMasks[sq]) * BISHOP_MAGICS[sq] >> 55;
-#endif
-}
-
-uint32_t attack_index_rook(Square sq, Bitboard occupied) {
-#if defined(USE_PEXT)
-  return (uint32_t)_pext_u64(occupied, RookMasks[sq]);
-#else
-  return (occupied & RookMasks[sq]) * ROOK_MAGICS[sq] >> 52;
-#endif
-}
-
-// lookup bishop attacks
-Bitboard getBishopAttacks(Square sq, Bitboard occupied) {
-	return BishopAttacks[sq][attack_index_bishop(sq, occupied)];
-}
-
-// lookup rook attacks
-Bitboard getRookAttacks(Square sq, Bitboard occupied) {
-	return RookAttacks[sq][attack_index_rook(sq, occupied)];
-}
-
-Bitboard getQueenAttacks(Square sq, Bitboard occupied) {
-  return getBishopAttacks(sq, occupied) | getRookAttacks(sq, occupied);
-}
-
-Bitboard getBishopAttacks(Square sq) {
-  return BishopAttacks[sq][0];
-}
-
-Bitboard getRookAttacks(Square sq) {
-  return RookAttacks[sq][0];
-}
-
-Bitboard getKingAttacks(Square sq) {
-  return king_attacks[sq];
-}
-
-Bitboard getKnightAttacks(Square sq) {
-  return knight_attacks[sq];
-}
-
-Bitboard getPawnAttacks(Square sq, Color pawnColor) {
-  return pawn_attacks[pawnColor][sq];
-}
-
-Bitboard getPawnBbAttacks(Bitboard pawns, Color pawnColor) {
-  if (pawnColor == WHITE) {
-    Bitboard east = (pawns & ~FILE_HBB) << 9;
-    Bitboard west = (pawns & ~FILE_ABB) << 7;
-    return east | west;
-  } else {
-    Bitboard east = (pawns & ~FILE_HBB) >> 7;
-    Bitboard west = (pawns & ~FILE_ABB) >> 9;
-    return east | west;
-  }
-}
-
-Bitboard getPieceAttacks(PieceType pt, Square s, Bitboard occupied) {
-  switch (pt) {
-  case KNIGHT: return getKnightAttacks(s);
-  case BISHOP: return getBishopAttacks(s, occupied);
-  case ROOK:   return getRookAttacks(s, occupied);
-  case QUEEN:  return getBishopAttacks(s, occupied) | getRookAttacks(s, occupied);
-  case KING:   return getKingAttacks(s);
-  default:     return 0;
-  }
-}
-
-#if defined(USE_PEXT)
-
-void init_pext_attacks(Bitboard table[], Bitboard* attacks[], Bitboard masks[],
-  const Direction* deltas, AttackIndexFunc index)
-{
-
-  for (Square sq = SQ_A1; sq < SQUARE_NB; ++sq) {
-    attacks[sq] = table;
-
-    // Use Carry-Rippler trick to enumerate all subsets of masks[s] and
-    // fill the attacks table.
-    Bitboard b = 0;
-    do {
-      attacks[sq][index(sq, b)] = sliding_attack(deltas, sq, b);
-      b = (b - masks[sq]) & masks[sq];
-      table++;
-    } while (b);
-  }
-}
-
-#else
-
-// init slider pieces attacks
-void init_fancy_magic_attacks(Bitboard masks[],
-  const Direction* deltas, PieceType pt)
-{
-    // loop over 64 board squares
-    for (Square sq = SQ_A1; sq < SQUARE_NB; ++sq)
-    {
-        // count attack mask bits
-        int bit_count = BitCount(masks[sq]);
-
-        // occupancy variations count
-        int occupancy_variations = 1 << bit_count;
-
-        // loop over occupancy variations
-        for (int count = 0; count < occupancy_variations; count++)
+        Square s = sq;
+        while (safe_destination(s, d))
         {
-            Bitboard occupancy = set_occupancy(count, bit_count, masks[sq]);
-
-            if (pt == BISHOP) {
-              Bitboard magic_index = occupancy * BISHOP_MAGICS[sq] >> 55;
-              BishopAttacks[sq][magic_index] = sliding_attack(deltas, sq, occupancy);
-            } else {
-              Bitboard magic_index = occupancy * ROOK_MAGICS[sq] >> 52;
-              RookAttacks[sq][magic_index] = sliding_attack(deltas, sq, occupancy);
+            attacks |= (s += d);
+            if (occupied & s)
+            {
+                break;
             }
         }
     }
+
+    return attacks;
 }
 
+
+// Computes all rook and bishop attacks at startup. Magic
+// bitboards are used to look up attacks of sliding pieces. As a reference see
+// https://www.chessprogramming.org/Magic_Bitboards. In particular, here we use
+// the so called "fancy" approach.
+void init_magics(PieceType pt, Bitboard table[], Magic magics[][2]) {
+
+#ifndef USE_PEXT
+    // Optimal PRNG seeds to pick the correct magics in the shortest time
+    int seeds[][RANK_NB] = {{8977, 44560, 54343, 38998, 5731, 95205, 104912, 17020},
+                            {728, 10316, 55013, 32803, 12281, 15100, 16645, 255}};
+
+    Bitboard occupancy[4096];
+    int      epoch[4096] = {}, cnt = 0;
 #endif
+    Bitboard reference[4096];
+    int      size = 0;
 
-namespace Bitboards {
+    for (Square s = SQ_A1; s <= SQ_H8; ++s)
+    {
+        // Board edges are not considered in the relevant occupancies
+        Bitboard edges = ((Rank1BB | Rank8BB) & ~rank_bb(s)) | ((FileABB | FileHBB) & ~file_bb(s));
 
-  void init() {
-    for (Square sq = SQ_A1; sq < SQUARE_NB; ++sq) {
-      king_attacks[sq] = gen_king_attacks(sq);
+        // Given a square 's', the mask is the bitboard of sliding attacks from
+        // 's' computed on an empty board. The index must be big enough to contain
+        // all the attacks for each possible subset of the mask and so is 2 power
+        // the number of 1s of the mask. Hence we deduce the size of the shift to
+        // apply to the 64 or 32 bits word to get the index.
+        Magic& m = magics[s][pt - BISHOP];
+        m.mask   = sliding_attack(pt, s, 0) & ~edges;
+#ifndef USE_PEXT
+        m.shift = (Is64Bit ? 64 : 32) - popcount(m.mask);
+#endif
+        // Set the offset for the attacks table of the square. We have individual
+        // table sizes for each square with "Fancy Magic Bitboards".
+        m.attacks = s == SQ_A1 ? table : magics[s - 1][pt - BISHOP].attacks + size;
+        size      = 0;
 
-      knight_attacks[sq] = gen_knight_attacks(sq);
+        // Use Carry-Rippler trick to enumerate all subsets of masks[s] and
+        // store the corresponding sliding attack bitboard in reference[].
+        Bitboard b = 0;
+        do
+        {
+#ifndef USE_PEXT
+            occupancy[size] = b;
+#endif
+            reference[size] = sliding_attack(pt, s, b);
 
-      pawn_attacks[WHITE][sq] = gen_pawn_attacks(WHITE, sq);
-      pawn_attacks[BLACK][sq] = gen_pawn_attacks(BLACK, sq);
+            if (HasPext)
+                m.attacks[pext(b, m.mask)] = reference[size];
 
-      // Board edges are not considered in the relevant occupancies
-      Bitboard edges = ((Rank1BB | Rank8BB) & ~rankBB(sq)) | ((FILE_ABB | FILE_HBB) & ~fileBB(sq));
+            size++;
+            b = (b - m.mask) & m.mask;
+        } while (b);
 
-      BishopMasks[sq] = sliding_attack(BishopDirs, sq, 0) & ~edges;
-      RookMasks[sq] = sliding_attack(RookDirs, sq, 0) & ~edges;
-    }
+#ifndef USE_PEXT
+        PRNG rng(seeds[Is64Bit][rank_of(s)]);
 
-    // Init sliding attacks
+        // Find a magic for square 's' picking up an (almost) random number
+        // until we find the one that passes the verification test.
+        for (int i = 0; i < size;)
+        {
+            for (m.magic = 0; popcount((m.magic * m.mask) >> 56) < 6;)
+                m.magic = rng.sparse_rand<Bitboard>();
 
-    #if defined(USE_PEXT)
-    init_pext_attacks(RookTable, RookAttacks, RookMasks, RookDirs, attack_index_rook);
-    init_pext_attacks(BishopTable, BishopAttacks, BishopMasks, BishopDirs, attack_index_bishop);
-    #else
-    init_fancy_magic_attacks(BishopMasks, BishopDirs, BISHOP); // bishop
-    init_fancy_magic_attacks(RookMasks, RookDirs, ROOK); // rook
-    #endif
+            // A good magic must map every possible occupancy to an index that
+            // looks up the correct sliding attack in the attacks[s] database.
+            // Note that we build up the database for square 's' as a side
+            // effect of verifying the magic. Keep track of the attempt count
+            // and save it in epoch[], little speed-up trick to avoid resetting
+            // m.attacks[] after every failed attempt.
+            for (++cnt, i = 0; i < size; ++i)
+            {
+                unsigned idx = m.index(occupancy[i]);
 
-
-    memset(LINE_BB, 0, sizeof(LINE_BB));
-    memset(BETWEEN_BB, 0, sizeof(BETWEEN_BB));
-
-    for (Square s1 = SQ_A1; s1 < SQUARE_NB; ++s1) {
-      for (Square s2 = SQ_A1; s2 < SQUARE_NB; ++s2) {
-        if (getBishopAttacks(s1) & s2) {
-          BETWEEN_BB[s1][s2] = getBishopAttacks(s1, squareBB(s2)) & getBishopAttacks(s2, squareBB(s1));
-
-          LINE_BB[s1][s2] = (getBishopAttacks(s1) & getBishopAttacks(s2)) | s1 | s2;
+                if (epoch[idx] < cnt)
+                {
+                    epoch[idx]     = cnt;
+                    m.attacks[idx] = reference[i];
+                }
+                else if (m.attacks[idx] != reference[i])
+                    break;
+            }
         }
-        else  if (getRookAttacks(s1) & s2) {
-          BETWEEN_BB[s1][s2] = getRookAttacks(s1, squareBB(s2)) & getRookAttacks(s2, squareBB(s1));
-
-          LINE_BB[s1][s2] = (getRookAttacks(s1) & getRookAttacks(s2)) | s1 | s2;
-        }
-        BETWEEN_BB[s1][s2] |= s2;
-      }
+#endif
     }
-  }
-
 }
+}
+
+}  // namespace Stockfish
