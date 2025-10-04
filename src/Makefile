@@ -51,7 +51,11 @@ PREFIX = /usr/local
 BINDIR = $(PREFIX)/bin
 
 ### Built-in benchmark for pgo-builds
+ codex/rename-executable-to-sirioc-1.0.exe-356y11
 PGOBENCH = $(WINE_PATH) "./$(EXE_PATH)" bench
+=======
+PGOBENCH = $(WINE_PATH) "./$(EXE)" bench
+ device
 
 ### Source and object files
 SRCS = benchmark.cpp bitboard.cpp evaluate.cpp main.cpp \
