@@ -72,17 +72,31 @@ Move move_from_uci(const Board &board, const std::string &uci) {
     if (uci.size() < 4) {
         throw std::invalid_argument("UCI move too short");
     }
-    std::string normalized = uci;
-    if (normalized.size() == 5) {
-        const unsigned char promotion_char_raw = static_cast<unsigned char>(normalized[4]);
-        normalized[4] = static_cast<char>(std::tolower(promotion_char_raw));
+
+    const int from = square_from_uci(uci, 0);
+    const int to = square_from_uci(uci, 2);
+
+    std::optional<PieceType> promotion;
+    if (uci.size() == 5) {
+        const unsigned char promotion_char_raw = static_cast<unsigned char>(uci[4]);
+        const char normalized_promotion = static_cast<char>(std::tolower(promotion_char_raw));
+        promotion = piece_from_promotion_char(normalized_promotion);
+    } else if (uci.size() != 4) {
+        throw std::invalid_argument("Invalid UCI move length");
     }
 
     auto legal_moves = generate_legal_moves(board);
     for (const Move &move : legal_moves) {
-        if (move_to_uci(move) == normalized) {
-            return move;
+        if (move.from != from || move.to != to) {
+            continue;
         }
+        if (promotion.has_value() != move.promotion.has_value()) {
+            continue;
+        }
+        if (promotion && move.promotion && *promotion != *move.promotion) {
+            continue;
+        }
+        return move;
     }
 
     throw std::invalid_argument("UCI move is not legal in the current position");
