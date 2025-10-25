@@ -9,6 +9,7 @@ namespace sirio {
 namespace {
 
 constexpr std::array<int, 6> piece_values = {100, 320, 330, 500, 900, 0};
+constexpr int bishop_pair_bonus = 40;
 
 constexpr std::array<int, 64> pawn_table = {
     0,  0,  0,  0,  0,  0,  0,  0,
@@ -93,6 +94,13 @@ int evaluate(const Board &board) {
                 score += color == Color::White ? total : -total;
             }
         }
+    }
+
+    if (board.has_bishop_pair(Color::White)) {
+        score += bishop_pair_bonus;
+    }
+    if (board.has_bishop_pair(Color::Black)) {
+        score -= bishop_pair_bonus;
     }
 
     return score;

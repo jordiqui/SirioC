@@ -6,8 +6,10 @@ SirioC es un proyecto de motor de ajedrez en C++ inspirado en la guía de Rustic
 
 - Representación del tablero basada en bitboards.
 - Carga y serialización de posiciones FEN, incluida la gestión de derechos de enroque y casillas de captura al paso.
-- Detección de casillas atacadas para piezas deslizantes, caballos, peones y reyes.
-- Ejecutable de ejemplo que muestra un tablero ASCII y acepta una posición en FEN desde la línea de comandos.
+- Generación de movimientos pseudo-legales y legales usando ataques por bitboards, incluida la detección de jaques, enroques y capturas al paso.
+- Evaluación estática con conteo de material, tablas pieza-casilla y bonificación por pareja de alfiles.
+- Búsqueda `negamax` con poda alfa-beta, quiescence search, heurísticas de ordenación y tabla de transposición.
+- Interfaz UCI monohilo lista para conectarse con GUIs de ajedrez.
 - Conjunto de pruebas unitarias sencillas para validar la inicialización, la compatibilidad FEN y la detección de ataques.
 
 ## Documentación
@@ -58,8 +60,7 @@ ctest --test-dir build
 
 ## Próximos pasos sugeridos
 
-- Implementar un generador de movimientos completo utilizando la representación bitboard existente.
-- Añadir evaluación estática y búsqueda minimax/alpha-beta.
-- Integrar una interfaz UCI para conectarse con GUIs de ajedrez.
-- Incorporar tablas de transposición y otras optimizaciones avanzadas conforme al plan de Rustic Chess.
+- Añadir gestión de tiempo y búsqueda iterativa para soportar partidas competitivas.
+- Incorporar mejoras de evaluación específicas para finales (por ejemplo, tablas de distancias rey-rey).
+- Implementar búsqueda con extensiones y reducciones selectivas siguiendo el plan de Rustic Chess.
 
