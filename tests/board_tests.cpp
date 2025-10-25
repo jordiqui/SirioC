@@ -5,6 +5,7 @@
 #include <string>
 
 #include "sirio/board.hpp"
+#include "sirio/endgame.hpp"
 #include "sirio/move.hpp"
 #include "sirio/movegen.hpp"
 
@@ -140,6 +141,26 @@ void test_game_history_tracking() {
     // Original board history should remain unchanged after applying a move to a copy.
     assert(board.history().size() == 1);
 }
+
+void test_sufficient_material_to_force_checkmate() {
+    sirio::Board only_kings{"7k/8/8/8/8/8/8/4K3 w - - 0 1"};
+    assert(!sirio::sufficient_material_to_force_checkmate(only_kings));
+
+    sirio::Board with_queen{"7k/8/8/8/8/8/8/4K2Q w - - 0 1"};
+    assert(sirio::sufficient_material_to_force_checkmate(with_queen));
+
+    sirio::Board bishop_pair{"7k/8/8/8/8/8/4B3/2B2K2 w - - 0 1"};
+    assert(sirio::sufficient_material_to_force_checkmate(bishop_pair));
+
+    sirio::Board bishop_and_knight{"7k/8/8/8/8/8/8/2B2NK1 w - - 0 1"};
+    assert(sirio::sufficient_material_to_force_checkmate(bishop_and_knight));
+
+    sirio::Board three_knights{"7k/8/8/8/8/8/8/1NNN2K1 w - - 0 1"};
+    assert(sirio::sufficient_material_to_force_checkmate(three_knights));
+
+    sirio::Board knight_vs_knight{"7k/8/8/8/8/8/6N1/4K1N1 w - - 0 1"};
+    assert(!sirio::sufficient_material_to_force_checkmate(knight_vs_knight));
+}
 }
 
 int main() {
@@ -152,6 +173,7 @@ int main() {
     test_bishop_pair_detection();
     test_zobrist_hashing();
     test_game_history_tracking();
+    test_sufficient_material_to_force_checkmate();
     std::cout << "All tests passed.\n";
     return 0;
 }
