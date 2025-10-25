@@ -96,12 +96,7 @@ void Board::clear() {
         }
     }
     occupancy_ = 0;
-    side_to_move_ = Color::White;
-    castling_ = {};
-    halfmove_clock_ = 0;
-    fullmove_number_ = 1;
-    en_passant_square_ = -1;
-    zobrist_hash_ = 0;
+    state_ = {};
 }
 
 Bitboard &Board::pieces_ref(Color color, PieceType type) {
@@ -151,10 +146,10 @@ Bitboard Board::occupancy(Color color) const {
 }
 
 std::optional<int> Board::en_passant_square() const {
-    if (en_passant_square_ < 0) {
+    if (state_.en_passant_square < 0) {
         return std::nullopt;
     }
-    return en_passant_square_;
+    return state_.en_passant_square;
 }
 
 std::optional<std::pair<Color, PieceType>> Board::piece_at(int square) const {
@@ -304,7 +299,7 @@ void Board::set_from_fen(std::string_view fen) {
         pieces_ref(color, type) |= mask;
         add_to_piece_list(color, type, square);
         occupancy_ |= mask;
-        zobrist_hash_ ^= piece_hash(color, type, square);
+        state_.zobrist_hash ^= piece_hash(color, type, square);
         ++file;
     }
 
@@ -313,41 +308,41 @@ void Board::set_from_fen(std::string_view fen) {
     }
 
     if (active_color == "w") {
-        side_to_move_ = Color::White;
+        state_.side_to_move = Color::White;
     } else if (active_color == "b") {
-        side_to_move_ = Color::Black;
-        zobrist_hash_ ^= side_to_move_hash();
+        state_.side_to_move = Color::Black;
+        state_.zobrist_hash ^= side_to_move_hash();
     } else {
         throw std::invalid_argument("Invalid active color in FEN");
     }
 
     if (castling_rights_text == "-") {
-        castling_ = {};
+        state_.castling = {};
     } else {
         for (char c : castling_rights_text) {
             switch (c) {
                 case 'K':
-                    if (!castling_.white_kingside) {
-                        castling_.white_kingside = true;
-                        zobrist_hash_ ^= castling_hash(Color::White, true);
+                    if (!state_.castling.white_kingside) {
+                        state_.castling.white_kingside = true;
+                        state_.zobrist_hash ^= castling_hash(Color::White, true);
                     }
                     break;
                 case 'Q':
-                    if (!castling_.white_queenside) {
-                        castling_.white_queenside = true;
-                        zobrist_hash_ ^= castling_hash(Color::White, false);
+                    if (!state_.castling.white_queenside) {
+                        state_.castling.white_queenside = true;
+                        state_.zobrist_hash ^= castling_hash(Color::White, false);
                     }
                     break;
                 case 'k':
-                    if (!castling_.black_kingside) {
-                        castling_.black_kingside = true;
-                        zobrist_hash_ ^= castling_hash(Color::Black, true);
+                    if (!state_.castling.black_kingside) {
+                        state_.castling.black_kingside = true;
+                        state_.zobrist_hash ^= castling_hash(Color::Black, true);
                     }
                     break;
                 case 'q':
-                    if (!castling_.black_queenside) {
-                        castling_.black_queenside = true;
-                        zobrist_hash_ ^= castling_hash(Color::Black, false);
+                    if (!state_.castling.black_queenside) {
+                        state_.castling.black_queenside = true;
+                        state_.zobrist_hash ^= castling_hash(Color::Black, false);
                     }
                     break;
                 default:
@@ -357,23 +352,23 @@ void Board::set_from_fen(std::string_view fen) {
     }
 
     if (en_passant_text == "-") {
-        en_passant_square_ = -1;
+        state_.en_passant_square = -1;
     } else {
-        en_passant_square_ = square_from_string(en_passant_text);
-        if (en_passant_square_ < 0) {
+        state_.en_passant_square = square_from_string(en_passant_text);
+        if (state_.en_passant_square < 0) {
             throw std::invalid_argument("Invalid en passant square in FEN");
         }
-        zobrist_hash_ ^= en_passant_hash(file_of(en_passant_square_));
+        state_.zobrist_hash ^= en_passant_hash(file_of(state_.en_passant_square));
     }
 
     try {
-        halfmove_clock_ = std::stoi(halfmove_text);
-        fullmove_number_ = std::stoi(fullmove_text);
+        state_.halfmove_clock = std::stoi(halfmove_text);
+        state_.fullmove_number = std::stoi(fullmove_text);
     } catch (const std::exception &) {
         throw std::invalid_argument("Invalid move counters in FEN");
     }
 
-    if (halfmove_clock_ < 0 || fullmove_number_ <= 0) {
+    if (state_.halfmove_clock < 0 || state_.fullmove_number <= 0) {
         throw std::invalid_argument("FEN counters have invalid values");
     }
 }
@@ -403,21 +398,21 @@ std::string Board::to_fen() const {
         }
     }
 
-    result += side_to_move_ == Color::White ? " w " : " b ";
+    result += state_.side_to_move == Color::White ? " w " : " b ";
 
     std::string castling;
-    if (castling_.white_kingside) castling += 'K';
-    if (castling_.white_queenside) castling += 'Q';
-    if (castling_.black_kingside) castling += 'k';
-    if (castling_.black_queenside) castling += 'q';
+    if (state_.castling.white_kingside) castling += 'K';
+    if (state_.castling.white_queenside) castling += 'Q';
+    if (state_.castling.black_kingside) castling += 'k';
+    if (state_.castling.black_queenside) castling += 'q';
     if (castling.empty()) {
         castling = "-";
     }
     result += castling;
     result += ' ';
-    result += en_passant_square_ >= 0 ? square_to_string(en_passant_square_) : "-";
-    result += ' ' + std::to_string(halfmove_clock_);
-    result += ' ' + std::to_string(fullmove_number_);
+    result += state_.en_passant_square >= 0 ? square_to_string(state_.en_passant_square) : "-";
+    result += ' ' + std::to_string(state_.halfmove_clock);
+    result += ' ' + std::to_string(state_.fullmove_number);
 
     return result;
 }
@@ -464,23 +459,23 @@ bool Board::is_square_attacked(int square, Color by) const {
 
 Board Board::apply_move(const Move &move) const {
     Board result = *this;
-    const Color us = side_to_move_;
+    const Color us = state_.side_to_move;
     const Color them = opposite(us);
     const Bitboard from_mask = one_bit(move.from);
     const Bitboard to_mask = one_bit(move.to);
 
     auto remove_piece_hash = [&](Color color, PieceType type, int square) {
-        result.zobrist_hash_ ^= piece_hash(color, type, square);
+        result.state_.zobrist_hash ^= piece_hash(color, type, square);
     };
 
     auto add_piece_hash = [&](Color color, PieceType type, int square) {
-        result.zobrist_hash_ ^= piece_hash(color, type, square);
+        result.state_.zobrist_hash ^= piece_hash(color, type, square);
     };
 
     auto clear_en_passant_hash = [&]() {
-        if (result.en_passant_square_ >= 0) {
-            result.zobrist_hash_ ^= en_passant_hash(file_of(result.en_passant_square_));
-            result.en_passant_square_ = -1;
+        if (result.state_.en_passant_square >= 0) {
+            result.state_.zobrist_hash ^= en_passant_hash(file_of(result.state_.en_passant_square));
+            result.state_.en_passant_square = -1;
         }
     };
 
@@ -498,14 +493,14 @@ Board Board::apply_move(const Move &move) const {
         auto disable_castling = [&](Color target, bool kingside) {
             bool &right = [&]() -> bool & {
                 if (target == Color::White) {
-                    return kingside ? result.castling_.white_kingside
-                                    : result.castling_.white_queenside;
+                    return kingside ? result.state_.castling.white_kingside
+                                    : result.state_.castling.white_queenside;
                 }
-                return kingside ? result.castling_.black_kingside
-                                : result.castling_.black_queenside;
+                return kingside ? result.state_.castling.black_kingside
+                                : result.state_.castling.black_queenside;
             }();
             if (right) {
-                result.zobrist_hash_ ^= castling_hash(target, kingside);
+                result.state_.zobrist_hash ^= castling_hash(target, kingside);
                 right = false;
             }
         };
@@ -526,14 +521,14 @@ Board Board::apply_move(const Move &move) const {
         auto disable_castling = [&](Color target, bool kingside) {
             bool &right = [&]() -> bool & {
                 if (target == Color::White) {
-                    return kingside ? result.castling_.white_kingside
-                                    : result.castling_.white_queenside;
+                    return kingside ? result.state_.castling.white_kingside
+                                    : result.state_.castling.white_queenside;
                 }
-                return kingside ? result.castling_.black_kingside
-                                : result.castling_.black_queenside;
+                return kingside ? result.state_.castling.black_kingside
+                                : result.state_.castling.black_queenside;
             }();
             if (right) {
-                result.zobrist_hash_ ^= castling_hash(target, kingside);
+                result.state_.zobrist_hash ^= castling_hash(target, kingside);
                 right = false;
             }
         };
@@ -611,21 +606,21 @@ Board Board::apply_move(const Move &move) const {
     }
 
     if (move.piece == PieceType::Pawn) {
-        result.halfmove_clock_ = 0;
+        result.state_.halfmove_clock = 0;
         if (std::abs(move.to - move.from) == 16) {
-            result.en_passant_square_ = us == Color::White ? move.from + 8 : move.from - 8;
-            result.zobrist_hash_ ^= en_passant_hash(file_of(result.en_passant_square_));
+            result.state_.en_passant_square = us == Color::White ? move.from + 8 : move.from - 8;
+            result.state_.zobrist_hash ^= en_passant_hash(file_of(result.state_.en_passant_square));
         }
     } else if (is_capture) {
-        result.halfmove_clock_ = 0;
+        result.state_.halfmove_clock = 0;
     } else {
-        ++result.halfmove_clock_;
+        ++result.state_.halfmove_clock;
     }
 
-    result.side_to_move_ = them;
-    result.zobrist_hash_ ^= side_to_move_hash();
+    result.state_.side_to_move = them;
+    result.state_.zobrist_hash ^= side_to_move_hash();
     if (us == Color::Black) {
-        ++result.fullmove_number_;
+        ++result.state_.fullmove_number;
     }
 
     result.occupancy_ = 0;

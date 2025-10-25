@@ -27,6 +27,15 @@ struct CastlingRights {
     bool black_queenside = false;
 };
 
+struct GameState {
+    Color side_to_move = Color::White;
+    CastlingRights castling{};
+    int halfmove_clock = 0;
+    int fullmove_number = 1;
+    int en_passant_square = -1;
+    std::uint64_t zobrist_hash = 0;
+};
+
 class Board {
 public:
     using PieceList = std::vector<int>;
@@ -40,17 +49,18 @@ public:
     [[nodiscard]] Bitboard pieces(Color color, PieceType type) const;
     [[nodiscard]] Bitboard occupancy(Color color) const;
     [[nodiscard]] Bitboard occupancy() const { return occupancy_; }
-    [[nodiscard]] Color side_to_move() const { return side_to_move_; }
-    [[nodiscard]] const CastlingRights &castling_rights() const { return castling_; }
-    [[nodiscard]] int halfmove_clock() const { return halfmove_clock_; }
-    [[nodiscard]] int fullmove_number() const { return fullmove_number_; }
+    [[nodiscard]] Color side_to_move() const { return state_.side_to_move; }
+    [[nodiscard]] const CastlingRights &castling_rights() const { return state_.castling; }
+    [[nodiscard]] int halfmove_clock() const { return state_.halfmove_clock; }
+    [[nodiscard]] int fullmove_number() const { return state_.fullmove_number; }
     [[nodiscard]] std::optional<int> en_passant_square() const;
     [[nodiscard]] std::optional<std::pair<Color, PieceType>> piece_at(int square) const;
     [[nodiscard]] int king_square(Color color) const;
     [[nodiscard]] bool in_check(Color color) const;
     [[nodiscard]] Board apply_move(const Move &move) const;
     [[nodiscard]] const PieceList &piece_list(Color color, PieceType type) const;
-    [[nodiscard]] std::uint64_t zobrist_hash() const { return zobrist_hash_; }
+    [[nodiscard]] std::uint64_t zobrist_hash() const { return state_.zobrist_hash; }
+    [[nodiscard]] const GameState &game_state() const { return state_; }
 
     [[nodiscard]] bool is_square_attacked(int square, Color by) const;
 
@@ -61,12 +71,7 @@ private:
     std::array<Bitboard, piece_type_count> black_{};
     std::array<std::array<PieceList, piece_type_count>, 2> piece_lists_{};
     Bitboard occupancy_ = 0;
-    Color side_to_move_ = Color::White;
-    CastlingRights castling_{};
-    int halfmove_clock_ = 0;
-    int fullmove_number_ = 1;
-    int en_passant_square_ = -1;
-    std::uint64_t zobrist_hash_ = 0;
+    GameState state_{};
 
     [[nodiscard]] Bitboard &pieces_ref(Color color, PieceType type);
     [[nodiscard]] const Bitboard &pieces_ref(Color color, PieceType type) const;
