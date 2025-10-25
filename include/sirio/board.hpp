@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -49,6 +50,7 @@ public:
     [[nodiscard]] bool in_check(Color color) const;
     [[nodiscard]] Board apply_move(const Move &move) const;
     [[nodiscard]] const PieceList &piece_list(Color color, PieceType type) const;
+    [[nodiscard]] std::uint64_t zobrist_hash() const { return zobrist_hash_; }
 
     [[nodiscard]] bool is_square_attacked(int square, Color by) const;
 
@@ -64,6 +66,7 @@ private:
     int halfmove_clock_ = 0;
     int fullmove_number_ = 1;
     int en_passant_square_ = -1;
+    std::uint64_t zobrist_hash_ = 0;
 
     [[nodiscard]] Bitboard &pieces_ref(Color color, PieceType type);
     [[nodiscard]] const Bitboard &pieces_ref(Color color, PieceType type) const;
