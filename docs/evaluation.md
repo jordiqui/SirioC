@@ -2,13 +2,14 @@
 
 La función de evaluación de SirioC se encarga de proporcionar una estimación estática de la
 posición para guiar la búsqueda negamax. Actualmente se apoya en dos ingredientes clásicos:
-conteo de material y tablas pieza-casilla precomputadas.【F:src/evaluation.cpp†L80-L99】
+conteo de material, tablas pieza-casilla precomputadas y una bonificación por pareja de
+alfiles.【F:src/evaluation.cpp†L80-L110】
 
 ## 6.1. Understanding evaluation
 
 `evaluate` recorre cada color y tipo de pieza, extrae las casillas ocupadas del bitboard y suma
 su contribución al marcador. El resultado se expresa desde la perspectiva de las blancas, de modo
-que los valores positivos favorecen a ese bando.【F:src/evaluation.cpp†L80-L99】
+que los valores positivos favorecen a ese bando.【F:src/evaluation.cpp†L80-L110】
 
 ## 6.2. Material counting
 
@@ -26,8 +27,9 @@ mismas tablas definidas para las blancas.【F:src/evaluation.cpp†L13-L77】【
 ## 6.4. The evaluation function
 
 El bucle principal combina el valor material y la bonificación posicional (`ps_value`) para cada
-pieza encontrada en la posición. Las contribuciones de las piezas negras se restan, generando un
-único resultado con signo desde la perspectiva de las blancas.【F:src/evaluation.cpp†L80-L99】
+pieza encontrada en la posición. Si un bando conserva ambos alfiles, se suma también
+`bishop_pair_bonus`. Las contribuciones de las piezas negras se restan, generando un único
+resultado con signo desde la perspectiva de las blancas.【F:src/evaluation.cpp†L80-L110】
 
 ## 6.5. Tapering the evaluation
 

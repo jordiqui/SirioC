@@ -19,13 +19,23 @@ namespace {
 
 constexpr int mate_score = 100000;
 constexpr int max_search_depth = 64;
+constexpr int mate_threshold = mate_score - max_search_depth;
 
 constexpr std::array<int, static_cast<std::size_t>(PieceType::Count)> mvv_values = {
     100, 320, 330, 500, 900, 20000};
 
+enum class TTNodeType { Exact, LowerBound, UpperBound };
+
+struct TTEntry {
+    Move best_move{};
+    int depth = 0;
+    int score = 0;
+    TTNodeType type = TTNodeType::Exact;
+};
+
 struct SearchContext {
     std::array<std::array<std::optional<Move>, 2>, max_search_depth> killer_moves{};
-    std::unordered_map<std::uint64_t, Move> tt_moves{};
+    std::unordered_map<std::uint64_t, TTEntry> tt_entries{};
 };
 
 bool same_move(const Move &lhs, const Move &rhs) {
@@ -73,6 +83,31 @@ int score_move(const Move &move, const SearchContext &context, int ply,
     return killer_score(move, context, ply);
 }
 
+int evaluate_for_current_player(const Board &board) {
+    int eval = evaluate(board);
+    return board.side_to_move() == Color::White ? eval : -eval;
+}
+
+int to_tt_score(int score, int ply) {
+    if (score > mate_threshold) {
+        return score + ply;
+    }
+    if (score < -mate_threshold) {
+        return score - ply;
+    }
+    return score;
+}
+
+int from_tt_score(int score, int ply) {
+    if (score > mate_threshold) {
+        return score - ply;
+    }
+    if (score < -mate_threshold) {
+        return score + ply;
+    }
+    return score;
+}
+
 void order_moves(std::vector<Move> &moves, const SearchContext &context, int ply,
                  const std::optional<Move> &tt_move) {
     std::vector<std::pair<int, Move>> scored;
@@ -100,6 +135,8 @@ void store_killer(const Move &move, SearchContext &context, int ply) {
     }
 }
 
+int quiescence(const Board &board, int alpha, int beta, int ply, SearchContext &context);
+
 int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *best_move,
             bool *found_best, SearchContext &context) {
     if (!sufficient_material_to_force_checkmate(board)) {
@@ -112,8 +149,7 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
     }
 
     if (depth == 0) {
-        int eval = evaluate(board);
-        return board.side_to_move() == Color::White ? eval : -eval;
+        return quiescence(board, alpha, beta, ply, context);
     }
 
     auto moves = generate_legal_moves(board);
@@ -124,17 +160,49 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
         return 0;
     }
 
-    int best_score = std::numeric_limits<int>::min();
-    Move local_best;
-    bool local_found = false;
-
+    const std::uint64_t hash = board.zobrist_hash();
     std::optional<Move> tt_move;
-    auto tt_it = context.tt_moves.find(board.zobrist_hash());
-    if (tt_it != context.tt_moves.end()) {
-        tt_move = tt_it->second;
+    auto tt_it = context.tt_entries.find(hash);
+    if (tt_it != context.tt_entries.end()) {
+        tt_move = tt_it->second.best_move;
+        const TTEntry &entry = tt_it->second;
+        if (entry.depth >= depth) {
+            int tt_score = from_tt_score(entry.score, ply);
+            switch (entry.type) {
+                case TTNodeType::Exact:
+                    if (best_move) {
+                        *best_move = entry.best_move;
+                    }
+                    if (found_best) {
+                        *found_best = true;
+                    }
+                    return tt_score;
+                case TTNodeType::LowerBound:
+                    alpha = std::max(alpha, tt_score);
+                    break;
+                case TTNodeType::UpperBound:
+                    beta = std::min(beta, tt_score);
+                    break;
+            }
+            if (alpha >= beta) {
+                if (best_move) {
+                    *best_move = entry.best_move;
+                }
+                if (found_best) {
+                    *found_best = true;
+                }
+                return tt_score;
+            }
+        }
     }
 
     order_moves(moves, context, ply, tt_move);
+
+    int alpha_original = alpha;
+    int beta_original = beta;
+    int best_score = std::numeric_limits<int>::min();
+    Move local_best;
+    bool local_found = false;
 
     for (const Move &move : moves) {
         Board next = board.apply_move(move);
@@ -162,10 +230,63 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
     }
 
     if (local_found) {
-        context.tt_moves[board.zobrist_hash()] = local_best;
+        TTEntry entry;
+        entry.best_move = local_best;
+        entry.depth = depth;
+        entry.score = to_tt_score(best_score, ply);
+        if (best_score <= alpha_original) {
+            entry.type = TTNodeType::UpperBound;
+        } else if (best_score >= beta_original) {
+            entry.type = TTNodeType::LowerBound;
+        } else {
+            entry.type = TTNodeType::Exact;
+        }
+
+        auto current = context.tt_entries.find(hash);
+        if (current == context.tt_entries.end() || current->second.depth <= entry.depth) {
+            context.tt_entries[hash] = entry;
+        }
     }
 
     return best_score;
+}
+
+int quiescence(const Board &board, int alpha, int beta, int ply, SearchContext &context) {
+    int stand_pat = evaluate_for_current_player(board);
+    if (stand_pat >= beta) {
+        return stand_pat;
+    }
+    if (stand_pat > alpha) {
+        alpha = stand_pat;
+    }
+
+    auto moves = generate_legal_moves(board);
+    std::vector<Move> tactical_moves;
+    tactical_moves.reserve(moves.size());
+    for (const Move &move : moves) {
+        if (move.captured.has_value() || move.is_en_passant || move.promotion.has_value()) {
+            tactical_moves.push_back(move);
+        }
+    }
+
+    if (tactical_moves.empty()) {
+        return alpha;
+    }
+
+    order_moves(tactical_moves, context, ply, std::nullopt);
+
+    for (const Move &move : tactical_moves) {
+        Board next = board.apply_move(move);
+        int score = -quiescence(next, -beta, -alpha, ply + 1, context);
+        if (score >= beta) {
+            return score;
+        }
+        if (score > alpha) {
+            alpha = score;
+        }
+    }
+
+    return alpha;
 }
 
 }  // namespace
