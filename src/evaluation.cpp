@@ -1,5 +1,6 @@
 #include "sirio/evaluation.hpp"
 
+#include <algorithm>
 #include <array>
 
 #include "sirio/bitboard.hpp"
@@ -10,6 +11,8 @@ namespace {
 
 constexpr std::array<int, 6> piece_values = {100, 320, 330, 500, 900, 0};
 constexpr int bishop_pair_bonus = 40;
+constexpr int endgame_material_threshold = 1300;
+constexpr int king_distance_scale = 12;
 
 constexpr std::array<int, 64> pawn_table = {
     0,  0,  0,  0,  0,  0,  0,  0,
@@ -76,10 +79,33 @@ const std::array<const std::array<int, 64> *, 6> piece_square_tables = {
 
 int mirror_square(int square) { return square ^ 56; }
 
+constexpr std::array<int, 64 * 64> generate_king_distance_table() {
+    std::array<int, 64 * 64> table{};
+    for (int from = 0; from < 64; ++from) {
+        for (int to = 0; to < 64; ++to) {
+            int file_diff = (from % 8) - (to % 8);
+            if (file_diff < 0) {
+                file_diff = -file_diff;
+            }
+            int rank_diff = (from / 8) - (to / 8);
+            if (rank_diff < 0) {
+                rank_diff = -rank_diff;
+            }
+            table[static_cast<std::size_t>(from) * 64 + static_cast<std::size_t>(to)] =
+                std::max(file_diff, rank_diff);
+        }
+    }
+    return table;
+}
+
+constexpr auto king_distance_table = generate_king_distance_table();
+
 }  // namespace
 
 int evaluate(const Board &board) {
     int score = 0;
+    int material_white = 0;
+    int material_black = 0;
     for (int color_index = 0; color_index < 2; ++color_index) {
         Color color = color_index == 0 ? Color::White : Color::Black;
         for (std::size_t piece_index = 0; piece_index < piece_values.size(); ++piece_index) {
@@ -92,6 +118,11 @@ int evaluate(const Board &board) {
                 int ps_value = (*piece_square_tables[piece_index])[table_index];
                 int total = base_value + ps_value;
                 score += color == Color::White ? total : -total;
+                if (color == Color::White) {
+                    material_white += base_value;
+                } else {
+                    material_black += base_value;
+                }
             }
         }
     }
@@ -101,6 +132,24 @@ int evaluate(const Board &board) {
     }
     if (board.has_bishop_pair(Color::Black)) {
         score -= bishop_pair_bonus;
+    }
+
+    int max_material = std::max(material_white, material_black);
+    if (max_material <= endgame_material_threshold) {
+        int white_king = board.king_square(Color::White);
+        int black_king = board.king_square(Color::Black);
+        int distance = king_distance_table[static_cast<std::size_t>(white_king) * 64 +
+                                           static_cast<std::size_t>(black_king)];
+        int closeness = 7 - distance;
+        if (closeness < 0) {
+            closeness = 0;
+        }
+        int advantage = material_white - material_black;
+        if (advantage > 0) {
+            score += closeness * king_distance_scale;
+        } else if (advantage < 0) {
+            score -= closeness * king_distance_scale;
+        }
     }
 
     return score;
