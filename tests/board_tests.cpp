@@ -1,9 +1,11 @@
+#include <algorithm>
 #include <bit>
 #include <cassert>
 #include <iostream>
 #include <string>
 
 #include "sirio/board.hpp"
+#include "sirio/move.hpp"
 #include "sirio/movegen.hpp"
 
 namespace {
@@ -24,6 +26,13 @@ void test_start_position() {
     assert(board.castling_rights().black_queenside);
     assert(board.to_fen() ==
            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+
+    const auto &white_pawns = board.piece_list(sirio::Color::White, sirio::PieceType::Pawn);
+    const auto &black_knights = board.piece_list(sirio::Color::Black, sirio::PieceType::Knight);
+    assert(white_pawns.size() == 8);
+    assert(std::find(white_pawns.begin(), white_pawns.end(), square_index('a', 2)) != white_pawns.end());
+    assert(black_knights.size() == 2);
+    assert(std::find(black_knights.begin(), black_knights.end(), square_index('g', 8)) != black_knights.end());
 }
 
 void test_fen_roundtrip() {
@@ -62,6 +71,27 @@ void test_start_position_moves() {
     auto moves = sirio::generate_legal_moves(board);
     assert(moves.size() == 20);
 }
+
+void test_piece_list_updates_after_moves() {
+    sirio::Board board;
+    auto move = sirio::move_from_uci(board, "e2e4");
+    sirio::Board after_pawn_push = board.apply_move(move);
+    const auto &white_pawns = after_pawn_push.piece_list(sirio::Color::White, sirio::PieceType::Pawn);
+    assert(std::find(white_pawns.begin(), white_pawns.end(), square_index('e', 4)) != white_pawns.end());
+    assert(std::find(white_pawns.begin(), white_pawns.end(), square_index('e', 2)) == white_pawns.end());
+
+    sirio::Board capture_position{"rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2"};
+    auto capture_move = sirio::move_from_uci(capture_position, "e4d5");
+    sirio::Board after_capture = capture_position.apply_move(capture_move);
+    const auto &white_pawns_after_capture =
+        after_capture.piece_list(sirio::Color::White, sirio::PieceType::Pawn);
+    const auto &black_pawns_after_capture =
+        after_capture.piece_list(sirio::Color::Black, sirio::PieceType::Pawn);
+    assert(std::find(white_pawns_after_capture.begin(), white_pawns_after_capture.end(),
+                     square_index('d', 5)) != white_pawns_after_capture.end());
+    assert(std::find(black_pawns_after_capture.begin(), black_pawns_after_capture.end(),
+                     square_index('d', 5)) == black_pawns_after_capture.end());
+}
 }
 
 int main() {
@@ -70,6 +100,7 @@ int main() {
     test_attack_detection();
     test_en_passant();
     test_start_position_moves();
+    test_piece_list_updates_after_moves();
     std::cout << "All tests passed.\n";
     return 0;
 }

@@ -5,6 +5,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "sirio/bitboard.hpp"
 
@@ -27,6 +28,8 @@ struct CastlingRights {
 
 class Board {
 public:
+    using PieceList = std::vector<int>;
+
     Board();
     explicit Board(std::string_view fen);
 
@@ -45,12 +48,16 @@ public:
     [[nodiscard]] int king_square(Color color) const;
     [[nodiscard]] bool in_check(Color color) const;
     [[nodiscard]] Board apply_move(const Move &move) const;
+    [[nodiscard]] const PieceList &piece_list(Color color, PieceType type) const;
 
     [[nodiscard]] bool is_square_attacked(int square, Color by) const;
 
 private:
-    std::array<Bitboard, static_cast<std::size_t>(PieceType::Count)> white_{};
-    std::array<Bitboard, static_cast<std::size_t>(PieceType::Count)> black_{};
+    static constexpr std::size_t piece_type_count = static_cast<std::size_t>(PieceType::Count);
+
+    std::array<Bitboard, piece_type_count> white_{};
+    std::array<Bitboard, piece_type_count> black_{};
+    std::array<std::array<PieceList, piece_type_count>, 2> piece_lists_{};
     Bitboard occupancy_ = 0;
     Color side_to_move_ = Color::White;
     CastlingRights castling_{};
@@ -60,6 +67,10 @@ private:
 
     [[nodiscard]] Bitboard &pieces_ref(Color color, PieceType type);
     [[nodiscard]] const Bitboard &pieces_ref(Color color, PieceType type) const;
+    [[nodiscard]] PieceList &piece_list_ref(Color color, PieceType type);
+    [[nodiscard]] const PieceList &piece_list_ref(Color color, PieceType type) const;
+    void add_to_piece_list(Color color, PieceType type, int square);
+    void remove_from_piece_list(Color color, PieceType type, int square);
     void clear();
     static PieceType piece_type_from_char(char piece);
     static char piece_to_char(Color color, PieceType type);

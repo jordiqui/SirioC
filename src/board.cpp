@@ -1,5 +1,6 @@
 #include "sirio/board.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdlib>
 #include <sstream>
@@ -32,6 +33,11 @@ Board::Board(std::string_view fen) {
 void Board::clear() {
     white_.fill(0);
     black_.fill(0);
+    for (auto &color_lists : piece_lists_) {
+        for (auto &list : color_lists) {
+            list.clear();
+        }
+    }
     occupancy_ = 0;
     side_to_move_ = Color::White;
     castling_ = {};
@@ -48,6 +54,31 @@ Bitboard &Board::pieces_ref(Color color, PieceType type) {
 const Bitboard &Board::pieces_ref(Color color, PieceType type) const {
     auto index = static_cast<std::size_t>(type);
     return color == Color::White ? white_[index] : black_[index];
+}
+
+Board::PieceList &Board::piece_list_ref(Color color, PieceType type) {
+    auto color_index = color == Color::White ? 0 : 1;
+    auto type_index = static_cast<std::size_t>(type);
+    return piece_lists_[color_index][type_index];
+}
+
+const Board::PieceList &Board::piece_list_ref(Color color, PieceType type) const {
+    auto color_index = color == Color::White ? 0 : 1;
+    auto type_index = static_cast<std::size_t>(type);
+    return piece_lists_[color_index][type_index];
+}
+
+void Board::add_to_piece_list(Color color, PieceType type, int square) {
+    piece_list_ref(color, type).push_back(square);
+}
+
+void Board::remove_from_piece_list(Color color, PieceType type, int square) {
+    auto &list = piece_list_ref(color, type);
+    auto it = std::find(list.begin(), list.end(), square);
+    if (it == list.end()) {
+        throw std::invalid_argument("Piece list missing square");
+    }
+    list.erase(it);
 }
 
 Bitboard Board::pieces(Color color, PieceType type) const { return pieces_ref(color, type); }
@@ -160,6 +191,10 @@ std::string Board::square_to_string(int square) {
     return result;
 }
 
+const Board::PieceList &Board::piece_list(Color color, PieceType type) const {
+    return piece_list_ref(color, type);
+}
+
 void Board::set_from_fen(std::string_view fen) {
     clear();
     std::string fen_text{fen};
@@ -209,6 +244,7 @@ void Board::set_from_fen(std::string_view fen) {
         int square = rank * 8 + file;
         Bitboard mask = one_bit(square);
         pieces_ref(color, type) |= mask;
+        add_to_piece_list(color, type, square);
         occupancy_ |= mask;
         ++file;
     }
@@ -365,6 +401,7 @@ Board Board::apply_move(const Move &move) const {
         throw std::invalid_argument("Move does not match board state");
     }
     moving_bb &= ~from_mask;
+    result.remove_from_piece_list(us, move.piece, move.from);
 
     result.en_passant_square_ = -1;
 
@@ -412,6 +449,7 @@ Board Board::apply_move(const Move &move) const {
             throw std::invalid_argument("En passant capture missing pawn");
         }
         capture_bb &= ~capture_mask;
+        result.remove_from_piece_list(them, PieceType::Pawn, capture_square);
         is_capture = true;
     } else if (move.captured.has_value()) {
         Bitboard &capture_bb = result.pieces_ref(them, *move.captured);
@@ -420,11 +458,13 @@ Board Board::apply_move(const Move &move) const {
         }
         capture_bb &= ~to_mask;
         update_rook_rights_on_move(them, move.to);
+        result.remove_from_piece_list(them, *move.captured, move.to);
         is_capture = true;
     }
 
     PieceType placed_piece = move.promotion.has_value() ? *move.promotion : move.piece;
     result.pieces_ref(us, placed_piece) |= to_mask;
+    result.add_to_piece_list(us, placed_piece, move.to);
 
     if (move.is_castling) {
         int rook_from;
@@ -444,6 +484,8 @@ Board Board::apply_move(const Move &move) const {
         }
         rook_bb &= ~rook_from_mask;
         rook_bb |= rook_to_mask;
+        result.remove_from_piece_list(us, PieceType::Rook, rook_from);
+        result.add_to_piece_list(us, PieceType::Rook, rook_to);
     }
 
     if (move.piece == PieceType::Pawn) {
