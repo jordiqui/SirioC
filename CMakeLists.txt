@@ -34,6 +34,16 @@ add_executable(sirio_tests
 
 target_link_libraries(sirio_tests PRIVATE sirio_core)
 
+if (WIN32)
+    if (MSVC)
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    else()
+        foreach(target_name IN ITEMS sirio sirio_tests)
+            target_link_options(${target_name} PRIVATE -static -static-libstdc++ -static-libgcc)
+        endforeach()
+    endif()
+endif()
+
 enable_testing()
 add_test(NAME sirio_board_tests COMMAND sirio_tests)
 
