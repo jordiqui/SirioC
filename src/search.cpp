@@ -2,6 +2,7 @@
 
 #include <limits>
 
+#include "sirio/endgame.hpp"
 #include "sirio/evaluation.hpp"
 #include "sirio/movegen.hpp"
 
@@ -13,6 +14,10 @@ constexpr int mate_score = 100000;
 
 int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *best_move,
             bool *found_best) {
+    if (!sufficient_material_to_force_checkmate(board)) {
+        return 0;
+    }
+
     if (depth == 0) {
         int eval = evaluate(board);
         return board.side_to_move() == Color::White ? eval : -eval;

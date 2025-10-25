@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(sirio_core
     src/board.cpp
+    src/endgame.cpp
     src/evaluation.cpp
     src/move.cpp
     src/movegen.cpp
