@@ -72,42 +72,20 @@ Move move_from_uci(const Board &board, const std::string &uci) {
     if (uci.size() < 4) {
         throw std::invalid_argument("UCI move too short");
     }
-    std::optional<PieceType> promotion;
-    if (uci.size() == 5) {
-        promotion = piece_from_promotion_char(static_cast<char>(std::tolower(uci[4])));
+    std::string normalized = uci;
+    if (normalized.size() == 5) {
+        const unsigned char promotion_char_raw = static_cast<unsigned char>(normalized[4]);
+        normalized[4] = static_cast<char>(std::tolower(promotion_char_raw));
     }
 
     auto legal_moves = generate_legal_moves(board);
     for (const Move &move : legal_moves) {
-        if (move_to_uci(move) == uci) {
+        if (move_to_uci(move) == normalized) {
             return move;
         }
     }
 
-    int from = square_from_uci(uci, 0);
-    int to = square_from_uci(uci, 2);
-    auto piece = board.piece_at(from);
-    if (!piece || piece->first != board.side_to_move()) {
-        throw std::invalid_argument("No movable piece on from-square");
-    }
-
-    Move move{from, to, piece->second};
-    move.promotion = promotion;
-    if (piece->second == PieceType::King && std::abs(to - from) == 2) {
-        move.is_castling = true;
-    }
-    if (auto captured = board.piece_at(to); captured && captured->first == opposite(piece->first)) {
-        move.captured = captured->second;
-    }
-    if (piece->second == PieceType::Pawn) {
-        auto ep = board.en_passant_square();
-        if (ep && *ep == to && move.captured == std::nullopt) {
-            move.is_en_passant = true;
-            move.captured = PieceType::Pawn;
-        }
-    }
-
-    return move;
+    throw std::invalid_argument("UCI move is not legal in the current position");
 }
 
 }  // namespace sirio
