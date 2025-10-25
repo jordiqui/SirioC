@@ -113,6 +113,21 @@ void test_zobrist_hashing() {
         "rnbqkbnr/pppp1ppp/8/4p3/3P4/8/PPP1PPPP/RNBQKBNR b KQkq - 0 2"};
     assert(en_passant_board.zobrist_hash() != without_en_passant.zobrist_hash());
 }
+
+void test_game_history_tracking() {
+    sirio::Board board;
+    assert(!board.history().empty());
+    assert(board.history().size() == 1);
+    assert(board.history().back().zobrist_hash == board.zobrist_hash());
+
+    auto move = sirio::move_from_uci(board, "e2e4");
+    sirio::Board after_move = board.apply_move(move);
+    assert(after_move.history().size() == 2);
+    assert(after_move.history().back().zobrist_hash == after_move.zobrist_hash());
+
+    // Original board history should remain unchanged after applying a move to a copy.
+    assert(board.history().size() == 1);
+}
 }
 
 int main() {
@@ -123,6 +138,7 @@ int main() {
     test_start_position_moves();
     test_piece_list_updates_after_moves();
     test_zobrist_hashing();
+    test_game_history_tracking();
     std::cout << "All tests passed.\n";
     return 0;
 }
