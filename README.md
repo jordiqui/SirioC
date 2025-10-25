@@ -22,6 +22,22 @@ cmake -S . -B build
 cmake --build build
 ```
 
+## Compilación con Makefile
+
+```bash
+make
+```
+
+El ejecutable quedará disponible en `build/bin/sirio`.
+
+Para compilar y ejecutar las pruebas con el Makefile:
+
+```bash
+make test
+```
+
+Esto genera el binario de pruebas en `build/bin/sirio_tests` y lo ejecuta.
+
 El ejecutable `sirio` imprime el tablero de la posición inicial, o bien de la posición indicada como argumentos en FEN:
 
 ```bash
