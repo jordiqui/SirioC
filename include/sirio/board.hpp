@@ -1,8 +1,10 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -36,6 +38,35 @@ struct GameState {
     std::uint64_t zobrist_hash = 0;
 };
 
+struct GameHistory {
+    void push(const GameState &state) { states_.push_back(state); }
+
+    void pop() {
+        if (states_.empty()) {
+            throw std::out_of_range("Cannot pop from empty game history");
+        }
+        states_.pop_back();
+    }
+
+    void clear() { states_.clear(); }
+
+    [[nodiscard]] bool empty() const { return states_.empty(); }
+
+    [[nodiscard]] std::size_t size() const { return states_.size(); }
+
+    [[nodiscard]] const GameState &back() const {
+        if (states_.empty()) {
+            throw std::out_of_range("Game history is empty");
+        }
+        return states_.back();
+    }
+
+    [[nodiscard]] const GameState &at(std::size_t index) const { return states_.at(index); }
+
+private:
+    std::vector<GameState> states_{};
+};
+
 class Board {
 public:
     using PieceList = std::vector<int>;
@@ -61,6 +92,7 @@ public:
     [[nodiscard]] const PieceList &piece_list(Color color, PieceType type) const;
     [[nodiscard]] std::uint64_t zobrist_hash() const { return state_.zobrist_hash; }
     [[nodiscard]] const GameState &game_state() const { return state_; }
+    [[nodiscard]] const GameHistory &history() const { return history_; }
 
     [[nodiscard]] bool is_square_attacked(int square, Color by) const;
 
@@ -72,6 +104,7 @@ private:
     std::array<std::array<PieceList, piece_type_count>, 2> piece_lists_{};
     Bitboard occupancy_ = 0;
     GameState state_{};
+    GameHistory history_{};
 
     [[nodiscard]] Bitboard &pieces_ref(Color color, PieceType type);
     [[nodiscard]] const Bitboard &pieces_ref(Color color, PieceType type) const;

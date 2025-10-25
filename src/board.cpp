@@ -97,6 +97,7 @@ void Board::clear() {
     }
     occupancy_ = 0;
     state_ = {};
+    history_.clear();
 }
 
 Bitboard &Board::pieces_ref(Color color, PieceType type) {
@@ -371,6 +372,8 @@ void Board::set_from_fen(std::string_view fen) {
     if (state_.halfmove_clock < 0 || state_.fullmove_number <= 0) {
         throw std::invalid_argument("FEN counters have invalid values");
     }
+
+    history_.push(state_);
 }
 
 std::string Board::to_fen() const {
@@ -628,6 +631,8 @@ Board Board::apply_move(const Move &move) const {
         result.occupancy_ |= result.white_[index];
         result.occupancy_ |= result.black_[index];
     }
+
+    result.history_.push(result.state_);
 
     return result;
 }
