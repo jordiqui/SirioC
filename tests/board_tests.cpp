@@ -92,6 +92,27 @@ void test_piece_list_updates_after_moves() {
     assert(std::find(black_pawns_after_capture.begin(), black_pawns_after_capture.end(),
                      square_index('d', 5)) == black_pawns_after_capture.end());
 }
+
+void test_zobrist_hashing() {
+    sirio::Board initial;
+    sirio::Board another_initial;
+    assert(initial.zobrist_hash() == another_initial.zobrist_hash());
+
+    sirio::Board black_to_move{
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1"};
+    assert(initial.zobrist_hash() != black_to_move.zobrist_hash());
+
+    auto move = sirio::move_from_uci(initial, "e2e4");
+    sirio::Board after_move = initial.apply_move(move);
+    sirio::Board reconstructed{after_move.to_fen()};
+    assert(after_move.zobrist_hash() == reconstructed.zobrist_hash());
+
+    sirio::Board en_passant_board{
+        "rnbqkbnr/pppp1ppp/8/4p3/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 2"};
+    sirio::Board without_en_passant{
+        "rnbqkbnr/pppp1ppp/8/4p3/3P4/8/PPP1PPPP/RNBQKBNR b KQkq - 0 2"};
+    assert(en_passant_board.zobrist_hash() != without_en_passant.zobrist_hash());
+}
 }
 
 int main() {
@@ -101,6 +122,7 @@ int main() {
     test_en_passant();
     test_start_position_moves();
     test_piece_list_updates_after_moves();
+    test_zobrist_hashing();
     std::cout << "All tests passed.\n";
     return 0;
 }

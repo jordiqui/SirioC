@@ -1,8 +1,10 @@
 #include "sirio/board.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdlib>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -16,6 +18,61 @@ constexpr const char *kStartPositionFEN =
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 constexpr std::size_t piece_count = static_cast<std::size_t>(PieceType::Count);
+
+constexpr std::size_t zobrist_piece_count = piece_count * 2 * 64;
+
+struct ZobristTables {
+    std::array<std::uint64_t, zobrist_piece_count> pieces{};
+    std::array<std::uint64_t, 4> castling{};
+    std::array<std::uint64_t, 8> en_passant{};
+    std::uint64_t side_to_move = 0;
+};
+
+const ZobristTables &zobrist_tables() {
+    static const ZobristTables tables = [] {
+        ZobristTables result{};
+        std::mt19937_64 rng(0x9E3779B97F4A7C15ULL);
+        for (auto &value : result.pieces) {
+            value = rng();
+        }
+        for (auto &value : result.castling) {
+            value = rng();
+        }
+        for (auto &value : result.en_passant) {
+            value = rng();
+        }
+        result.side_to_move = rng();
+        return result;
+    }();
+    return tables;
+}
+
+std::uint64_t piece_hash(Color color, PieceType type, int square) {
+    const auto &tables = zobrist_tables();
+    const std::size_t color_index = color == Color::White ? 0U : 1U;
+    const std::size_t type_index = static_cast<std::size_t>(type);
+    const std::size_t offset = ((color_index * piece_count) + type_index) * 64 +
+                               static_cast<std::size_t>(square);
+    return tables.pieces[offset];
+}
+
+std::uint64_t castling_hash(Color color, bool kingside) {
+    const auto &tables = zobrist_tables();
+    std::size_t index = 0;
+    if (color == Color::White) {
+        index = kingside ? 0 : 1;
+    } else {
+        index = kingside ? 2 : 3;
+    }
+    return tables.castling[index];
+}
+
+std::uint64_t en_passant_hash(int file) {
+    const auto &tables = zobrist_tables();
+    return tables.en_passant[static_cast<std::size_t>(file)];
+}
+
+std::uint64_t side_to_move_hash() { return zobrist_tables().side_to_move; }
 }  // namespace
 
 Color opposite(Color color) {
@@ -44,6 +101,7 @@ void Board::clear() {
     halfmove_clock_ = 0;
     fullmove_number_ = 1;
     en_passant_square_ = -1;
+    zobrist_hash_ = 0;
 }
 
 Bitboard &Board::pieces_ref(Color color, PieceType type) {
@@ -246,6 +304,7 @@ void Board::set_from_fen(std::string_view fen) {
         pieces_ref(color, type) |= mask;
         add_to_piece_list(color, type, square);
         occupancy_ |= mask;
+        zobrist_hash_ ^= piece_hash(color, type, square);
         ++file;
     }
 
@@ -257,6 +316,7 @@ void Board::set_from_fen(std::string_view fen) {
         side_to_move_ = Color::White;
     } else if (active_color == "b") {
         side_to_move_ = Color::Black;
+        zobrist_hash_ ^= side_to_move_hash();
     } else {
         throw std::invalid_argument("Invalid active color in FEN");
     }
@@ -267,16 +327,28 @@ void Board::set_from_fen(std::string_view fen) {
         for (char c : castling_rights_text) {
             switch (c) {
                 case 'K':
-                    castling_.white_kingside = true;
+                    if (!castling_.white_kingside) {
+                        castling_.white_kingside = true;
+                        zobrist_hash_ ^= castling_hash(Color::White, true);
+                    }
                     break;
                 case 'Q':
-                    castling_.white_queenside = true;
+                    if (!castling_.white_queenside) {
+                        castling_.white_queenside = true;
+                        zobrist_hash_ ^= castling_hash(Color::White, false);
+                    }
                     break;
                 case 'k':
-                    castling_.black_kingside = true;
+                    if (!castling_.black_kingside) {
+                        castling_.black_kingside = true;
+                        zobrist_hash_ ^= castling_hash(Color::Black, true);
+                    }
                     break;
                 case 'q':
-                    castling_.black_queenside = true;
+                    if (!castling_.black_queenside) {
+                        castling_.black_queenside = true;
+                        zobrist_hash_ ^= castling_hash(Color::Black, false);
+                    }
                     break;
                 default:
                     throw std::invalid_argument("Invalid castling rights in FEN");
@@ -291,6 +363,7 @@ void Board::set_from_fen(std::string_view fen) {
         if (en_passant_square_ < 0) {
             throw std::invalid_argument("Invalid en passant square in FEN");
         }
+        zobrist_hash_ ^= en_passant_hash(file_of(en_passant_square_));
     }
 
     try {
@@ -396,22 +469,52 @@ Board Board::apply_move(const Move &move) const {
     const Bitboard from_mask = one_bit(move.from);
     const Bitboard to_mask = one_bit(move.to);
 
+    auto remove_piece_hash = [&](Color color, PieceType type, int square) {
+        result.zobrist_hash_ ^= piece_hash(color, type, square);
+    };
+
+    auto add_piece_hash = [&](Color color, PieceType type, int square) {
+        result.zobrist_hash_ ^= piece_hash(color, type, square);
+    };
+
+    auto clear_en_passant_hash = [&]() {
+        if (result.en_passant_square_ >= 0) {
+            result.zobrist_hash_ ^= en_passant_hash(file_of(result.en_passant_square_));
+            result.en_passant_square_ = -1;
+        }
+    };
+
     Bitboard &moving_bb = result.pieces_ref(us, move.piece);
     if ((moving_bb & from_mask) == 0) {
         throw std::invalid_argument("Move does not match board state");
     }
     moving_bb &= ~from_mask;
     result.remove_from_piece_list(us, move.piece, move.from);
+    remove_piece_hash(us, move.piece, move.from);
 
-    result.en_passant_square_ = -1;
+    clear_en_passant_hash();
 
     auto reset_castling_rights = [&](Color color) {
+        auto disable_castling = [&](Color target, bool kingside) {
+            bool &right = [&]() -> bool & {
+                if (target == Color::White) {
+                    return kingside ? result.castling_.white_kingside
+                                    : result.castling_.white_queenside;
+                }
+                return kingside ? result.castling_.black_kingside
+                                : result.castling_.black_queenside;
+            }();
+            if (right) {
+                result.zobrist_hash_ ^= castling_hash(target, kingside);
+                right = false;
+            }
+        };
         if (color == Color::White) {
-            result.castling_.white_kingside = false;
-            result.castling_.white_queenside = false;
+            disable_castling(Color::White, true);
+            disable_castling(Color::White, false);
         } else {
-            result.castling_.black_kingside = false;
-            result.castling_.black_queenside = false;
+            disable_castling(Color::Black, true);
+            disable_castling(Color::Black, false);
         }
     };
 
@@ -420,17 +523,31 @@ Board Board::apply_move(const Move &move) const {
     }
 
     auto update_rook_rights_on_move = [&](Color color, int square) {
+        auto disable_castling = [&](Color target, bool kingside) {
+            bool &right = [&]() -> bool & {
+                if (target == Color::White) {
+                    return kingside ? result.castling_.white_kingside
+                                    : result.castling_.white_queenside;
+                }
+                return kingside ? result.castling_.black_kingside
+                                : result.castling_.black_queenside;
+            }();
+            if (right) {
+                result.zobrist_hash_ ^= castling_hash(target, kingside);
+                right = false;
+            }
+        };
         if (color == Color::White) {
             if (square == 0) {
-                result.castling_.white_queenside = false;
+                disable_castling(Color::White, false);
             } else if (square == 7) {
-                result.castling_.white_kingside = false;
+                disable_castling(Color::White, true);
             }
         } else {
             if (square == 56) {
-                result.castling_.black_queenside = false;
+                disable_castling(Color::Black, false);
             } else if (square == 63) {
-                result.castling_.black_kingside = false;
+                disable_castling(Color::Black, true);
             }
         }
     };
@@ -450,6 +567,7 @@ Board Board::apply_move(const Move &move) const {
         }
         capture_bb &= ~capture_mask;
         result.remove_from_piece_list(them, PieceType::Pawn, capture_square);
+        remove_piece_hash(them, PieceType::Pawn, capture_square);
         is_capture = true;
     } else if (move.captured.has_value()) {
         Bitboard &capture_bb = result.pieces_ref(them, *move.captured);
@@ -459,12 +577,14 @@ Board Board::apply_move(const Move &move) const {
         capture_bb &= ~to_mask;
         update_rook_rights_on_move(them, move.to);
         result.remove_from_piece_list(them, *move.captured, move.to);
+        remove_piece_hash(them, *move.captured, move.to);
         is_capture = true;
     }
 
     PieceType placed_piece = move.promotion.has_value() ? *move.promotion : move.piece;
     result.pieces_ref(us, placed_piece) |= to_mask;
     result.add_to_piece_list(us, placed_piece, move.to);
+    add_piece_hash(us, placed_piece, move.to);
 
     if (move.is_castling) {
         int rook_from;
@@ -486,12 +606,15 @@ Board Board::apply_move(const Move &move) const {
         rook_bb |= rook_to_mask;
         result.remove_from_piece_list(us, PieceType::Rook, rook_from);
         result.add_to_piece_list(us, PieceType::Rook, rook_to);
+        remove_piece_hash(us, PieceType::Rook, rook_from);
+        add_piece_hash(us, PieceType::Rook, rook_to);
     }
 
     if (move.piece == PieceType::Pawn) {
         result.halfmove_clock_ = 0;
         if (std::abs(move.to - move.from) == 16) {
             result.en_passant_square_ = us == Color::White ? move.from + 8 : move.from - 8;
+            result.zobrist_hash_ ^= en_passant_hash(file_of(result.en_passant_square_));
         }
     } else if (is_capture) {
         result.halfmove_clock_ = 0;
@@ -499,11 +622,8 @@ Board Board::apply_move(const Move &move) const {
         ++result.halfmove_clock_;
     }
 
-    if (move.piece != PieceType::King && move.piece != PieceType::Rook) {
-        // Already handled above for those pieces
-    }
-
     result.side_to_move_ = them;
+    result.zobrist_hash_ ^= side_to_move_hash();
     if (us == Color::Black) {
         ++result.fullmove_number_;
     }
