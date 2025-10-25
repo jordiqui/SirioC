@@ -2,6 +2,7 @@
 
 #include <limits>
 
+#include "sirio/draws.hpp"
 #include "sirio/endgame.hpp"
 #include "sirio/evaluation.hpp"
 #include "sirio/movegen.hpp"
@@ -15,6 +16,11 @@ constexpr int mate_score = 100000;
 int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *best_move,
             bool *found_best) {
     if (!sufficient_material_to_force_checkmate(board)) {
+        return 0;
+    }
+
+    if (draw_by_fifty_move_rule(board) || draw_by_threefold_repetition(board) ||
+        draw_by_insufficient_material_rule(board)) {
         return 0;
     }
 
