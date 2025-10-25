@@ -93,6 +93,18 @@ void test_piece_list_updates_after_moves() {
                      square_index('d', 5)) == black_pawns_after_capture.end());
 }
 
+void test_bishop_pair_detection() {
+    sirio::Board board;
+    assert(board.has_bishop_pair(sirio::Color::White));
+    assert(board.has_bishop_pair(sirio::Color::Black));
+
+    sirio::Board same_color_bishops{"8/8/8/8/2B5/8/4B3/8 w - - 0 1"};
+    assert(!same_color_bishops.has_bishop_pair(sirio::Color::White));
+
+    sirio::Board mixed_bishops{"8/8/8/8/2B5/4B3/8/8 w - - 0 1"};
+    assert(mixed_bishops.has_bishop_pair(sirio::Color::White));
+}
+
 void test_zobrist_hashing() {
     sirio::Board initial;
     sirio::Board another_initial;
@@ -137,6 +149,7 @@ int main() {
     test_en_passant();
     test_start_position_moves();
     test_piece_list_updates_after_moves();
+    test_bishop_pair_detection();
     test_zobrist_hashing();
     test_game_history_tracking();
     std::cout << "All tests passed.\n";

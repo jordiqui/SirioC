@@ -84,6 +84,7 @@ public:
     [[nodiscard]] const CastlingRights &castling_rights() const { return state_.castling; }
     [[nodiscard]] int halfmove_clock() const { return state_.halfmove_clock; }
     [[nodiscard]] int fullmove_number() const { return state_.fullmove_number; }
+    [[nodiscard]] bool has_bishop_pair(Color color) const;
     [[nodiscard]] std::optional<int> en_passant_square() const;
     [[nodiscard]] std::optional<std::pair<Color, PieceType>> piece_at(int square) const;
     [[nodiscard]] int king_square(Color color) const;

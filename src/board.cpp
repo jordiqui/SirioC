@@ -146,6 +146,30 @@ Bitboard Board::occupancy(Color color) const {
     return occ;
 }
 
+bool Board::has_bishop_pair(Color color) const {
+    const auto &bishops = piece_list(color, PieceType::Bishop);
+    if (bishops.size() < 2) {
+        return false;
+    }
+
+    bool has_light_square = false;
+    bool has_dark_square = false;
+    for (int square : bishops) {
+        const bool is_light_square = ((file_of(square) + rank_of(square)) & 1) != 0;
+        if (is_light_square) {
+            has_light_square = true;
+        } else {
+            has_dark_square = true;
+        }
+
+        if (has_light_square && has_dark_square) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 std::optional<int> Board::en_passant_square() const {
     if (state_.en_passant_square < 0) {
         return std::nullopt;
