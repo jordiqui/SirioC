@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <limits>
 #include <optional>
 #include <unordered_map>
@@ -36,7 +37,14 @@ struct TTEntry {
 struct SearchContext {
     std::array<std::array<std::optional<Move>, 2>, max_search_depth> killer_moves{};
     std::unordered_map<std::uint64_t, TTEntry> tt_entries{};
+    bool stop = false;
+    bool has_time_limit = false;
+    std::chrono::steady_clock::time_point start_time{};
+    std::chrono::milliseconds time_limit{0};
+    std::uint64_t node_counter = 0;
 };
+
+constexpr std::uint64_t time_check_interval = 2048;
 
 bool same_move(const Move &lhs, const Move &rhs) {
     return lhs.from == rhs.from && lhs.to == rhs.to && lhs.piece == rhs.piece &&
@@ -81,6 +89,26 @@ int score_move(const Move &move, const SearchContext &context, int ply,
         return 900000 + mvv_lva_score(move);
     }
     return killer_score(move, context, ply);
+}
+
+bool should_stop(SearchContext &context) {
+    if (context.stop) {
+        return true;
+    }
+    if (!context.has_time_limit) {
+        return false;
+    }
+    ++context.node_counter;
+    if ((context.node_counter & (time_check_interval - 1)) != 0) {
+        return false;
+    }
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - context.start_time);
+    if (elapsed >= context.time_limit) {
+        context.stop = true;
+        return true;
+    }
+    return false;
 }
 
 int evaluate_for_current_player(const Board &board) {
@@ -139,6 +167,9 @@ int quiescence(const Board &board, int alpha, int beta, int ply, SearchContext &
 
 int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *best_move,
             bool *found_best, SearchContext &context) {
+    if (should_stop(context)) {
+        return evaluate_for_current_player(board);
+    }
     if (!sufficient_material_to_force_checkmate(board)) {
         return 0;
     }
@@ -208,6 +239,9 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
         Board next = board.apply_move(move);
         int score =
             -negamax(next, depth - 1, -beta, -alpha, ply + 1, nullptr, nullptr, context);
+        if (context.stop) {
+            break;
+        }
         if (score > best_score) {
             best_score = score;
             local_best = move;
@@ -227,6 +261,10 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
     }
     if (found_best) {
         *found_best = local_found;
+    }
+
+    if (context.stop) {
+        return best_score;
     }
 
     if (local_found) {
@@ -252,6 +290,9 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
 }
 
 int quiescence(const Board &board, int alpha, int beta, int ply, SearchContext &context) {
+    if (should_stop(context)) {
+        return alpha;
+    }
     int stand_pat = evaluate_for_current_player(board);
     if (stand_pat >= beta) {
         return stand_pat;
@@ -278,6 +319,9 @@ int quiescence(const Board &board, int alpha, int beta, int ply, SearchContext &
     for (const Move &move : tactical_moves) {
         Board next = board.apply_move(move);
         int score = -quiescence(next, -beta, -alpha, ply + 1, context);
+        if (context.stop) {
+            return alpha;
+        }
         if (score >= beta) {
             return score;
         }
@@ -291,22 +335,78 @@ int quiescence(const Board &board, int alpha, int beta, int ply, SearchContext &
 
 }  // namespace
 
-SearchResult search_best_move(const Board &board, int depth) {
-    SearchResult result;
-    if (depth <= 0) {
-        depth = 1;
+std::optional<std::chrono::milliseconds> compute_time_limit(const Board &board,
+                                                            const SearchLimits &limits) {
+    if (limits.move_time > 0) {
+        return std::chrono::milliseconds{limits.move_time};
     }
 
-    Move best_move;
-    bool found = false;
+    Color stm = board.side_to_move();
+    int time_left = stm == Color::White ? limits.time_left_white : limits.time_left_black;
+    int increment = stm == Color::White ? limits.increment_white : limits.increment_black;
+    int moves_to_go = limits.moves_to_go > 0 ? limits.moves_to_go : 30;
+
+    if (time_left > 0) {
+        int allocation = time_left / std::max(1, moves_to_go);
+        if (increment > 0) {
+            allocation += increment;
+        }
+        allocation = std::max(allocation, increment);
+        int reserve = std::max(1, time_left / 20);
+        int max_allocation = time_left - reserve;
+        if (max_allocation <= 0) {
+            max_allocation = std::max(1, time_left / 2);
+        }
+        allocation = std::min(allocation, max_allocation);
+        allocation = std::max(allocation, 1);
+        return std::chrono::milliseconds{allocation};
+    }
+
+    if (increment > 0) {
+        int allocation = std::max(increment / 2, 1);
+        return std::chrono::milliseconds{allocation};
+    }
+
+    return std::nullopt;
+}
+
+SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
+    SearchResult result;
+    int target_depth = limits.max_depth > 0 ? limits.max_depth : 1;
+
     SearchContext context;
-    int score = negamax(board, depth, std::numeric_limits<int>::min() / 2,
-                        std::numeric_limits<int>::max() / 2, 0, &best_move, &found, context);
-    result.score = score;
-    result.has_move = found;
-    if (found) {
+    if (auto time_limit = compute_time_limit(board, limits); time_limit.has_value()) {
+        context.has_time_limit = true;
+        context.time_limit = *time_limit;
+        context.start_time = std::chrono::steady_clock::now();
+    }
+
+    Move best_move{};
+    bool best_found = false;
+    for (int depth = 1; depth <= target_depth; ++depth) {
+        Move current_best;
+        bool found = false;
+        int score = negamax(board, depth, std::numeric_limits<int>::min() / 2,
+                            std::numeric_limits<int>::max() / 2, 0, &current_best, &found,
+                            context);
+        if (context.stop) {
+            result.timed_out = true;
+            break;
+        }
+        result.score = score;
+        if (found) {
+            best_move = current_best;
+            best_found = true;
+            result.best_move = current_best;
+            result.has_move = true;
+            result.depth_reached = depth;
+        }
+    }
+
+    if (best_found) {
         result.best_move = best_move;
     }
+
     return result;
 }
 

@@ -83,18 +83,59 @@ void set_position(sirio::Board &board, const std::string &command_args) {
 void handle_go(const std::string &command_args, const sirio::Board &board) {
     std::istringstream stream{command_args};
     std::string token;
-    int depth = 4;
+    sirio::SearchLimits limits;
+    bool depth_overridden = false;
+    bool has_time_information = false;
     while (stream >> token) {
         if (token == "depth") {
             if (stream >> token) {
-                depth = std::stoi(token);
+                limits.max_depth = std::stoi(token);
+                depth_overridden = true;
             }
+        } else if (token == "movetime") {
+            if (stream >> token) {
+                limits.move_time = std::stoi(token);
+                has_time_information = true;
+                limits.max_depth = 64;
+            }
+        } else if (token == "wtime") {
+            if (stream >> token) {
+                limits.time_left_white = std::stoi(token);
+                has_time_information = true;
+            }
+        } else if (token == "btime") {
+            if (stream >> token) {
+                limits.time_left_black = std::stoi(token);
+                has_time_information = true;
+            }
+        } else if (token == "winc") {
+            if (stream >> token) {
+                limits.increment_white = std::stoi(token);
+                has_time_information = true;
+            }
+        } else if (token == "binc") {
+            if (stream >> token) {
+                limits.increment_black = std::stoi(token);
+                has_time_information = true;
+            }
+        } else if (token == "movestogo") {
+            if (stream >> token) {
+                limits.moves_to_go = std::stoi(token);
+                has_time_information = true;
+            }
+        } else if (token == "infinite") {
+            limits.max_depth = 64;
         }
     }
 
-    sirio::SearchResult result = sirio::search_best_move(board, depth);
+    if (has_time_information && !depth_overridden && limits.move_time == 0) {
+        limits.max_depth = 64;
+    }
+
+    sirio::SearchResult result = sirio::search_best_move(board, limits);
     if (result.has_move) {
-        std::cout << "info depth " << depth << " score cp " << result.score << " pv "
+        int reported_depth = result.depth_reached > 0 ? result.depth_reached : limits.max_depth;
+        std::cout << "info depth " << reported_depth << " score cp " << result.score << " pv "
                   << sirio::move_to_uci(result.best_move) << std::endl;
         std::cout << "bestmove " << sirio::move_to_uci(result.best_move) << std::endl;
     } else {

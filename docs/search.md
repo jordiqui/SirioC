@@ -7,6 +7,14 @@ de movimientos asesinos y la regla MVV/LVA para capturas. Estas optimizaciones e
 en helpers internos y en `SearchContext`, que acompaña a cada llamada recursiva para conservar el
 historial de movimientos especiales.【F:src/search.cpp†L18-L134】
 
+## 5.1. Iterative deepening y gestión del tiempo
+
+La función `search_best_move` realiza ahora una búsqueda iterativa desde profundidad 1 hasta la
+profundidad objetivo, interrumpiendo en cuanto expira el presupuesto temporal calculado por
+`compute_time_limit`. El `SearchContext` mantiene el instante de inicio y un contador de nodos que
+se usa para comprobar periódicamente si se debe abortar la rama actual cuando se agota el tiempo
+disponible.【F:src/search.cpp†L37-L334】【F:src/search.cpp†L338-L410】
+
 ## 5.2. Move Ordering
 
 La ordenación de movimientos se aplica justo antes de iterar sobre los candidatos generados
