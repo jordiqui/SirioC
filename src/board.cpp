@@ -1,9 +1,12 @@
 #include "sirio/board.hpp"
 
 #include <cctype>
+#include <cstdlib>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+
+#include "sirio/move.hpp"
 
 namespace sirio {
 
@@ -13,6 +16,10 @@ constexpr const char *kStartPositionFEN =
 
 constexpr std::size_t piece_count = static_cast<std::size_t>(PieceType::Count);
 }  // namespace
+
+Color opposite(Color color) {
+    return color == Color::White ? Color::Black : Color::White;
+}
 
 Board::Board() {
     set_from_fen(kStartPositionFEN);
@@ -43,9 +50,7 @@ const Bitboard &Board::pieces_ref(Color color, PieceType type) const {
     return color == Color::White ? white_[index] : black_[index];
 }
 
-Bitboard Board::pieces(Color color, PieceType type) const {
-    return pieces_ref(color, type);
-}
+Bitboard Board::pieces(Color color, PieceType type) const { return pieces_ref(color, type); }
 
 Bitboard Board::occupancy(Color color) const {
     const auto &source = color == Color::White ? white_ : black_;
@@ -74,6 +79,22 @@ std::optional<std::pair<Color, PieceType>> Board::piece_at(int square) const {
         }
     }
     return std::nullopt;
+}
+
+int Board::king_square(Color color) const {
+    Bitboard kings = pieces(color, PieceType::King);
+    if (kings == 0) {
+        return -1;
+    }
+    return bit_scan_forward(kings);
+}
+
+bool Board::in_check(Color color) const {
+    const int king_sq = king_square(color);
+    if (king_sq < 0) {
+        return false;
+    }
+    return is_square_attacked(king_sq, opposite(color));
 }
 
 PieceType Board::piece_type_from_char(char piece) {
@@ -330,6 +351,128 @@ bool Board::is_square_attacked(int square, Color by) const {
     }
 
     return false;
+}
+
+Board Board::apply_move(const Move &move) const {
+    Board result = *this;
+    const Color us = side_to_move_;
+    const Color them = opposite(us);
+    const Bitboard from_mask = one_bit(move.from);
+    const Bitboard to_mask = one_bit(move.to);
+
+    Bitboard &moving_bb = result.pieces_ref(us, move.piece);
+    if ((moving_bb & from_mask) == 0) {
+        throw std::invalid_argument("Move does not match board state");
+    }
+    moving_bb &= ~from_mask;
+
+    result.en_passant_square_ = -1;
+
+    auto reset_castling_rights = [&](Color color) {
+        if (color == Color::White) {
+            result.castling_.white_kingside = false;
+            result.castling_.white_queenside = false;
+        } else {
+            result.castling_.black_kingside = false;
+            result.castling_.black_queenside = false;
+        }
+    };
+
+    if (move.piece == PieceType::King) {
+        reset_castling_rights(us);
+    }
+
+    auto update_rook_rights_on_move = [&](Color color, int square) {
+        if (color == Color::White) {
+            if (square == 0) {
+                result.castling_.white_queenside = false;
+            } else if (square == 7) {
+                result.castling_.white_kingside = false;
+            }
+        } else {
+            if (square == 56) {
+                result.castling_.black_queenside = false;
+            } else if (square == 63) {
+                result.castling_.black_kingside = false;
+            }
+        }
+    };
+
+    if (move.piece == PieceType::Rook) {
+        update_rook_rights_on_move(us, move.from);
+    }
+
+    bool is_capture = false;
+
+    if (move.is_en_passant) {
+        const int capture_square = us == Color::White ? move.to - 8 : move.to + 8;
+        Bitboard &capture_bb = result.pieces_ref(them, PieceType::Pawn);
+        Bitboard capture_mask = one_bit(capture_square);
+        if ((capture_bb & capture_mask) == 0) {
+            throw std::invalid_argument("En passant capture missing pawn");
+        }
+        capture_bb &= ~capture_mask;
+        is_capture = true;
+    } else if (move.captured.has_value()) {
+        Bitboard &capture_bb = result.pieces_ref(them, *move.captured);
+        if ((capture_bb & to_mask) == 0) {
+            throw std::invalid_argument("Capture square empty");
+        }
+        capture_bb &= ~to_mask;
+        update_rook_rights_on_move(them, move.to);
+        is_capture = true;
+    }
+
+    PieceType placed_piece = move.promotion.has_value() ? *move.promotion : move.piece;
+    result.pieces_ref(us, placed_piece) |= to_mask;
+
+    if (move.is_castling) {
+        int rook_from;
+        int rook_to;
+        if (move.to > move.from) {  // Kingside
+            rook_from = us == Color::White ? 7 : 63;
+            rook_to = us == Color::White ? 5 : 61;
+        } else {  // Queenside
+            rook_from = us == Color::White ? 0 : 56;
+            rook_to = us == Color::White ? 3 : 59;
+        }
+        Bitboard rook_from_mask = one_bit(rook_from);
+        Bitboard rook_to_mask = one_bit(rook_to);
+        Bitboard &rook_bb = result.pieces_ref(us, PieceType::Rook);
+        if ((rook_bb & rook_from_mask) == 0) {
+            throw std::invalid_argument("Castling rook missing");
+        }
+        rook_bb &= ~rook_from_mask;
+        rook_bb |= rook_to_mask;
+    }
+
+    if (move.piece == PieceType::Pawn) {
+        result.halfmove_clock_ = 0;
+        if (std::abs(move.to - move.from) == 16) {
+            result.en_passant_square_ = us == Color::White ? move.from + 8 : move.from - 8;
+        }
+    } else if (is_capture) {
+        result.halfmove_clock_ = 0;
+    } else {
+        ++result.halfmove_clock_;
+    }
+
+    if (move.piece != PieceType::King && move.piece != PieceType::Rook) {
+        // Already handled above for those pieces
+    }
+
+    result.side_to_move_ = them;
+    if (us == Color::Black) {
+        ++result.fullmove_number_;
+    }
+
+    result.occupancy_ = 0;
+    for (std::size_t index = 0; index < piece_count; ++index) {
+        result.occupancy_ |= result.white_[index];
+        result.occupancy_ |= result.black_[index];
+    }
+
+    return result;
 }
 
 }  // namespace sirio

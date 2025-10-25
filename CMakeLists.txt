@@ -7,6 +7,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(sirio_core
     src/board.cpp
+    src/evaluation.cpp
+    src/move.cpp
+    src/movegen.cpp
+    src/search.cpp
 )
 
 target_include_directories(sirio_core

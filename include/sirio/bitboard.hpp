@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <cstdint>
 
 namespace sirio {
@@ -8,6 +9,16 @@ using Bitboard = std::uint64_t;
 
 constexpr Bitboard one_bit(int square) {
     return Bitboard{1} << square;
+}
+
+inline int pop_lsb(Bitboard &bb) {
+    const int index = std::countr_zero(bb);
+    bb &= (bb - 1);
+    return index;
+}
+
+inline int bit_scan_forward(Bitboard bb) {
+    return std::countr_zero(bb);
 }
 
 constexpr int rank_of(int square) {
@@ -22,6 +33,15 @@ constexpr Bitboard file_a_mask = 0x0101010101010101ULL;
 constexpr Bitboard file_b_mask = 0x0202020202020202ULL;
 constexpr Bitboard file_g_mask = 0x4040404040404040ULL;
 constexpr Bitboard file_h_mask = 0x8080808080808080ULL;
+
+constexpr Bitboard rank_1_mask = 0x00000000000000FFULL;
+constexpr Bitboard rank_2_mask = 0x000000000000FF00ULL;
+constexpr Bitboard rank_3_mask = 0x0000000000FF0000ULL;
+constexpr Bitboard rank_4_mask = 0x00000000FF000000ULL;
+constexpr Bitboard rank_5_mask = 0x000000FF00000000ULL;
+constexpr Bitboard rank_6_mask = 0x0000FF0000000000ULL;
+constexpr Bitboard rank_7_mask = 0x00FF000000000000ULL;
+constexpr Bitboard rank_8_mask = 0xFF00000000000000ULL;
 
 constexpr Bitboard not_file_a_mask = ~file_a_mask;
 constexpr Bitboard not_file_h_mask = ~file_h_mask;
