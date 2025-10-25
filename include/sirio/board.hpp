@@ -14,6 +14,10 @@ enum class Color { White, Black };
 
 enum class PieceType { Pawn = 0, Knight, Bishop, Rook, Queen, King, Count };
 
+struct Move;
+
+Color opposite(Color color);
+
 struct CastlingRights {
     bool white_kingside = false;
     bool white_queenside = false;
@@ -37,6 +41,10 @@ public:
     [[nodiscard]] int halfmove_clock() const { return halfmove_clock_; }
     [[nodiscard]] int fullmove_number() const { return fullmove_number_; }
     [[nodiscard]] std::optional<int> en_passant_square() const;
+    [[nodiscard]] std::optional<std::pair<Color, PieceType>> piece_at(int square) const;
+    [[nodiscard]] int king_square(Color color) const;
+    [[nodiscard]] bool in_check(Color color) const;
+    [[nodiscard]] Board apply_move(const Move &move) const;
 
     [[nodiscard]] bool is_square_attacked(int square, Color by) const;
 
@@ -52,8 +60,6 @@ private:
 
     [[nodiscard]] Bitboard &pieces_ref(Color color, PieceType type);
     [[nodiscard]] const Bitboard &pieces_ref(Color color, PieceType type) const;
-    [[nodiscard]] std::optional<std::pair<Color, PieceType>> piece_at(int square) const;
-
     void clear();
     static PieceType piece_type_from_char(char piece);
     static char piece_to_char(Color color, PieceType type);

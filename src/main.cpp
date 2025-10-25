@@ -1,84 +1,148 @@
+#include <cctype>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 
-#include "sirio/bitboard.hpp"
 #include "sirio/board.hpp"
+#include "sirio/move.hpp"
+#include "sirio/movegen.hpp"
+#include "sirio/search.hpp"
 
 namespace {
-std::string join_arguments(int argc, char **argv) {
-    if (argc <= 1) {
-        return {};
-    }
-    std::ostringstream builder;
-    for (int i = 1; i < argc; ++i) {
-        if (i > 1) {
-            builder << ' ';
-        }
-        builder << argv[i];
-    }
-    return builder.str();
+
+void send_uci_id() {
+    std::cout << "id name SirioC" << std::endl;
+    std::cout << "id author OpenAI" << std::endl;
+    std::cout << "uciok" << std::endl;
 }
 
-char piece_to_char(sirio::Color color, sirio::PieceType type) {
-    switch (type) {
-        case sirio::PieceType::Pawn:
-            return color == sirio::Color::White ? 'P' : 'p';
-        case sirio::PieceType::Knight:
-            return color == sirio::Color::White ? 'N' : 'n';
-        case sirio::PieceType::Bishop:
-            return color == sirio::Color::White ? 'B' : 'b';
-        case sirio::PieceType::Rook:
-            return color == sirio::Color::White ? 'R' : 'r';
-        case sirio::PieceType::Queen:
-            return color == sirio::Color::White ? 'Q' : 'q';
-        case sirio::PieceType::King:
-            return color == sirio::Color::White ? 'K' : 'k';
-        case sirio::PieceType::Count:
+void send_ready() { std::cout << "readyok" << std::endl; }
+
+std::string trim_leading(std::string_view view) {
+    std::size_t pos = 0;
+    while (pos < view.size() && std::isspace(static_cast<unsigned char>(view[pos]))) {
+        ++pos;
+    }
+    return std::string{view.substr(pos)};
+}
+
+void set_position(sirio::Board &board, const std::string &command_args) {
+    std::istringstream stream{command_args};
+    std::string token;
+    if (!(stream >> token)) {
+        return;
+    }
+
+    if (token == "startpos") {
+        board = sirio::Board{};
+        if (!(stream >> token)) {
+            return;
+        }
+    } else if (token == "fen") {
+        std::string fen_parts[6];
+        for (int i = 0; i < 6; ++i) {
+            if (!(stream >> fen_parts[i])) {
+                throw std::runtime_error("Invalid FEN in position command");
+            }
+        }
+        board = sirio::Board{fen_parts[0] + " " + fen_parts[1] + " " + fen_parts[2] + " " +
+                             fen_parts[3] + " " + fen_parts[4] + " " + fen_parts[5]};
+        if (!(stream >> token)) {
+            return;
+        }
+    } else {
+        throw std::runtime_error("Unsupported position command");
+    }
+
+    if (token != "moves") {
+        // Skip until we find moves keyword or end
+        while (stream >> token) {
+            if (token == "moves") {
+                break;
+            }
+        }
+    }
+
+    if (token != "moves") {
+        return;
+    }
+
+    while (stream >> token) {
+        try {
+            sirio::Move move = sirio::move_from_uci(board, token);
+            board = board.apply_move(move);
+        } catch (const std::exception &) {
+            // Ignore illegal moves in history to maintain robustness
             break;
-    }
-    return '?';
-}
-
-char symbol_on_square(const sirio::Board &board, int square) {
-    const sirio::Bitboard mask = sirio::one_bit(square);
-    for (std::size_t index = 0; index < static_cast<std::size_t>(sirio::PieceType::Count); ++index) {
-        const auto type = static_cast<sirio::PieceType>(index);
-        if (board.pieces(sirio::Color::White, type) & mask) {
-            return piece_to_char(sirio::Color::White, type);
-        }
-        if (board.pieces(sirio::Color::Black, type) & mask) {
-            return piece_to_char(sirio::Color::Black, type);
         }
     }
-    return '.';
 }
 
-void print_board(const sirio::Board &board) {
-    std::cout << "  +------------------------+\n";
-    for (int rank = 7; rank >= 0; --rank) {
-        std::cout << rank + 1 << " |";
-        for (int file = 0; file < 8; ++file) {
-            const int square = rank * 8 + file;
-            std::cout << ' ' << symbol_on_square(board, square);
+void handle_go(const std::string &command_args, const sirio::Board &board) {
+    std::istringstream stream{command_args};
+    std::string token;
+    int depth = 4;
+    while (stream >> token) {
+        if (token == "depth") {
+            if (stream >> token) {
+                depth = std::stoi(token);
+            }
         }
-        std::cout << " |\n";
     }
-    std::cout << "  +------------------------+\n";
-    std::cout << "    a b c d e f g h\n";
-}
+
+    sirio::SearchResult result = sirio::search_best_move(board, depth);
+    if (result.has_move) {
+        std::cout << "info depth " << depth << " score cp " << result.score << " pv "
+                  << sirio::move_to_uci(result.best_move) << std::endl;
+        std::cout << "bestmove " << sirio::move_to_uci(result.best_move) << std::endl;
+    } else {
+        std::cout << "bestmove 0000" << std::endl;
+    }
 }
 
-int main(int argc, char **argv) {
-    try {
-        const std::string fen = join_arguments(argc, argv);
-        sirio::Board board = fen.empty() ? sirio::Board{} : sirio::Board{fen};
-        print_board(board);
-        std::cout << "FEN: " << board.to_fen() << "\n";
-    } catch (const std::exception &ex) {
-        std::cerr << "Failed to initialise board: " << ex.what() << "\n";
-        return 1;
+}  // namespace
+
+int main() {
+    sirio::Board board;
+    std::string line;
+
+    while (std::getline(std::cin, line)) {
+        std::string trimmed = trim_leading(line);
+        if (trimmed.empty()) {
+            continue;
+        }
+
+        std::istringstream stream{trimmed};
+        std::string command;
+        stream >> command;
+
+        try {
+            if (command == "uci") {
+                send_uci_id();
+            } else if (command == "isready") {
+                send_ready();
+            } else if (command == "ucinewgame") {
+                board = sirio::Board{};
+            } else if (command == "position") {
+                std::string rest;
+                std::getline(stream, rest);
+                set_position(board, rest);
+            } else if (command == "go") {
+                std::string rest;
+                std::getline(stream, rest);
+                handle_go(rest, board);
+            } else if (command == "quit" || command == "stop") {
+                break;
+            } else if (command == "d") {
+                std::cout << board.to_fen() << std::endl;
+            }
+        } catch (const std::exception &ex) {
+            std::cerr << "Error: " << ex.what() << std::endl;
+        }
     }
+
     return 0;
 }
 

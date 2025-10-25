@@ -4,6 +4,7 @@
 #include <string>
 
 #include "sirio/board.hpp"
+#include "sirio/movegen.hpp"
 
 namespace {
 int square_index(char file, int rank) {
@@ -55,6 +56,12 @@ void test_en_passant() {
     assert(ep.has_value());
     assert(*ep == square_index('d', 3));
 }
+
+void test_start_position_moves() {
+    sirio::Board board;
+    auto moves = sirio::generate_legal_moves(board);
+    assert(moves.size() == 20);
+}
 }
 
 int main() {
@@ -62,6 +69,7 @@ int main() {
     test_fen_roundtrip();
     test_attack_detection();
     test_en_passant();
+    test_start_position_moves();
     std::cout << "All tests passed.\n";
     return 0;
 }
