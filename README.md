@@ -14,6 +14,7 @@ SirioC es un proyecto de motor de ajedrez en C++ inspirado en la guía de Rustic
 
 - [Manejo de cadenas FEN](docs/fen.md)
 - [Búsqueda y ordenación de movimientos](docs/search.md)
+- [Comunicación UCI](docs/communication.md)
 
 ## Requisitos
 
