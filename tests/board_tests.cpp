@@ -5,6 +5,7 @@
 #include <string>
 
 #include "sirio/board.hpp"
+#include "sirio/draws.hpp"
 #include "sirio/endgame.hpp"
 #include "sirio/move.hpp"
 #include "sirio/movegen.hpp"
@@ -161,6 +162,44 @@ void test_sufficient_material_to_force_checkmate() {
     sirio::Board knight_vs_knight{"7k/8/8/8/8/8/6N1/4K1N1 w - - 0 1"};
     assert(!sirio::sufficient_material_to_force_checkmate(knight_vs_knight));
 }
+
+void test_draw_by_fifty_move_rule() {
+    sirio::Board not_draw{"8/8/8/8/8/8/8/4K3 w - - 99 1"};
+    assert(!sirio::draw_by_fifty_move_rule(not_draw));
+
+    sirio::Board draw{"8/8/8/8/8/8/8/4K3 w - - 100 1"};
+    assert(sirio::draw_by_fifty_move_rule(draw));
+}
+
+void test_draw_by_repetition_rule() {
+    sirio::Board board;
+    const std::string moves[] = {"g1f3", "g8f6", "f3g1", "f6g8", "g1f3", "g8f6", "f3g1", "f6g8"};
+    for (const auto &uci : moves) {
+        auto move = sirio::move_from_uci(board, uci);
+        board = board.apply_move(move);
+    }
+
+    int repetitions = sirio::draw_by_repetition_rule(board);
+    assert(repetitions >= 3);
+    assert(sirio::draw_by_threefold_repetition(board));
+}
+
+void test_draw_by_insufficient_material_rule() {
+    sirio::Board kings_only{"7k/8/8/8/8/8/8/4K3 w - - 0 1"};
+    assert(sirio::draw_by_insufficient_material_rule(kings_only));
+
+    sirio::Board bishop_vs_king{"7k/8/8/8/8/8/8/4KB2 w - - 0 1"};
+    assert(sirio::draw_by_insufficient_material_rule(bishop_vs_king));
+
+    sirio::Board knights_each{"7k/8/8/8/8/8/6N1/4K1N1 w - - 0 1"};
+    assert(!sirio::draw_by_insufficient_material_rule(knights_each));
+
+    sirio::Board bishops_same_color{"7k/8/8/8/8/8/6b1/4K2B w - - 0 1"};
+    assert(sirio::draw_by_insufficient_material_rule(bishops_same_color));
+
+    sirio::Board bishops_opposite_color{"7k/8/8/8/8/8/5b2/4K2B w - - 0 1"};
+    assert(!sirio::draw_by_insufficient_material_rule(bishops_opposite_color));
+}
 }
 
 int main() {
@@ -174,6 +213,9 @@ int main() {
     test_zobrist_hashing();
     test_game_history_tracking();
     test_sufficient_material_to_force_checkmate();
+    test_draw_by_fifty_move_rule();
+    test_draw_by_repetition_rule();
+    test_draw_by_insufficient_material_rule();
     std::cout << "All tests passed.\n";
     return 0;
 }
