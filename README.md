@@ -10,6 +10,10 @@ SirioC es un proyecto de motor de ajedrez en C++ inspirado en la guía de Rustic
 - Ejecutable de ejemplo que muestra un tablero ASCII y acepta una posición en FEN desde la línea de comandos.
 - Conjunto de pruebas unitarias sencillas para validar la inicialización, la compatibilidad FEN y la detección de ataques.
 
+## Documentación
+
+- [Manejo de cadenas FEN](docs/fen.md)
+
 ## Requisitos
 
 - CMake 3.16 o superior.
