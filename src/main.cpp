@@ -97,18 +97,6 @@ std::string trim_leading(std::string_view view) {
     return std::string{view.substr(pos)};
 }
 
-std::string trim(std::string_view view) {
-    std::size_t start = 0;
-    while (start < view.size() && std::isspace(static_cast<unsigned char>(view[start]))) {
-        ++start;
-    }
-    std::size_t end = view.size();
-    while (end > start && std::isspace(static_cast<unsigned char>(view[end - 1]))) {
-        --end;
-    }
-    return std::string{view.substr(start, end - start)};
-}
-
 void set_position(sirio::Board &board, const std::string &command_args) {
     std::istringstream stream{command_args};
     std::string token;
