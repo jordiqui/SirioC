@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <optional>
 
 #include "sirio/board.hpp"
@@ -23,6 +24,7 @@ struct SearchResult {
     bool has_move = false;
     int depth_reached = 0;
     bool timed_out = false;
+    std::uint64_t nodes = 0;
 };
 
 SearchResult search_best_move(const Board &board, const SearchLimits &limits);

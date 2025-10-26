@@ -2,10 +2,11 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <chrono>
+#include <cstdlib>
 #include <limits>
 #include <optional>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -13,6 +14,7 @@
 #include "sirio/endgame.hpp"
 #include "sirio/evaluation.hpp"
 #include "sirio/movegen.hpp"
+#include "sirio/syzygy.hpp"
 
 namespace sirio {
 
@@ -21,6 +23,7 @@ namespace {
 constexpr int mate_score = 100000;
 constexpr int max_search_depth = 64;
 constexpr int mate_threshold = mate_score - max_search_depth;
+constexpr std::size_t default_tt_size_mb = 64;
 
 constexpr std::array<int, static_cast<std::size_t>(PieceType::Count)> mvv_values = {
     100, 320, 330, 500, 900, 20000};
@@ -32,11 +35,87 @@ struct TTEntry {
     int depth = 0;
     int score = 0;
     TTNodeType type = TTNodeType::Exact;
+    int static_eval = 0;
+};
+
+struct PackedTTEntry {
+    std::uint64_t key = 0;
+    Move best_move{};
+    int32_t score = 0;
+    int16_t depth = -1;
+    int32_t static_eval = 0;
+    std::uint8_t type = 0;
+    std::uint8_t generation = 0;
+};
+
+class TranspositionTable {
+public:
+    TranspositionTable() { resize(default_tt_size_mb); }
+
+    void resize(std::size_t size_mb) {
+        if (size_mb == 0) {
+            entries_.clear();
+            generation_ = 1;
+            return;
+        }
+        std::size_t bytes = size_mb * 1024ULL * 1024ULL;
+        std::size_t count = std::max<std::size_t>(1, bytes / sizeof(PackedTTEntry));
+        std::size_t pow2 = std::bit_ceil(count);
+        entries_.assign(pow2, PackedTTEntry{});
+        generation_ = 1;
+    }
+
+    void new_search() {
+        ++generation_;
+        if (generation_ == 0) {
+            generation_ = 1;
+        }
+    }
+
+    void store(std::uint64_t key, const TTEntry &entry) {
+        if (entries_.empty()) {
+            return;
+        }
+        const std::size_t index = key & (entries_.size() - 1);
+        PackedTTEntry &slot = entries_[index];
+        if (slot.generation != generation_ || slot.depth < entry.depth ||
+            entry.type == TTNodeType::Exact) {
+            slot.key = key;
+            slot.best_move = entry.best_move;
+            slot.score = entry.score;
+            slot.depth = static_cast<int16_t>(entry.depth);
+            slot.static_eval = entry.static_eval;
+            slot.type = static_cast<std::uint8_t>(entry.type);
+            slot.generation = generation_;
+        }
+    }
+
+    std::optional<TTEntry> probe(std::uint64_t key) const {
+        if (entries_.empty()) {
+            return std::nullopt;
+        }
+        const std::size_t index = key & (entries_.size() - 1);
+        const PackedTTEntry &slot = entries_[index];
+        if (slot.generation != generation_ || slot.key != key || slot.depth < 0) {
+            return std::nullopt;
+        }
+        TTEntry entry;
+        entry.best_move = slot.best_move;
+        entry.score = slot.score;
+        entry.depth = slot.depth;
+        entry.type = static_cast<TTNodeType>(slot.type);
+        entry.static_eval = slot.static_eval;
+        return entry;
+    }
+
+private:
+    std::vector<PackedTTEntry> entries_;
+    std::uint8_t generation_ = 1;
 };
 
 struct SearchContext {
     std::array<std::array<std::optional<Move>, 2>, max_search_depth> killer_moves{};
-    std::unordered_map<std::uint64_t, TTEntry> tt_entries{};
+    TranspositionTable tt{};
     bool stop = false;
     bool has_time_limit = false;
     bool soft_limit_reached = false;
@@ -44,9 +123,42 @@ struct SearchContext {
     std::chrono::milliseconds soft_time_limit{0};
     std::chrono::milliseconds hard_time_limit{0};
     std::uint64_t node_counter = 0;
+    std::chrono::milliseconds last_iteration_time{0};
 };
 
 constexpr std::uint64_t time_check_interval = 2048;
+
+int total_piece_count(const Board &board) {
+    int total = 0;
+    for (int color_index = 0; color_index < 2; ++color_index) {
+        Color color = color_index == 0 ? Color::White : Color::Black;
+        for (int type_index = 0; type_index < static_cast<int>(PieceType::Count); ++type_index) {
+            total += std::popcount(board.pieces(color, static_cast<PieceType>(type_index)));
+        }
+    }
+    return total;
+}
+
+bool has_non_pawn_material(const Board &board, Color color) {
+    return (board.pieces(color, PieceType::Queen) | board.pieces(color, PieceType::Rook) |
+            board.pieces(color, PieceType::Bishop) | board.pieces(color, PieceType::Knight)) != 0;
+}
+
+int syzygy_wdl_to_score(int wdl, int ply) {
+    switch (wdl) {
+        case 2:
+            return mate_score - ply;
+        case 1:
+            return 200;
+        case 0:
+            return 0;
+        case -1:
+            return -200;
+        case -2:
+        default:
+            return -mate_score + ply;
+    }
+}
 
 bool same_move(const Move &lhs, const Move &rhs) {
     return lhs.from == rhs.from && lhs.to == rhs.to && lhs.piece == rhs.piece &&
@@ -94,13 +206,13 @@ int score_move(const Move &move, const SearchContext &context, int ply,
 }
 
 bool should_stop(SearchContext &context) {
+    ++context.node_counter;
     if (context.stop) {
         return true;
     }
     if (!context.has_time_limit) {
         return false;
     }
-    ++context.node_counter;
     if ((context.node_counter & (time_check_interval - 1)) != 0) {
         return false;
     }
@@ -171,7 +283,8 @@ void store_killer(const Move &move, SearchContext &context, int ply) {
 int quiescence(const Board &board, int alpha, int beta, int ply, SearchContext &context);
 
 int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *best_move,
-            bool *found_best, SearchContext &context) {
+            bool *found_best, SearchContext &context, int parent_static_eval,
+            bool allow_null_move) {
     if (should_stop(context)) {
         return evaluate_for_current_player(board);
     }
@@ -184,121 +297,160 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
         return 0;
     }
 
+    const std::uint64_t hash = board.zobrist_hash();
     bool in_check = board.in_check(board.side_to_move());
     int static_eval = 0;
     if (!in_check) {
         static_eval = evaluate_for_current_player(board);
     }
-    int max_remaining_depth = max_search_depth - ply;
+
+    const int max_remaining_depth = max_search_depth - ply;
     int depth_left = std::min(depth, max_remaining_depth);
     if (in_check && depth_left < max_remaining_depth) {
         ++depth_left;
+    }
+
+    std::optional<TTEntry> tt_entry = context.tt.probe(hash);
+    std::optional<Move> tt_move;
+    if (tt_entry.has_value()) {
+        tt_move = tt_entry->best_move;
+        if (!in_check && tt_entry->static_eval != 0) {
+            static_eval = tt_entry->static_eval;
+        }
+    }
+
+    if (syzygy::available() && syzygy::max_pieces() >= total_piece_count(board)) {
+        if (auto tb = syzygy::probe_wdl(board); tb.has_value()) {
+            int tb_score = syzygy_wdl_to_score(tb->wdl, ply);
+            if (std::abs(tb_score) >= mate_threshold || tb->wdl == 0) {
+                if (best_move && tb->best_move) {
+                    *best_move = *tb->best_move;
+                }
+                if (found_best && tb->best_move) {
+                    *found_best = true;
+                }
+                return tb_score;
+            }
+            if (!in_check) {
+                static_eval = tb_score;
+            }
+        }
     }
 
     if (depth_left <= 0) {
         return quiescence(board, alpha, beta, ply, context);
     }
 
-    if (!in_check && depth_left == 1) {
-        int futility_margin = 150;
-        if (static_eval - futility_margin >= beta) {
-            return static_eval - futility_margin;
-        }
-        if (static_eval + futility_margin <= alpha) {
-            return static_eval + futility_margin;
-        }
-    }
-
-    auto moves = generate_legal_moves(board);
-    if (moves.empty()) {
-        if (board.in_check(board.side_to_move())) {
-            return -mate_score + ply;
-        }
-        return 0;
-    }
-
-    const std::uint64_t hash = board.zobrist_hash();
-    std::optional<Move> tt_move;
-    auto tt_it = context.tt_entries.find(hash);
-    if (tt_it != context.tt_entries.end()) {
-        tt_move = tt_it->second.best_move;
-        const TTEntry &entry = tt_it->second;
-        if (entry.depth >= depth_left) {
-            int tt_score = from_tt_score(entry.score, ply);
-            switch (entry.type) {
-                case TTNodeType::Exact:
-                    if (best_move) {
-                        *best_move = entry.best_move;
-                    }
-                    if (found_best) {
-                        *found_best = true;
-                    }
-                    return tt_score;
-                case TTNodeType::LowerBound:
-                    alpha = std::max(alpha, tt_score);
-                    break;
-                case TTNodeType::UpperBound:
-                    beta = std::min(beta, tt_score);
-                    break;
-            }
-            if (alpha >= beta) {
+    if (tt_entry.has_value() && tt_entry->depth >= depth_left) {
+        int tt_score = from_tt_score(tt_entry->score, ply);
+        switch (tt_entry->type) {
+            case TTNodeType::Exact:
                 if (best_move) {
-                    *best_move = entry.best_move;
+                    *best_move = tt_entry->best_move;
                 }
                 if (found_best) {
                     *found_best = true;
                 }
                 return tt_score;
+            case TTNodeType::LowerBound:
+                alpha = std::max(alpha, tt_score);
+                break;
+            case TTNodeType::UpperBound:
+                beta = std::min(beta, tt_score);
+                break;
+        }
+        if (alpha >= beta) {
+            if (best_move) {
+                *best_move = tt_entry->best_move;
+            }
+            if (found_best) {
+                *found_best = true;
+            }
+            return tt_score;
+        }
+    }
+
+    if (!in_check && depth_left == 1) {
+        constexpr int futility_margin = 150;
+        if (static_eval - futility_margin >= beta) {
+            return static_eval - futility_margin;
+        }
+    }
+
+    if (allow_null_move && !in_check && depth_left >= 3 && static_eval >= beta &&
+        has_non_pawn_material(board, board.side_to_move())) {
+        Board null_board = board.apply_null_move();
+        int reduction = 2 + depth_left / 4;
+        int null_depth = depth_left - 1 - reduction;
+        if (null_depth >= 0) {
+            int null_score = -negamax(null_board, null_depth, -beta, -beta + 1, ply + 1, nullptr,
+                                      nullptr, context, static_eval, false);
+            if (context.stop) {
+                return 0;
+            }
+            if (null_score >= beta) {
+                return beta;
             }
         }
+    }
+
+    auto moves = generate_legal_moves(board);
+    if (moves.empty()) {
+        if (in_check) {
+            return -mate_score + ply;
+        }
+        return 0;
     }
 
     order_moves(moves, context, ply, tt_move);
 
     int alpha_original = alpha;
-    int beta_original = beta;
     int best_score = std::numeric_limits<int>::min();
-    Move local_best;
+    Move local_best{};
     bool local_found = false;
 
-    int moves_searched = 0;
-    int max_child_remaining_base = std::max(0, max_search_depth - (ply + 1));
+    int move_index = 0;
     for (const Move &move : moves) {
-        ++moves_searched;
+        ++move_index;
         Board next = board.apply_move(move);
         bool gives_check = next.in_check(next.side_to_move());
 
-        int extension = 0;
-        int max_child_remaining = max_child_remaining_base;
-        if (gives_check && (depth_left - 1) < max_child_remaining) {
-            extension = 1;
+        int child_depth = depth_left - 1;
+        if (gives_check && child_depth < max_search_depth - (ply + 1)) {
+            ++child_depth;
         }
+        child_depth = std::min(child_depth, std::max(0, max_search_depth - (ply + 1)));
 
         int reduction = 0;
-        if (!in_check && !gives_check && is_quiet(move) && depth_left >= 3 && moves_searched > 3) {
+        if (child_depth > 0 && depth_left >= 3 && move_index > 1 && is_quiet(move) && !gives_check) {
+            bool improving = static_eval > parent_static_eval;
             reduction = 1;
-            if (depth_left >= 5 && moves_searched > 6) {
-                reduction = 2;
+            if (depth_left >= 5 && move_index > 4) {
+                ++reduction;
+            }
+            if (!improving) {
+                ++reduction;
+            }
+            if (reduction > child_depth - 1) {
+                reduction = child_depth - 1;
+            }
+            if (reduction < 0) {
+                reduction = 0;
             }
         }
 
-        int child_depth = depth_left - 1 + extension - reduction;
-        if (child_depth > max_child_remaining) {
-            child_depth = max_child_remaining;
-        }
-        if (child_depth < 0) {
-            child_depth = 0;
-        }
-
+        int new_depth = std::max(0, child_depth - reduction);
         int score;
-        if (child_depth <= 0) {
+        if (new_depth <= 0) {
             score = -quiescence(next, -beta, -alpha, ply + 1, context);
         } else {
-            score = -negamax(next, child_depth, -beta, -alpha, ply + 1, nullptr, nullptr, context);
+            score = -negamax(next, new_depth, -beta, -alpha, ply + 1, nullptr, nullptr, context,
+                             static_eval, true);
         }
         if (context.stop) {
-            break;
+            return 0;
         }
+
         if (score > best_score) {
             best_score = score;
             local_best = move;
@@ -308,7 +460,9 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
             alpha = score;
         }
         if (alpha >= beta) {
-            store_killer(move, context, ply);
+            if (is_quiet(move)) {
+                store_killer(move, context, ply);
+            }
             break;
         }
     }
@@ -325,22 +479,19 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
     }
 
     if (local_found) {
-        TTEntry entry;
-        entry.best_move = local_best;
-        entry.depth = depth_left;
-        entry.score = to_tt_score(best_score, ply);
+        TTEntry new_entry{};
+        new_entry.best_move = local_best;
+        new_entry.depth = depth_left;
+        new_entry.score = to_tt_score(best_score, ply);
+        new_entry.static_eval = static_eval;
         if (best_score <= alpha_original) {
-            entry.type = TTNodeType::UpperBound;
-        } else if (best_score >= beta_original) {
-            entry.type = TTNodeType::LowerBound;
+            new_entry.type = TTNodeType::UpperBound;
+        } else if (best_score >= beta) {
+            new_entry.type = TTNodeType::LowerBound;
         } else {
-            entry.type = TTNodeType::Exact;
+            new_entry.type = TTNodeType::Exact;
         }
-
-        auto current = context.tt_entries.find(hash);
-        if (current == context.tt_entries.end() || current->second.depth <= entry.depth) {
-            context.tt_entries[hash] = entry;
-        }
+        context.tt.store(hash, new_entry);
     }
 
     return best_score;
@@ -349,6 +500,11 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
 int quiescence(const Board &board, int alpha, int beta, int ply, SearchContext &context) {
     if (should_stop(context)) {
         return alpha;
+    }
+    if (syzygy::available() && syzygy::max_pieces() >= total_piece_count(board)) {
+        if (auto tb = syzygy::probe_wdl(board); tb.has_value()) {
+            return syzygy_wdl_to_score(tb->wdl, ply);
+        }
     }
     int stand_pat = evaluate_for_current_player(board);
     if (stand_pat >= beta) {
@@ -462,18 +618,70 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
         }
     }
 
+    if (syzygy::available() && syzygy::max_pieces() >= total_piece_count(board)) {
+        if (auto root_probe = syzygy::probe_root(board); root_probe.has_value()) {
+            result.score = syzygy_wdl_to_score(root_probe->wdl, 0);
+            if (root_probe->best_move.has_value()) {
+                result.best_move = *root_probe->best_move;
+                result.has_move = true;
+                result.depth_reached = 0;
+                if (std::abs(result.score) >= mate_threshold || root_probe->wdl == 0) {
+                    return result;
+                }
+            }
+        }
+    }
+
     Move best_move{};
     bool best_found = false;
+    int previous_score = result.score;
+    bool have_previous = result.has_move;
+
     for (int depth = 1; depth <= max_depth_limit; ++depth) {
-        Move current_best;
+        context.tt.new_search();
+
+        const int full_min = std::numeric_limits<int>::min() / 2;
+        const int full_max = std::numeric_limits<int>::max() / 2;
+        int aspiration_window = 25;
+        int alpha = have_previous ? previous_score - aspiration_window : full_min;
+        int beta = have_previous ? previous_score + aspiration_window : full_max;
+
+        Move current_best{};
         bool found = false;
-        int score = negamax(board, depth, std::numeric_limits<int>::min() / 2,
-                            std::numeric_limits<int>::max() / 2, 0, &current_best, &found,
-                            context);
-        if (context.stop) {
-            result.timed_out = true;
+        int score = 0;
+        auto iteration_start = std::chrono::steady_clock::now();
+
+        while (true) {
+            score = negamax(board, depth, alpha, beta, 0, &current_best, &found, context, 0, true);
+            if (context.stop) {
+                result.timed_out = true;
+                break;
+            }
+            if (have_previous && score <= alpha) {
+                aspiration_window *= 2;
+                alpha = std::max(full_min, previous_score - aspiration_window);
+                beta = std::min(full_max, previous_score + aspiration_window);
+                continue;
+            }
+            if (have_previous && score >= beta) {
+                aspiration_window *= 2;
+                beta = std::min(full_max, previous_score + aspiration_window);
+                alpha = std::max(full_min, previous_score - aspiration_window);
+                continue;
+            }
             break;
         }
+
+        auto iteration_end = std::chrono::steady_clock::now();
+        context.last_iteration_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+            iteration_end - iteration_start);
+
+        if (context.stop) {
+            break;
+        }
+
+        previous_score = score;
+        have_previous = true;
         result.score = score;
         if (found) {
             best_move = current_best;
@@ -484,15 +692,16 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
         }
 
         if (context.has_time_limit) {
-            auto now = std::chrono::steady_clock::now();
-            auto elapsed =
-                std::chrono::duration_cast<std::chrono::milliseconds>(now - context.start_time);
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                iteration_end - context.start_time);
             if (elapsed >= context.hard_time_limit) {
                 context.stop = true;
                 result.timed_out = true;
                 break;
             }
-            if (elapsed >= context.soft_time_limit) {
+            auto projected = context.last_iteration_time * 3 / 2;
+            if (elapsed + projected >= context.soft_time_limit ||
+                elapsed >= context.soft_time_limit) {
                 break;
             }
         }
@@ -501,6 +710,8 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     if (best_found) {
         result.best_move = best_move;
     }
+
+    result.nodes = context.node_counter;
 
     return result;
 }

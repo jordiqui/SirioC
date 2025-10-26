@@ -9,12 +9,14 @@
 #include "sirio/move.hpp"
 #include "sirio/movegen.hpp"
 #include "sirio/search.hpp"
+#include "sirio/syzygy.hpp"
 
 namespace {
 
 void send_uci_id() {
     std::cout << "id name SirioC" << std::endl;
     std::cout << "id author OpenAI" << std::endl;
+    std::cout << "option name SyzygyPath type string default" << std::endl;
     std::cout << "uciok" << std::endl;
 }
 
@@ -77,6 +79,35 @@ void set_position(sirio::Board &board, const std::string &command_args) {
             // Ignore illegal moves in history to maintain robustness
             break;
         }
+    }
+}
+
+void handle_setoption(const std::string &args) {
+    std::istringstream stream{args};
+    std::string token;
+    std::string name;
+    std::string value;
+    while (stream >> token) {
+        if (token == "name") {
+            std::string word;
+            while (stream >> word && word != "value") {
+                if (!name.empty()) {
+                    name += ' ';
+                }
+                name += word;
+            }
+            if (word != "value") {
+                return;
+            }
+            std::string remainder;
+            std::getline(stream, remainder);
+            value = trim_leading(remainder);
+            break;
+        }
+    }
+
+    if (name == "SyzygyPath") {
+        sirio::syzygy::set_tablebase_path(value);
     }
 }
 
@@ -174,6 +205,10 @@ int main() {
                 std::string rest;
                 std::getline(stream, rest);
                 handle_go(rest, board);
+            } else if (command == "setoption") {
+                std::string rest;
+                std::getline(stream, rest);
+                handle_setoption(rest);
             } else if (command == "quit" || command == "stop") {
                 break;
             } else if (command == "d") {

@@ -484,6 +484,28 @@ bool Board::is_square_attacked(int square, Color by) const {
     return false;
 }
 
+Board Board::apply_null_move() const {
+    Board result = *this;
+    const Color us = state_.side_to_move;
+    const Color them = opposite(us);
+
+    if (result.state_.en_passant_square >= 0) {
+        result.state_.zobrist_hash ^=
+            en_passant_hash(file_of(result.state_.en_passant_square));
+        result.state_.en_passant_square = -1;
+    }
+
+    result.state_.side_to_move = them;
+    result.state_.zobrist_hash ^= side_to_move_hash();
+    ++result.state_.halfmove_clock;
+    if (us == Color::Black) {
+        ++result.state_.fullmove_number;
+    }
+
+    result.history_.push(result.state_);
+    return result;
+}
+
 Board Board::apply_move(const Move &move) const {
     Board result = *this;
     const Color us = state_.side_to_move;

@@ -7,12 +7,13 @@ SirioC es un proyecto de motor de ajedrez en C++ inspirado en la guía de Rustic
 - Representación del tablero basada en bitboards.
 - Carga y serialización de posiciones FEN, incluida la gestión de derechos de enroque y casillas de captura al paso.
 - Generación de movimientos pseudo-legales y legales usando ataques por bitboards, incluida la detección de jaques, enroques y capturas al paso.
-- Evaluación estática con conteo de material, tablas pieza-casilla y bonificación por pareja de alfiles.
-- Búsqueda `negamax` con poda alfa-beta, quiescence search, heurísticas de ordenación y tabla de transposición.
-- Búsqueda iterativa con gestión básica de tiempo para controles incrementales y por movimiento.
+- Evaluación estática enriquecida con estructura de peones, seguridad del rey, movilidad y actividad de piezas menores, además de heurísticas especializadas para finales conocidos.
+- Búsqueda `negamax` con poda alfa-beta, quiescence search, tabla de transposición ampliada, reducciones de movimientos tardíos, poda de movimiento nulo y *aspiration windows*.
+- Búsqueda iterativa con control de tiempo adaptativo, cálculo de nodos visitados y soporte para opciones UCI como `SyzygyPath`.
+- Integración opcional con tablebases Syzygy (3-7 piezas) mediante el motor Fathom.
 - Interfaz UCI monohilo lista para conectarse con GUIs de ajedrez.
-- Evaluación con heurísticas específicas para finales, incluyendo cercanía rey-rey.
-- Conjunto de pruebas unitarias sencillas para validar la inicialización, la compatibilidad FEN y la detección de ataques.
+- Suite de pruebas unitarias que cubre inicialización del tablero, compatibilidad FEN, reglas de tablas, heurísticas de evaluación y nuevas utilidades como el movimiento nulo.
+- Benchmarks reproducibles para medir nodos por segundo, precisión táctica y verificación opcional de tablebases.
 
 ## Documentación
 
@@ -60,9 +61,35 @@ Para ejecutar las pruebas:
 ctest --test-dir build
 ```
 
+## Benchmarks
+
+Los benchmarks se pueden compilar con CMake (`sirio_bench`) o mediante el Makefile:
+
+```bash
+make bench
+```
+
+El ejecutable imprime tres métricas:
+
+- Nodos por segundo sobre un conjunto fijo de posiciones de velocidad.
+- Aciertos en una pequeña suite táctica de mates inmediatos.
+- Resultado de una sonda Syzygy (si las tablebases están disponibles); en caso contrario muestra instrucciones para configurarlas.
+
+## Tablebases Syzygy
+
+El motor permite configurar la ruta a las tablebases mediante UCI:
+
+```
+setoption name SyzygyPath value /ruta/a/tablebases
+```
+
+El directorio debe contener los archivos Syzygy de 3 a 7 piezas (`*.rtbw`, `*.rtbz`). Para disponer del conjunto completo de 7 piezas se requieren aproximadamente 150 GB de almacenamiento. Si no se establece la ruta o los archivos no están disponibles el motor continúa funcionando con su evaluación interna.
+
+La integración utiliza la biblioteca Fathom (licencia MIT) incluida en `third_party/fathom`. Consulte `third_party/fathom/LICENSE` para los términos completos.
+
 ## Próximos pasos sugeridos
 
-- Añadir gestión de tiempo y búsqueda iterativa para soportar partidas competitivas.
-- Incorporar mejoras de evaluación específicas para finales (por ejemplo, tablas de distancias rey-rey).
-- Implementar búsqueda con extensiones y reducciones selectivas siguiendo el plan de Rustic Chess.
+- Paralelizar la búsqueda (por ejemplo, mediante *lazy SMP* o trabajo en *split points*).
+- Persistir la tabla de transposición para sesiones largas y añadir libro de aperturas.
+- Integrar suites tácticas más extensas (LCT-II, WAC) y benchmarks automáticos en CI.
 
