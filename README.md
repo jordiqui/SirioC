@@ -21,6 +21,7 @@ SirioC es un proyecto de motor de ajedrez en C++ inspirado en la guía de Rustic
 - [Manejo de cadenas FEN](docs/fen.md)
 - [Búsqueda y ordenación de movimientos](docs/search.md)
 - [Comunicación UCI](docs/communication.md)
+- [Integración con GUIs UCI](docs/gui.md)
 
 ## Requisitos
 
@@ -118,6 +119,40 @@ SirioC no incluye una copia del archivo ni deriva de Stockfish 17.1, pero al usa
 respetar sus términos (conservar avisos de copyright, ofrecer el código fuente del generador de la
 red si redistribuyes binarios, etc.). Para quienes necesiten una alternativa completamente propia,
 se puede seguir utilizando la evaluación clásica integrada.
+
+### Descarga de redes y configuración en GUIs
+
+Las redes NNUE oficiales están publicadas en el repositorio de Stockfish. Puedes obtener la red
+principal y la variante "small" directamente desde los servidores de pruebas del proyecto:
+
+```bash
+curl -L -o nn-13406b1dcbe0.nnue \
+  https://tests.stockfishchess.org/api/nn/nn-13406b1dcbe0.nnue
+curl -L -o nn-6877cd24400e.nnue \
+  https://tests.stockfishchess.org/api/nn/nn-6877cd24400e.nnue
+```
+
+o, si lo prefieres, con `wget`:
+
+```bash
+wget https://tests.stockfishchess.org/api/nn/nn-13406b1dcbe0.nnue
+wget https://tests.stockfishchess.org/api/nn/nn-6877cd24400e.nnue
+```
+
+No es obligatorio colocar las redes en el mismo directorio que el binario del motor, pero resulta
+práctico hacerlo para que la GUI construya rutas relativas de forma automática. En Windows, por
+ejemplo, puedes crear `C:\ChessEngines\SirioC` y copiar allí `sirio.exe` junto con los archivos
+`nn-13406b1dcbe0.nnue` y `nn-6877cd24400e.nnue`. Después, desde Fritz 20:
+
+1. Ve a **Archivo → Opciones → Motores → Crear UCI** y selecciona `sirio.exe`.
+2. Abre el diálogo de opciones del motor recién agregado y localiza el campo `EvalFile`.
+3. Pulsa **Examinar…** y apunta a `nn-13406b1dcbe0.nnue` (si deseas usar la red pequeña, usa
+   `EvalFileSmall`).
+4. Confirma con **Aceptar** y utiliza el motor con normalidad.
+
+El resto de GUIs (Cute Chess, Arena, etc.) también mostrarán `EvalFile` y `EvalFileSmall` dentro de
+las opciones UCI; basta con indicar la ruta absoluta o relativa a las redes descargadas. Si no se
+configura ninguna ruta el motor seguirá funcionando con su evaluación clásica.
 
 ## Próximos pasos sugeridos
 
