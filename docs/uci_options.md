@@ -43,7 +43,7 @@ sirio::uci::handle_setoption(Options, full_line_after_keyword_setoption);
 - UCI_LimitStrength (check false)
 - UCI_Elo (spin 1320..3190, default 3190)
 - Debug Log File (string "")
-- EvalFile (string "nn-000000000000.nnue")
+- EvalFile (string "nn-1c0000000000.nnue")
 - SyzygyPath (string "")
 - SyzygyProbeDepth (spin 0..128, default 1)
 - Syzygy50MoveRule (check true)
@@ -84,9 +84,10 @@ if (bool(Options["UCI_ShowWDL"])) { /* emit wdl W D L */ }
 La implementación por defecto de SirioC expone las opciones `EvalFile` y `EvalFileSmall` para cargar
 redes NNUE desde disco. La primera ruta es la preferida; la segunda se usa como respaldo durante
 `isready` cuando la principal falla (por ejemplo, en máquinas con poca memoria). Ambas aceptan
-`<empty>` para volver a la evaluación clásica. La red recomendada actualmente es
-`nn-13406b1dcbe0.nnue` (Stockfish 17.1), distribuida bajo GPLv3: recuerda cumplir con su licencia si
-la redistribuyes junto a SirioC.
+`<empty>` para volver a la evaluación clásica. Las redes recomendadas actualmente son
+`nn-1c0000000000.nnue` como principal y `nn-37f18f62d772.nnue` como alternativa, ambas basadas en
+las versiones más recientes publicadas por el proyecto Stockfish. Recuerda cumplir con su licencia
+si las redistribuyes junto a SirioC.
 
 ## License
 Placed under the same license as SirioC repository (inherit).

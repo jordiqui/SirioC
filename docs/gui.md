@@ -27,7 +27,8 @@ interfaz UCI.
    programa*.
 3. Tras añadirlo, pulsa **Opciones** para abrir el diálogo de configuración UCI.
 4. En el campo `EvalFile` elige la ruta a la red principal (por ejemplo,
-   `C:\\ChessEngines\\SirioC\\nn-13406b1dcbe0.nnue`). Para una red alternativa usa `EvalFileSmall`.
+   `C:\\ChessEngines\\SirioC\\nn-1c0000000000.nnue`). Para registrar la red alternativa pequeña,
+   usa `EvalFileSmall` y apunta a `nn-37f18f62d772.nnue` en el mismo directorio.
 5. Ajusta `Threads` y `Hash` según tu hardware y confirma con **Aceptar**.
 
 A partir de ese momento el motor aparecerá en la lista de motores UCI y podrás usarlo en partidas,

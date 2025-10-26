@@ -99,11 +99,13 @@ posible cargar una red neuronal mediante las opciones estándar `EvalFile` y `Ev
   hardware con menos memoria). Si `EvalFile` no se puede cargar, la GUI intentará esta ruta al
   enviar `isready`.
 
-Se recomienda utilizar la red oficial de Stockfish 17.1 (`nn-13406b1dcbe0.nnue`, ~42 MiB) como
-punto de partida:
+Se recomienda utilizar las redes oficiales más recientes (`nn-1c0000000000.nnue`, ~45 MiB) como
+principal y `nn-37f18f62d772.nnue` como alternativa "small". Ambas se publican por el proyecto
+Stockfish y son compatibles con SirioC:
 
 ```
-setoption name EvalFile value /ruta/a/nn-13406b1dcbe0.nnue
+setoption name EvalFile value /ruta/a/nn-1c0000000000.nnue
+setoption name EvalFileSmall value /ruta/a/nn-37f18f62d772.nnue
 ```
 
 Tras una carga correcta el motor informará con `info string NNUE evaluation using ...` que incluye
@@ -114,11 +116,11 @@ opción:
 setoption name EvalFile value <empty>
 ```
 
-La red `nn-13406b1dcbe0.nnue` es distribuida por el proyecto Stockfish bajo la licencia GNU GPLv3.
-SirioC no incluye una copia del archivo ni deriva de Stockfish 17.1, pero al usar dicha red debes
-respetar sus términos (conservar avisos de copyright, ofrecer el código fuente del generador de la
-red si redistribuyes binarios, etc.). Para quienes necesiten una alternativa completamente propia,
-se puede seguir utilizando la evaluación clásica integrada.
+Ambas redes se distribuyen bajo la licencia GNU GPLv3 del proyecto Stockfish. SirioC no incluye
+copias de dichos archivos, pero al utilizarlas debes respetar sus términos (conservar avisos de
+copyright, ofrecer el código fuente del generador de la red si redistribuyes binarios, etc.). Para
+quienes necesiten una alternativa completamente propia, se puede seguir utilizando la evaluación
+clásica integrada.
 
 ### Descarga de redes y configuración en GUIs
 
@@ -126,28 +128,33 @@ Las redes NNUE oficiales están publicadas en el repositorio de Stockfish. Puede
 principal y la variante "small" directamente desde los servidores de pruebas del proyecto:
 
 ```bash
-curl -L -o nn-13406b1dcbe0.nnue \
-  https://tests.stockfishchess.org/api/nn/nn-13406b1dcbe0.nnue
-curl -L -o nn-6877cd24400e.nnue \
-  https://tests.stockfishchess.org/api/nn/nn-6877cd24400e.nnue
+curl -L -o nn-1c0000000000.nnue \
+  https://tests.stockfishchess.org/api/nn/nn-1c0000000000.nnue
+curl -L -o nn-37f18f62d772.nnue \
+  https://tests.stockfishchess.org/api/nn/nn-37f18f62d772.nnue
 ```
 
 o, si lo prefieres, con `wget`:
 
 ```bash
-wget https://tests.stockfishchess.org/api/nn/nn-13406b1dcbe0.nnue
-wget https://tests.stockfishchess.org/api/nn/nn-6877cd24400e.nnue
+wget https://tests.stockfishchess.org/api/nn/nn-1c0000000000.nnue
+wget https://tests.stockfishchess.org/api/nn/nn-37f18f62d772.nnue
 ```
 
 No es obligatorio colocar las redes en el mismo directorio que el binario del motor, pero resulta
 práctico hacerlo para que la GUI construya rutas relativas de forma automática. En Windows, por
 ejemplo, puedes crear `C:\ChessEngines\SirioC` y copiar allí `sirio.exe` junto con los archivos
-`nn-13406b1dcbe0.nnue` y `nn-6877cd24400e.nnue`. Después, desde Fritz 20:
+`nn-1c0000000000.nnue` y `nn-37f18f62d772.nnue`. Después, desde Fritz 20:
 
 1. Ve a **Archivo → Opciones → Motores → Crear UCI** y selecciona `sirio.exe`.
 2. Abre el diálogo de opciones del motor recién agregado y localiza el campo `EvalFile`.
-3. Pulsa **Examinar…** y apunta a `nn-13406b1dcbe0.nnue` (si deseas usar la red pequeña, usa
-   `EvalFileSmall`).
+3. Pulsa **Examinar…** y apunta a `nn-1c0000000000.nnue`. Si deseas registrar la red alternativa
+   pequeña, repite el proceso con `EvalFileSmall` y selecciona `nn-37f18f62d772.nnue`.
+
+SirioC anuncia estas dos rutas como valores por defecto (`EvalFile` = `nn-1c0000000000.nnue` y
+`EvalFileSmall` = `nn-37f18f62d772.nnue`). Si los archivos están en el mismo directorio que el
+ejecutable, muchas GUIs (incluida Fritz 20) pre rellenarán los campos con esos nombres, por lo que
+solo tendrás que confirmar la selección.
 4. Confirma con **Aceptar** y utiliza el motor con normalidad.
 
 El resto de GUIs (Cute Chess, Arena, etc.) también mostrarán `EvalFile` y `EvalFileSmall` dentro de

@@ -195,7 +195,7 @@ inline void register_essential_options(OptionsMap& o){
 
     // Paths / logs / NNUE / TBs
     o["Debug Log File"]  = Option(std::string(""));
-    o["EvalFile"]        = Option(std::string("nn-000000000000.nnue"));
+    o["EvalFile"]        = Option(std::string("nn-1c0000000000.nnue"));
     o["SyzygyPath"]      = Option(std::string(""));
     o["SyzygyProbeDepth"]= Option(1, 0, 128);
     o["Syzygy50MoveRule"]= Option(true);

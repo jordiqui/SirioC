@@ -22,8 +22,11 @@
 
 namespace {
 
-std::string pending_eval_file;
-std::string pending_eval_file_small;
+constexpr char kDefaultEvalFile[] = "nn-1c0000000000.nnue";
+constexpr char kDefaultEvalFileSmall[] = "nn-37f18f62d772.nnue";
+
+std::string pending_eval_file{kDefaultEvalFile};
+std::string pending_eval_file_small{kDefaultEvalFileSmall};
 std::ofstream debug_log_stream;
 std::streambuf *original_clog_buffer = nullptr;
 
@@ -187,8 +190,9 @@ void send_uci_id() {
               << std::endl;
     std::cout << "option name Syzygy50MoveRule type check default true" << std::endl;
     std::cout << "option name SyzygyProbeLimit type spin default 7 min 0 max 7" << std::endl;
-    std::cout << "option name EvalFile type string default <empty>" << std::endl;
-    std::cout << "option name EvalFileSmall type string default <empty>" << std::endl;
+    std::cout << "option name EvalFile type string default " << kDefaultEvalFile << std::endl;
+    std::cout << "option name EvalFileSmall type string default " << kDefaultEvalFileSmall
+              << std::endl;
     std::cout << "uciok" << std::endl;
 }
 
