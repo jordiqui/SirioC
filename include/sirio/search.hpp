@@ -30,5 +30,8 @@ struct SearchResult {
 
 SearchResult search_best_move(const Board &board, const SearchLimits &limits);
 
+void set_search_threads(int threads);
+int get_search_threads();
+
 }  // namespace sirio
 

@@ -27,6 +27,8 @@ public:
 
     bool load(const std::string &path, std::string *error_message);
 
+    [[nodiscard]] std::unique_ptr<EvaluationBackend> clone() const override;
+
     void initialize(const Board &board) override;
     void reset(const Board &board) override;
     void push(const Board &previous, const std::optional<Move> &move,

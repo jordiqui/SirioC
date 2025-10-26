@@ -11,7 +11,7 @@ SirioC es un proyecto de motor de ajedrez en C++ inspirado en la guía de Rustic
 - Búsqueda `negamax` con poda alfa-beta, quiescence search, tabla de transposición ampliada, reducciones de movimientos tardíos, poda de movimiento nulo y *aspiration windows*.
 - Búsqueda iterativa con control de tiempo adaptativo, cálculo de nodos visitados y soporte para opciones UCI como `SyzygyPath`.
 - Integración opcional con tablebases Syzygy (3-7 piezas) mediante el motor Fathom.
-- Interfaz UCI monohilo lista para conectarse con GUIs de ajedrez.
+- Interfaz UCI multihilo con búsqueda *lazy SMP* configurable.
 - Suite de pruebas unitarias que cubre inicialización del tablero, compatibilidad FEN, reglas de tablas, heurísticas de evaluación y nuevas utilidades como el movimiento nulo.
 - Benchmarks reproducibles para medir nodos por segundo, precisión táctica y verificación opcional de tablebases.
 
@@ -89,7 +89,6 @@ La integración utiliza la biblioteca Fathom (licencia MIT) incluida en `third_p
 
 ## Próximos pasos sugeridos
 
-- Paralelizar la búsqueda (por ejemplo, mediante *lazy SMP* o trabajo en *split points*).
 - Persistir la tabla de transposición para sesiones largas y añadir libro de aperturas.
 - Integrar suites tácticas más extensas (LCT-II, WAC) y benchmarks automáticos en CI.
 
