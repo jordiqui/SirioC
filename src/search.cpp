@@ -7,19 +7,23 @@
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
+#include <iostream>
 #include <limits>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include "sirio/draws.hpp"
 #include "sirio/endgame.hpp"
 #include "sirio/evaluation.hpp"
+#include "sirio/move.hpp"
 #include "sirio/movegen.hpp"
 #include "sirio/syzygy.hpp"
 
@@ -49,6 +53,7 @@ std::atomic<int> time_nodes_per_ms{0};
 
 std::mutex active_search_mutex;
 SearchSharedState *active_search_state = nullptr;
+std::mutex info_output_mutex;
 
 class EvaluationStateGuard {
 public:
@@ -87,6 +92,7 @@ struct TTEntry {
     int score = 0;
     TTNodeType type = TTNodeType::Exact;
     int static_eval = 0;
+    std::uint8_t generation = 0;
 };
 
 struct PackedTTEntry {
@@ -180,6 +186,7 @@ public:
         entry.depth = slot.depth;
         entry.type = static_cast<TTNodeType>(slot.type);
         entry.static_eval = slot.static_eval;
+        entry.generation = slot.generation;
         return entry;
     }
 
@@ -335,6 +342,7 @@ struct SearchContext {
     std::uint8_t tt_generation = 1;
     SearchSharedState *shared = nullptr;
     std::chrono::milliseconds last_iteration_time{0};
+    int selective_depth = 0;
 };
 
 class ActiveSearchGuard {
@@ -448,6 +456,67 @@ bool same_move(const Move &lhs, const Move &rhs) {
            lhs.captured == rhs.captured && lhs.promotion == rhs.promotion &&
            lhs.is_en_passant == rhs.is_en_passant &&
            lhs.is_castling == rhs.is_castling;
+}
+
+std::vector<Move> extract_principal_variation(const Board &board, GlobalTranspositionTable &tt,
+                                              std::uint8_t generation, int max_length) {
+    std::vector<Move> pv;
+    if (max_length <= 0) {
+        return pv;
+    }
+    Board current = board;
+    std::unordered_set<std::uint64_t> visited;
+    visited.insert(current.zobrist_hash());
+    const int limit = std::min(max_length, max_search_depth);
+    for (int depth = 0; depth < limit; ++depth) {
+        auto entry_opt = tt.probe(current.zobrist_hash());
+        if (!entry_opt.has_value()) {
+            break;
+        }
+        const TTEntry &entry = *entry_opt;
+        if (entry.generation != 0 && entry.generation != generation) {
+            break;
+        }
+        auto moves = generate_legal_moves(current);
+        auto it = std::find_if(moves.begin(), moves.end(),
+                               [&](const Move &candidate) {
+                                   return same_move(candidate, entry.best_move);
+                               });
+        if (it == moves.end()) {
+            break;
+        }
+        pv.push_back(*it);
+        current = current.apply_move(*it);
+        std::uint64_t hash = current.zobrist_hash();
+        if (visited.count(hash) != 0) {
+            break;
+        }
+        visited.insert(hash);
+    }
+    return pv;
+}
+
+void announce_search_update(const Board &board, const SearchResult &result,
+                            const SearchSharedState &shared_state) {
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - shared_state.start_time);
+    long long elapsed_ms = elapsed.count();
+    if (elapsed_ms < 0) {
+        elapsed_ms = 0;
+    }
+    std::uint64_t nodes = shared_state.node_counter.load(std::memory_order_relaxed);
+    std::uint64_t nps = elapsed_ms > 0 ? (nodes * 1000ULL) / static_cast<std::uint64_t>(elapsed_ms) : 0ULL;
+    int depth = result.depth_reached;
+    int seldepth = result.seldepth > 0 ? result.seldepth : depth;
+    std::string pv_string = principal_variation_to_uci(board, result.principal_variation);
+    std::lock_guard<std::mutex> lock(info_output_mutex);
+    std::cout << "info depth " << depth << " seldepth " << seldepth << " multipv 1 score "
+              << format_uci_score(result.score) << " nodes " << nodes << " nps " << nps
+              << " hashfull 0 tbhits 0 time " << elapsed_ms;
+    if (!pv_string.empty()) {
+        std::cout << " pv " << pv_string;
+    }
+    std::cout << std::endl;
 }
 
 bool is_quiet(const Move &move) {
@@ -575,6 +644,7 @@ int quiescence(const Board &board, int alpha, int beta, int ply, SearchContext &
 int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *best_move,
             bool *found_best, SearchContext &context, int parent_static_eval,
             bool allow_null_move) {
+    context.selective_depth = std::max(context.selective_depth, ply + 1);
     if (should_stop(context)) {
         return evaluate_for_current_player(board);
     }
@@ -797,6 +867,7 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
 }
 
 int quiescence(const Board &board, int alpha, int beta, int ply, SearchContext &context) {
+    context.selective_depth = std::max(context.selective_depth, ply + 1);
     if (should_stop(context)) {
         return alpha;
     }
@@ -948,17 +1019,61 @@ struct SharedBestResult {
     SearchResult result;
 };
 
-void publish_best_result(const SearchResult &candidate, SharedBestResult &shared) {
+bool publish_best_result(const SearchResult &candidate, SharedBestResult &shared,
+                         const Board &board, GlobalTranspositionTable &tt,
+                         std::uint8_t tt_generation, SearchSharedState &shared_state,
+                         bool announce_update) {
     if (!candidate.has_move) {
-        return;
+        return false;
     }
-    std::lock_guard lock(shared.mutex);
-    if (!shared.result.has_move ||
-        candidate.depth_reached > shared.result.depth_reached ||
-        (candidate.depth_reached == shared.result.depth_reached &&
-         std::abs(candidate.score) >= std::abs(shared.result.score))) {
-        shared.result = candidate;
+
+    bool should_update = false;
+    {
+        std::lock_guard lock(shared.mutex);
+        if (!shared.result.has_move ||
+            candidate.depth_reached > shared.result.depth_reached ||
+            (candidate.depth_reached == shared.result.depth_reached &&
+             std::abs(candidate.score) >= std::abs(shared.result.score))) {
+            should_update = true;
+        }
     }
+
+    if (!should_update) {
+        return false;
+    }
+
+    SearchResult enriched = candidate;
+    enriched.principal_variation = extract_principal_variation(
+        board, tt, tt_generation, std::max(candidate.depth_reached, 1));
+    if (enriched.principal_variation.empty() && candidate.has_move) {
+        enriched.principal_variation.push_back(candidate.best_move);
+    }
+    if (enriched.seldepth < candidate.seldepth) {
+        enriched.seldepth = candidate.seldepth;
+    }
+    std::uint64_t nodes = shared_state.node_counter.load(std::memory_order_relaxed);
+    enriched.nodes = nodes;
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - shared_state.start_time);
+    long long elapsed_ms = elapsed.count();
+    if (elapsed_ms < 0) {
+        elapsed_ms = 0;
+    }
+    if (elapsed_ms > std::numeric_limits<int>::max()) {
+        elapsed_ms = std::numeric_limits<int>::max();
+    }
+    enriched.time_ms = static_cast<int>(elapsed_ms);
+
+    {
+        std::lock_guard lock(shared.mutex);
+        shared.result = enriched;
+    }
+
+    if (announce_update) {
+        announce_search_update(board, enriched, shared_state);
+    }
+
+    return true;
 }
 
 SearchResult run_search_thread(const Board &board, int max_depth_limit, SearchSharedState &shared,
@@ -996,6 +1111,7 @@ SearchResult run_search_thread(const Board &board, int max_depth_limit, SearchSh
         bool found = false;
         int score = 0;
         auto iteration_start = std::chrono::steady_clock::now();
+        context.selective_depth = 0;
 
         while (true) {
             score = negamax(board, depth, alpha, beta, 0, &current_best, &found, context, 0, true);
@@ -1029,13 +1145,15 @@ SearchResult run_search_thread(const Board &board, int max_depth_limit, SearchSh
         previous_score = score;
         have_previous = true;
         local.score = score;
+        local.seldepth = std::max(local.seldepth, context.selective_depth);
         if (found) {
             best_move = current_best;
             best_found = true;
             local.best_move = current_best;
             local.has_move = true;
             local.depth_reached = depth;
-            publish_best_result(local, shared_result);
+            publish_best_result(local, shared_result, board, tt, tt_generation, shared,
+                                is_primary);
         }
 
         if (is_primary && shared.has_time_limit) {
@@ -1060,7 +1178,7 @@ SearchResult run_search_thread(const Board &board, int max_depth_limit, SearchSh
         local.best_move = best_move;
         local.has_move = true;
     }
-    publish_best_result(local, shared_result);
+    publish_best_result(local, shared_result, board, tt, tt_generation, shared, false);
 
     return local;
 }
@@ -1169,11 +1287,71 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     }
 
     best.nodes = shared.node_counter.load(std::memory_order_relaxed);
+    if (shared_result.result.seldepth > best.seldepth) {
+        best.seldepth = shared_result.result.seldepth;
+    }
+    if (best.has_move && best.principal_variation.empty()) {
+        best.principal_variation = extract_principal_variation(
+            board, tt, tt_generation, std::max(best.depth_reached, 1));
+        if (best.principal_variation.empty()) {
+            best.principal_variation.push_back(best.best_move);
+        }
+    }
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - shared.start_time);
+    long long elapsed_ms = elapsed.count();
+    if (elapsed_ms < 0) {
+        elapsed_ms = 0;
+    }
+    if (elapsed_ms > std::numeric_limits<int>::max()) {
+        elapsed_ms = std::numeric_limits<int>::max();
+    }
+    best.time_ms = static_cast<int>(elapsed_ms);
     if (shared.timed_out.load(std::memory_order_relaxed)) {
         best.timed_out = true;
     }
 
     return best;
+}
+
+std::string format_uci_score(int score) {
+    if (score >= mate_threshold || score <= -mate_threshold) {
+        int moves = (mate_score - std::abs(score) + 1) / 2;
+        if (score < 0) {
+            moves = -moves;
+        }
+        return std::string{"mate "} + std::to_string(moves);
+    }
+    return std::string{"cp "} + std::to_string(score);
+}
+
+std::string principal_variation_to_uci(const Board &board, const std::vector<Move> &pv) {
+    if (pv.empty()) {
+        return {};
+    }
+    Board current = board;
+    std::ostringstream stream;
+    bool first = true;
+    for (const Move &move : pv) {
+        auto moves = generate_legal_moves(current);
+        auto it = std::find_if(moves.begin(), moves.end(), [&](const Move &candidate) {
+            return candidate.from == move.from && candidate.to == move.to &&
+                   candidate.piece == move.piece && candidate.captured == move.captured &&
+                   candidate.promotion == move.promotion &&
+                   candidate.is_en_passant == move.is_en_passant &&
+                   candidate.is_castling == move.is_castling;
+        });
+        if (it == moves.end()) {
+            break;
+        }
+        if (!first) {
+            stream << ' ';
+        }
+        stream << move_to_uci(*it);
+        current = current.apply_move(*it);
+        first = false;
+    }
+    return stream.str();
 }
 
 bool save_transposition_table(const std::string &path, std::string *error) {

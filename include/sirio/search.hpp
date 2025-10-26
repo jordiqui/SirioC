@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "sirio/board.hpp"
 #include "sirio/move.hpp"
@@ -26,11 +27,17 @@ struct SearchResult {
     int score = 0;
     bool has_move = false;
     int depth_reached = 0;
+    int seldepth = 0;
     bool timed_out = false;
     std::uint64_t nodes = 0;
+    int time_ms = 0;
+    std::vector<Move> principal_variation;
 };
 
 SearchResult search_best_move(const Board &board, const SearchLimits &limits);
+
+std::string format_uci_score(int score);
+std::string principal_variation_to_uci(const Board &board, const std::vector<Move> &pv);
 
 void set_search_threads(int threads);
 int get_search_threads();

@@ -118,12 +118,27 @@ void output_search_result(const sirio::Board &board, const sirio::SearchLimits &
         if (reported_depth < 0) {
             reported_depth = 0;
         }
-        std::cout << "info depth " << reported_depth << " score cp " << result.score;
-        if (result.nodes > 0) {
-            std::cout << " nodes " << result.nodes;
+        int seldepth = result.seldepth > 0 ? result.seldepth : reported_depth;
+        std::uint64_t nodes = result.nodes;
+        int time_ms = result.time_ms;
+        if (time_ms < 0) {
+            time_ms = 0;
         }
-        std::cout << " pv " << sirio::move_to_uci(result.best_move) << std::endl;
-        std::cout << "bestmove " << sirio::move_to_uci(result.best_move) << std::endl;
+        std::uint64_t nps = time_ms > 0 ? (nodes * 1000ULL) / static_cast<std::uint64_t>(time_ms) : 0ULL;
+        std::string pv_string = sirio::principal_variation_to_uci(board, result.principal_variation);
+        if (pv_string.empty()) {
+            pv_string = sirio::move_to_uci(result.best_move);
+        }
+        std::cout << "info depth " << reported_depth << " seldepth " << seldepth
+                  << " multipv 1 score " << sirio::format_uci_score(result.score)
+                  << " nodes " << nodes << " nps " << nps << " hashfull 0 tbhits 0 time "
+                  << time_ms << " pv " << pv_string << std::endl;
+        std::cout << "bestmove " << sirio::move_to_uci(result.best_move);
+        if (result.principal_variation.size() >= 2) {
+            std::cout << " ponder "
+                      << sirio::move_to_uci(result.principal_variation[1]);
+        }
+        std::cout << std::endl;
     } else {
         auto legal_moves = sirio::generate_legal_moves(board);
         if (!legal_moves.empty()) {
