@@ -75,6 +75,43 @@ std::uint64_t en_passant_hash(int file) {
 }
 
 std::uint64_t side_to_move_hash() { return zobrist_tables().side_to_move; }
+
+bool en_passant_capture_possible(const Board &board, int ep_square, Color capturer) {
+    if (ep_square < 0) {
+        return false;
+    }
+
+    const Bitboard pawns = board.pieces(capturer, PieceType::Pawn);
+    const int file = file_of(ep_square);
+
+    auto has_pawn_on = [&](int square, int expected_file) {
+        if (square < 0 || square >= 64) {
+            return false;
+        }
+        if (file_of(square) != expected_file) {
+            return false;
+        }
+        return (pawns & one_bit(square)) != 0;
+    };
+
+    if (capturer == Color::White) {
+        if (file > 0 && has_pawn_on(ep_square - 9, file - 1)) {
+            return true;
+        }
+        if (file < 7 && has_pawn_on(ep_square - 7, file + 1)) {
+            return true;
+        }
+    } else {
+        if (file > 0 && has_pawn_on(ep_square + 7, file - 1)) {
+            return true;
+        }
+        if (file < 7 && has_pawn_on(ep_square + 9, file + 1)) {
+            return true;
+        }
+    }
+
+    return false;
+}
 }  // namespace
 
 Color opposite(Color color) {
@@ -385,7 +422,9 @@ void Board::set_from_fen(std::string_view fen) {
         if (state_.en_passant_square < 0) {
             throw std::invalid_argument("Invalid en passant square in FEN");
         }
-        state_.zobrist_hash ^= en_passant_hash(file_of(state_.en_passant_square));
+        if (en_passant_capture_possible(*this, state_.en_passant_square, state_.side_to_move)) {
+            state_.zobrist_hash ^= en_passant_hash(file_of(state_.en_passant_square));
+        }
     }
 
     try {
@@ -493,8 +532,10 @@ Board Board::apply_null_move() const {
     const Color them = opposite(us);
 
     if (result.state_.en_passant_square >= 0) {
-        result.state_.zobrist_hash ^=
-            en_passant_hash(file_of(result.state_.en_passant_square));
+        if (en_passant_capture_possible(result, result.state_.en_passant_square, us)) {
+            result.state_.zobrist_hash ^=
+                en_passant_hash(file_of(result.state_.en_passant_square));
+        }
         result.state_.en_passant_square = -1;
     }
 
@@ -527,7 +568,10 @@ Board Board::apply_move(const Move &move) const {
 
     auto clear_en_passant_hash = [&]() {
         if (result.state_.en_passant_square >= 0) {
-            result.state_.zobrist_hash ^= en_passant_hash(file_of(result.state_.en_passant_square));
+            if (en_passant_capture_possible(result, result.state_.en_passant_square, us)) {
+                result.state_.zobrist_hash ^=
+                    en_passant_hash(file_of(result.state_.en_passant_square));
+            }
             result.state_.en_passant_square = -1;
         }
     };
@@ -662,7 +706,10 @@ Board Board::apply_move(const Move &move) const {
         result.state_.halfmove_clock = 0;
         if (std::abs(move.to - move.from) == 16) {
             result.state_.en_passant_square = us == Color::White ? move.from + 8 : move.from - 8;
-            result.state_.zobrist_hash ^= en_passant_hash(file_of(result.state_.en_passant_square));
+            if (en_passant_capture_possible(result, result.state_.en_passant_square, them)) {
+                result.state_.zobrist_hash ^=
+                    en_passant_hash(file_of(result.state_.en_passant_square));
+            }
         }
     } else if (is_capture) {
         result.state_.halfmove_clock = 0;

@@ -74,6 +74,22 @@ void test_en_passant() {
     assert(*ep == square_index('d', 3));
 }
 
+void test_en_passant_zobrist_hash_without_capture() {
+    const std::string with_ep = "4k3/8/8/8/P7/8/8/4K3 b - a3 0 1";
+    const std::string without_ep = "4k3/8/8/8/P7/8/8/4K3 b - - 0 1";
+    sirio::Board board_with{with_ep};
+    sirio::Board board_without{without_ep};
+    assert(board_with.zobrist_hash() == board_without.zobrist_hash());
+}
+
+void test_en_passant_zobrist_hash_with_capture() {
+    const std::string with_ep = "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1";
+    const std::string without_ep = "4k3/8/8/3pP3/8/8/8/4K3 w - - 0 1";
+    sirio::Board board_with{with_ep};
+    sirio::Board board_without{without_ep};
+    assert(board_with.zobrist_hash() != board_without.zobrist_hash());
+}
+
 void test_start_position_moves() {
     sirio::Board board;
     auto moves = sirio::generate_legal_moves(board);
@@ -127,10 +143,8 @@ void test_zobrist_hashing() {
     sirio::Board reconstructed{after_move.to_fen()};
     assert(after_move.zobrist_hash() == reconstructed.zobrist_hash());
 
-    sirio::Board en_passant_board{
-        "rnbqkbnr/pppp1ppp/8/4p3/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 2"};
-    sirio::Board without_en_passant{
-        "rnbqkbnr/pppp1ppp/8/4p3/3P4/8/PPP1PPPP/RNBQKBNR b KQkq - 0 2"};
+    sirio::Board en_passant_board{"4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1"};
+    sirio::Board without_en_passant{"4k3/8/8/3pP3/8/8/8/4K3 w - - 0 1"};
     assert(en_passant_board.zobrist_hash() != without_en_passant.zobrist_hash());
 }
 
@@ -296,6 +310,8 @@ int main() {
     test_fen_roundtrip();
     test_attack_detection();
     test_en_passant();
+    test_en_passant_zobrist_hash_without_capture();
+    test_en_passant_zobrist_hash_with_capture();
     test_start_position_moves();
     test_piece_list_updates_after_moves();
     test_bishop_pair_detection();
