@@ -14,6 +14,7 @@ add_library(sirio_core
     src/nnue/api.cpp
     src/move.cpp
     src/movegen.cpp
+    src/opening_book.cpp
     src/search.cpp
     src/syzygy.cpp
     third_party/fathom/tbprobe.c

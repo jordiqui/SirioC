@@ -1,8 +1,9 @@
 #pragma once
 
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
+#include <string>
 
 #include "sirio/board.hpp"
 #include "sirio/move.hpp"
@@ -37,6 +38,8 @@ int get_search_threads();
 void set_transposition_table_size(std::size_t size_mb);
 std::size_t get_transposition_table_size();
 void clear_transposition_tables();
+bool save_transposition_table(const std::string &path, std::string *error = nullptr);
+bool load_transposition_table(const std::string &path, std::string *error = nullptr);
 
 void set_move_overhead(int milliseconds);
 void set_minimum_thinking_time(int milliseconds);
