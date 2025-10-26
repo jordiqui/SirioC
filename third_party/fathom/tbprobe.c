@@ -292,6 +292,7 @@ static const uint64_t anti2board_table[15] =
 
 static inline size_t diag2index(uint64_t b, unsigned d)
 {
+    (void)d;
     b *= 0x0101010101010101ull;
     b >>= 56;
     b >>= 1;
