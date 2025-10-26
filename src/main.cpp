@@ -133,6 +133,13 @@ void output_search_result(const sirio::Board &board, const sirio::SearchLimits &
             std::cout << "bestmove 0000" << std::endl;
         }
     }
+
+    if (options.hash_persist && !options.hash_persist_file.empty()) {
+        std::string error;
+        if (!sirio::save_transposition_table(options.hash_persist_file, &error)) {
+            std::cout << "info string Failed to save transposition table: " << error << std::endl;
+        }
+    }
 }
 
 void start_search_async(const sirio::Board &board, const sirio::SearchLimits &limits) {
@@ -660,7 +667,6 @@ void handle_go(const std::string &command_args, const sirio::Board &board) {
         limits.max_depth = kDefaultGoDepth;
     }
 
-codex/persistir-tabla-de-transposicion-y-anadir-libro-de-aperturas
     sirio::initialize_evaluation(board);
     if (options.use_book && !options.book_file.empty() && sirio::book::is_loaded()) {
         if (auto book_move = sirio::book::choose_move(board); book_move.has_value()) {
@@ -670,34 +676,8 @@ codex/persistir-tabla-de-transposicion-y-anadir-libro-de-aperturas
             return;
         }
     }
-    sirio::SearchResult result = sirio::search_best_move(board, limits);
-    if (result.has_move) {
-        int reported_depth = result.depth_reached > 0 ? result.depth_reached : limits.max_depth;
-        std::cout << "info depth " << reported_depth << " score cp " << result.score;
-        if (result.nodes > 0) {
-            std::cout << " nodes " << result.nodes;
-        }
-        std::cout << " pv " << sirio::move_to_uci(result.best_move) << std::endl;
-        std::cout << "bestmove " << sirio::move_to_uci(result.best_move) << std::endl;
-    } else {
-        auto legal_moves = sirio::generate_legal_moves(board);
-        if (!legal_moves.empty()) {
-            const auto fallback = legal_moves.front();
-            std::cout << "bestmove " << sirio::move_to_uci(fallback) << std::endl;
-        } else {
-            std::cout << "bestmove 0000" << std::endl;
-        }
-    }
 
-    if (options.hash_persist && !options.hash_persist_file.empty()) {
-        std::string error;
-        if (!sirio::save_transposition_table(options.hash_persist_file, &error)) {
-            std::cout << "info string Failed to save transposition table: " << error << std::endl;
-        }
-    }
-=======
     start_search_async(board, limits);
-main
 }
 
 void handle_bench() {

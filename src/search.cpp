@@ -1121,12 +1121,10 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     SharedBestResult shared_result;
     shared_result.result = seed;
 
- codex/persistir-tabla-de-transposicion-y-anadir-libro-de-aperturas
     GlobalTranspositionTable &tt = shared_transposition_table();
     std::uint8_t tt_generation = tt.prepare_for_search();
-=======
+
     ActiveSearchGuard active_guard{&shared};
- main
 
     int thread_count = std::max(1, get_search_threads());
     std::vector<std::thread> workers;
@@ -1178,20 +1176,19 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     return best;
 }
 
- codex/persistir-tabla-de-transposicion-y-anadir-libro-de-aperturas
 bool save_transposition_table(const std::string &path, std::string *error) {
     return shared_transposition_table().save(path, error);
 }
 
 bool load_transposition_table(const std::string &path, std::string *error) {
     return shared_transposition_table().load(path, error);
-=======
+}
+
 void request_stop_search() {
     std::lock_guard<std::mutex> lock(active_search_mutex);
     if (active_search_state != nullptr) {
         active_search_state->stop.store(true, std::memory_order_relaxed);
     }
- main
 }
 
 }  // namespace sirio
