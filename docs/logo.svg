@@ -1,17 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">SirioC chess computer logo</title>
+  <desc id="desc">Minimalist emblem combining a chess board square, circuitry and the letter S.</desc>
   <defs>
-    <linearGradient id="board" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0b3d91" />
-      <stop offset="100%" stop-color="#112b4a" />
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0c1b33" />
+      <stop offset="100%" stop-color="#132b4c" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6bd1ff" />
+      <stop offset="100%" stop-color="#3aa0ff" />
     </linearGradient>
   </defs>
-  <rect x="6" y="6" width="52" height="52" rx="10" fill="url(#board)" />
-  <rect x="6" y="6" width="26" height="26" rx="6" fill="#1f4fa3" opacity="0.6" />
-  <rect x="32" y="32" width="26" height="26" rx="6" fill="#1f4fa3" opacity="0.35" />
-  <path d="M28 18c4-6 12-10 18-8l-2 6c4 1 7 5 7 9 0 6-4 11-10 13l-2 8H27l4-12c-4-2-7-6-7-10 0-3 2-6 4-8z"
-        fill="#f2f5ff" stroke="#d9e2ff" stroke-width="2" stroke-linejoin="round" />
-  <path d="M16 44h-6v-8m0 0l4-4m-4 4l-4-4" fill="none" stroke="#7fc8ff" stroke-width="2"
-        stroke-linecap="round" stroke-linejoin="round" />
-  <path d="M48 20h6v8m0 0l-4 4m4-4l4 4" fill="none" stroke="#7fc8ff" stroke-width="2"
-        stroke-linecap="round" stroke-linejoin="round" />
+  <rect x="12" y="12" width="104" height="104" rx="18" fill="url(#bg)" />
+  <g stroke="#1f3d63" stroke-width="4" opacity="0.4">
+    <line x1="40" y1="20" x2="40" y2="108" />
+    <line x1="88" y1="20" x2="88" y2="108" />
+    <line x1="20" y1="52" x2="108" y2="52" />
+    <line x1="20" y1="84" x2="108" y2="84" />
+  </g>
+  <path d="M92 34c0-13-11-24-24-24H52c-12 0-22 10-22 22s10 22 22 22h16c9 0 16 7 16 16s-7 16-16 16H50c-13 0-24 11-24 24"
+        fill="none" stroke="url(#accent)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M94 98h18v-22h-6l-5-10-5 10h-6z" fill="#e9f4ff" stroke="#9cc9ff" stroke-width="4" stroke-linejoin="round" />
+  <circle cx="32" cy="36" r="6" fill="#6bd1ff" />
+  <circle cx="32" cy="92" r="6" fill="#6bd1ff" />
+  <circle cx="64" cy="64" r="5" fill="#6bd1ff" />
 </svg>
