@@ -89,6 +89,7 @@ public:
     [[nodiscard]] std::optional<std::pair<Color, PieceType>> piece_at(int square) const;
     [[nodiscard]] int king_square(Color color) const;
     [[nodiscard]] bool in_check(Color color) const;
+    [[nodiscard]] Board apply_null_move() const;
     [[nodiscard]] Board apply_move(const Move &move) const;
     [[nodiscard]] const PieceList &piece_list(Color color, PieceType type) const;
     [[nodiscard]] std::uint64_t zobrist_hash() const { return state_.zobrist_hash; }

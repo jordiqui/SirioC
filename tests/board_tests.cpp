@@ -9,6 +9,8 @@
 #include "sirio/endgame.hpp"
 #include "sirio/move.hpp"
 #include "sirio/movegen.hpp"
+#include "sirio/evaluation.hpp"
+#include "sirio/syzygy.hpp"
 
 void run_perft_tests();
 
@@ -145,6 +147,32 @@ void test_game_history_tracking() {
     assert(board.history().size() == 1);
 }
 
+void test_null_move() {
+    sirio::Board initial{"8/8/8/8/8/8/4P3/4K2k w - - 4 15"};
+    sirio::Board after_null = initial.apply_null_move();
+    assert(after_null.side_to_move() == sirio::Color::Black);
+    assert(!after_null.en_passant_square().has_value());
+    assert(after_null.halfmove_clock() == initial.halfmove_clock() + 1);
+    assert(after_null.fullmove_number() == initial.fullmove_number());
+
+    sirio::Board after_second_null = after_null.apply_null_move();
+    assert(after_second_null.side_to_move() == sirio::Color::White);
+    assert(after_second_null.fullmove_number() == after_null.fullmove_number() + 1);
+}
+
+void test_evaluation_passed_pawn() {
+    sirio::Board passed{"8/8/8/3P4/8/8/8/3kK3 w - - 0 1"};
+    sirio::Board blocked{"8/8/3p4/3P4/8/8/8/3kK3 w - - 0 1"};
+    int passed_score = sirio::evaluate(passed);
+    int blocked_score = sirio::evaluate(blocked);
+    assert(passed_score > blocked_score);
+}
+
+void test_syzygy_option_configuration() {
+    sirio::syzygy::set_tablebase_path("");
+    assert(!sirio::syzygy::available());
+}
+
 void test_sufficient_material_to_force_checkmate() {
     sirio::Board only_kings{"7k/8/8/8/8/8/8/4K3 w - - 0 1"};
     assert(!sirio::sufficient_material_to_force_checkmate(only_kings));
@@ -218,7 +246,13 @@ int main() {
     test_draw_by_fifty_move_rule();
     test_draw_by_repetition_rule();
     test_draw_by_insufficient_material_rule();
+codex/implement-iterative-search-with-adaptive-time
+    test_null_move();
+    test_evaluation_passed_pawn();
+    test_syzygy_option_configuration();
+=======
     run_perft_tests();
+ main
     std::cout << "All tests passed.\n";
     return 0;
 }
