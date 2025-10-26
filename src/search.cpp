@@ -23,6 +23,8 @@ namespace sirio {
 
 namespace {
 
+struct SearchSharedState;
+
 constexpr int mate_score = 100000;
 constexpr int max_search_depth = 64;
 constexpr int mate_threshold = mate_score - max_search_depth;
@@ -40,6 +42,9 @@ std::atomic<int> time_move_overhead{10};
 std::atomic<int> time_minimum_thinking{100};
 std::atomic<int> time_slow_mover{100};
 std::atomic<int> time_nodes_per_ms{0};
+
+std::mutex active_search_mutex;
+SearchSharedState *active_search_state = nullptr;
 
 class EvaluationStateGuard {
 public:
@@ -188,6 +193,27 @@ struct SearchContext {
     TranspositionTable tt{};
     SearchSharedState *shared = nullptr;
     std::chrono::milliseconds last_iteration_time{0};
+};
+
+class ActiveSearchGuard {
+public:
+    explicit ActiveSearchGuard(SearchSharedState *state) : state_(state) {
+        std::lock_guard<std::mutex> lock(active_search_mutex);
+        active_search_state = state_;
+    }
+
+    ~ActiveSearchGuard() {
+        std::lock_guard<std::mutex> lock(active_search_mutex);
+        if (active_search_state == state_) {
+            active_search_state = nullptr;
+        }
+    }
+
+    ActiveSearchGuard(const ActiveSearchGuard &) = delete;
+    ActiveSearchGuard &operator=(const ActiveSearchGuard &) = delete;
+
+private:
+    SearchSharedState *state_;
 };
 
 constexpr std::uint64_t time_check_interval = 2048;
@@ -948,6 +974,8 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     SharedBestResult shared_result;
     shared_result.result = seed;
 
+    ActiveSearchGuard active_guard{&shared};
+
     int thread_count = std::max(1, get_search_threads());
     std::vector<std::thread> workers;
     workers.reserve(static_cast<std::size_t>(std::max(0, thread_count - 1)));
@@ -996,6 +1024,13 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     }
 
     return best;
+}
+
+void request_stop_search() {
+    std::lock_guard<std::mutex> lock(active_search_mutex);
+    if (active_search_state != nullptr) {
+        active_search_state->stop.store(true, std::memory_order_relaxed);
+    }
 }
 
 }  // namespace sirio

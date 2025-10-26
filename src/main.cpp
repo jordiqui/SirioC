@@ -1,15 +1,18 @@
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <chrono>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include "sirio/board.hpp"
@@ -29,6 +32,15 @@ std::string pending_eval_file{kDefaultEvalFile};
 std::string pending_eval_file_small{kDefaultEvalFileSmall};
 std::ofstream debug_log_stream;
 std::streambuf *original_clog_buffer = nullptr;
+
+std::mutex search_thread_mutex;
+std::thread search_thread;
+std::atomic<bool> search_in_progress{false};
+
+void stop_and_join_search();
+void start_search_async(const sirio::Board &board, const sirio::SearchLimits &limits);
+void output_search_result(const sirio::Board &board, const sirio::SearchLimits &limits,
+                          const sirio::SearchResult &result);
 
 struct EngineOptions {
     std::string debug_log_file;
@@ -72,6 +84,78 @@ void initialize_engine_options() {
     sirio::syzygy::set_probe_depth_limit(options.syzygy_probe_depth);
     sirio::syzygy::set_probe_piece_limit(options.syzygy_probe_limit);
     sirio::syzygy::set_use_fifty_move_rule(options.syzygy_50_move_rule);
+}
+
+void stop_and_join_search() {
+    if (search_in_progress.load(std::memory_order_acquire)) {
+        sirio::request_stop_search();
+    }
+
+    std::thread local_thread;
+    {
+        std::lock_guard<std::mutex> lock(search_thread_mutex);
+        if (search_thread.joinable()) {
+            local_thread = std::move(search_thread);
+        }
+    }
+
+    if (local_thread.joinable()) {
+        local_thread.join();
+    }
+
+    search_in_progress.store(false, std::memory_order_release);
+}
+
+void output_search_result(const sirio::Board &board, const sirio::SearchLimits &limits,
+                          const sirio::SearchResult &result) {
+    if (result.has_move) {
+        int reported_depth = result.depth_reached > 0 ? result.depth_reached : limits.max_depth;
+        if (reported_depth < 0) {
+            reported_depth = 0;
+        }
+        std::cout << "info depth " << reported_depth << " score cp " << result.score;
+        if (result.nodes > 0) {
+            std::cout << " nodes " << result.nodes;
+        }
+        std::cout << " pv " << sirio::move_to_uci(result.best_move) << std::endl;
+        std::cout << "bestmove " << sirio::move_to_uci(result.best_move) << std::endl;
+    } else {
+        auto legal_moves = sirio::generate_legal_moves(board);
+        if (!legal_moves.empty()) {
+            const auto fallback = legal_moves.front();
+            std::cout << "bestmove " << sirio::move_to_uci(fallback) << std::endl;
+        } else {
+            std::cout << "bestmove 0000" << std::endl;
+        }
+    }
+}
+
+void start_search_async(const sirio::Board &board, const sirio::SearchLimits &limits) {
+    stop_and_join_search();
+
+    sirio::Board board_copy = board;
+    sirio::SearchLimits limits_copy = limits;
+
+    search_in_progress.store(true, std::memory_order_release);
+
+    std::thread new_thread;
+
+    try {
+        new_thread = std::thread([board_copy, limits_copy]() mutable {
+            sirio::SearchResult result = sirio::search_best_move(board_copy, limits_copy);
+            output_search_result(board_copy, limits_copy, result);
+            search_in_progress.store(false, std::memory_order_release);
+        });
+
+        std::lock_guard<std::mutex> lock(search_thread_mutex);
+        search_thread = std::move(new_thread);
+    } catch (...) {
+        if (new_thread.joinable()) {
+            new_thread.join();
+        }
+        search_in_progress.store(false, std::memory_order_release);
+        throw;
+    }
 }
 
 std::string normalize_eval_path(std::string value) {
@@ -517,25 +601,7 @@ void handle_go(const std::string &command_args, const sirio::Board &board) {
         limits.max_depth = kDefaultGoDepth;
     }
 
-    sirio::initialize_evaluation(board);
-    sirio::SearchResult result = sirio::search_best_move(board, limits);
-    if (result.has_move) {
-        int reported_depth = result.depth_reached > 0 ? result.depth_reached : limits.max_depth;
-        std::cout << "info depth " << reported_depth << " score cp " << result.score;
-        if (result.nodes > 0) {
-            std::cout << " nodes " << result.nodes;
-        }
-        std::cout << " pv " << sirio::move_to_uci(result.best_move) << std::endl;
-        std::cout << "bestmove " << sirio::move_to_uci(result.best_move) << std::endl;
-    } else {
-        auto legal_moves = sirio::generate_legal_moves(board);
-        if (!legal_moves.empty()) {
-            const auto fallback = legal_moves.front();
-            std::cout << "bestmove " << sirio::move_to_uci(fallback) << std::endl;
-        } else {
-            std::cout << "bestmove 0000" << std::endl;
-        }
-    }
+    start_search_async(board, limits);
 }
 
 void handle_bench() {
@@ -644,12 +710,15 @@ int main() {
             if (command == "uci") {
                 send_uci_id();
             } else if (command == "isready") {
+                stop_and_join_search();
                 send_ready(board);
             } else if (command == "ucinewgame") {
+                stop_and_join_search();
                 board = sirio::Board{};
                 sirio::initialize_evaluation(board);
             } else if (command == "position") {
                 std::string rest;
+                stop_and_join_search();
                 std::getline(stream, rest);
                 set_position(board, rest);
             } else if (command == "go") {
@@ -658,13 +727,19 @@ int main() {
                 handle_go(rest, board);
             } else if (command == "setoption") {
                 std::string rest;
+                stop_and_join_search();
                 std::getline(stream, rest);
                 handle_setoption(rest, board);
             } else if (command == "bench") {
+                stop_and_join_search();
                 handle_bench();
-            } else if (command == "quit" || command == "stop") {
+            } else if (command == "stop") {
+                stop_and_join_search();
+            } else if (command == "quit") {
+                stop_and_join_search();
                 break;
             } else if (command == "d") {
+                stop_and_join_search();
                 std::cout << board.to_fen() << std::endl;
             }
         } catch (const std::exception &ex) {
@@ -672,6 +747,7 @@ int main() {
         }
     }
 
+    stop_and_join_search();
     return 0;
 }
 

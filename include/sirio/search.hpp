@@ -47,5 +47,7 @@ int get_minimum_thinking_time();
 int get_slow_mover();
 int get_nodestime();
 
+void request_stop_search();
+
 }  // namespace sirio
 
