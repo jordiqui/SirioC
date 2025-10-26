@@ -1,6 +1,7 @@
 #include "sirio/syzygy.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <bit>
 #include <cmath>
 #include <mutex>
@@ -21,6 +22,9 @@ namespace {
 std::string g_tb_path;
 bool g_initialized = false;
 std::mutex g_mutex;
+std::atomic<int> g_probe_depth{1};
+std::atomic<int> g_probe_limit{7};
+std::atomic<bool> g_use_fifty_move_rule{true};
 
 bool has_castling_rights(const Board &board) {
     const auto &rights = board.castling_rights();
@@ -136,7 +140,11 @@ std::optional<ProbeResult> probe_wdl(const Board &board) {
     if (has_castling_rights(board)) {
         return std::nullopt;
     }
-    if (total_pieces(board) > static_cast<int>(TB_LARGEST)) {
+    int pieces = total_pieces(board);
+    if (pieces > static_cast<int>(TB_LARGEST)) {
+        return std::nullopt;
+    }
+    if (pieces > g_probe_limit.load(std::memory_order_relaxed)) {
         return std::nullopt;
     }
 
@@ -171,9 +179,17 @@ std::optional<ProbeResult> probe_root(const Board &board) {
     if (has_castling_rights(board)) {
         return std::nullopt;
     }
-    if (total_pieces(board) > static_cast<int>(TB_LARGEST)) {
+    int pieces = total_pieces(board);
+    if (pieces > static_cast<int>(TB_LARGEST)) {
         return std::nullopt;
     }
+    if (pieces > g_probe_limit.load(std::memory_order_relaxed)) {
+        return std::nullopt;
+    }
+
+    unsigned halfmove_clock = g_use_fifty_move_rule.load(std::memory_order_relaxed)
+                                  ? static_cast<unsigned>(board.halfmove_clock())
+                                  : 0;
 
     unsigned result = tb_probe_root(board.occupancy(Color::White), board.occupancy(Color::Black),
                                     board.pieces(Color::White, PieceType::King) |
@@ -188,7 +204,7 @@ std::optional<ProbeResult> probe_root(const Board &board) {
                                         board.pieces(Color::Black, PieceType::Knight),
                                     board.pieces(Color::White, PieceType::Pawn) |
                                         board.pieces(Color::Black, PieceType::Pawn),
-                                    static_cast<unsigned>(board.halfmove_clock()), 0, encode_ep(board),
+                                    halfmove_clock, 0, encode_ep(board),
                                     board.side_to_move() == Color::White, nullptr);
     if (result == TB_RESULT_FAILED) {
         return std::nullopt;
@@ -200,6 +216,24 @@ std::optional<ProbeResult> probe_root(const Board &board) {
     output.best_move = move_from_result(board, result);
     return output;
 }
+
+void set_probe_depth_limit(int depth) {
+    g_probe_depth.store(std::clamp(depth, 1, 100), std::memory_order_relaxed);
+}
+
+int probe_depth_limit() { return g_probe_depth.load(std::memory_order_relaxed); }
+
+void set_probe_piece_limit(int pieces) {
+    g_probe_limit.store(std::clamp(pieces, 0, 7), std::memory_order_relaxed);
+}
+
+int probe_piece_limit() { return g_probe_limit.load(std::memory_order_relaxed); }
+
+void set_use_fifty_move_rule(bool enabled) {
+    g_use_fifty_move_rule.store(enabled, std::memory_order_relaxed);
+}
+
+bool use_fifty_move_rule() { return g_use_fifty_move_rule.load(std::memory_order_relaxed); }
 
 }  // namespace sirio::syzygy
 
