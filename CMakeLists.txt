@@ -10,6 +10,7 @@ add_library(sirio_core
     src/draws.cpp
     src/endgame.cpp
     src/evaluation.cpp
+    src/nnue/backend.cpp
     src/move.cpp
     src/movegen.cpp
     src/search.cpp

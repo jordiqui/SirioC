@@ -1,4 +1,5 @@
 #include <cctype>
+#include <algorithm>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -8,15 +9,73 @@
 #include "sirio/board.hpp"
 #include "sirio/move.hpp"
 #include "sirio/movegen.hpp"
+#include "sirio/evaluation.hpp"
 #include "sirio/search.hpp"
 #include "sirio/syzygy.hpp"
 
 namespace {
 
+struct EngineOptions {
+    bool use_nnue = false;
+    std::string nnue_file;
+};
+
+struct BackendState {
+    bool nnue_active = false;
+    std::string nnue_path;
+};
+
+EngineOptions engine_options;
+BackendState backend_state;
+
+void apply_evaluation_options(const EngineOptions &options, const sirio::Board &board) {
+    if (!options.use_nnue) {
+        if (backend_state.nnue_active) {
+            use_classical_evaluation();
+            backend_state.nnue_active = false;
+            backend_state.nnue_path.clear();
+        } else {
+            use_classical_evaluation();
+        }
+        initialize_evaluation(board);
+        return;
+    }
+
+    if (options.nnue_file.empty()) {
+        std::cout << "info string NNUE is enabled but NNUEFile is empty" << std::endl;
+        use_classical_evaluation();
+        backend_state.nnue_active = false;
+        backend_state.nnue_path.clear();
+        initialize_evaluation(board);
+        return;
+    }
+
+    if (backend_state.nnue_active && backend_state.nnue_path == options.nnue_file) {
+        initialize_evaluation(board);
+        return;
+    }
+
+    std::string error;
+    if (auto backend = make_nnue_evaluation(options.nnue_file, &error)) {
+        set_evaluation_backend(std::move(backend));
+        backend_state.nnue_active = true;
+        backend_state.nnue_path = options.nnue_file;
+        initialize_evaluation(board);
+    } else {
+        std::cout << "info string Failed to load NNUE: " << error << std::endl;
+        use_classical_evaluation();
+        backend_state.nnue_active = false;
+        backend_state.nnue_path.clear();
+        initialize_evaluation(board);
+    }
+}
+
 void send_uci_id() {
     std::cout << "id name SirioC" << std::endl;
     std::cout << "id author OpenAI" << std::endl;
     std::cout << "option name SyzygyPath type string default" << std::endl;
+    std::cout << "option name UseNNUE type check default false" << std::endl;
+    std::cout << "option name NNUEFile type string default" << std::endl;
     std::cout << "uciok" << std::endl;
 }
 
@@ -80,9 +139,11 @@ void set_position(sirio::Board &board, const std::string &command_args) {
             break;
         }
     }
+
+    initialize_evaluation(board);
 }
 
-void handle_setoption(const std::string &args) {
+void handle_setoption(const std::string &args, sirio::Board &board) {
     std::istringstream stream{args};
     std::string token;
     std::string name;
@@ -108,6 +169,20 @@ void handle_setoption(const std::string &args) {
 
     if (name == "SyzygyPath") {
         sirio::syzygy::set_tablebase_path(value);
+    } else if (name == "UseNNUE") {
+        std::string lowered = value;
+        std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char ch) {
+            return static_cast<char>(std::tolower(ch));
+        });
+        if (lowered == "true" || lowered == "1" || lowered == "on" || lowered == "yes") {
+            engine_options.use_nnue = true;
+        } else if (lowered == "false" || lowered == "0" || lowered == "off" || lowered == "no") {
+            engine_options.use_nnue = false;
+        }
+        apply_evaluation_options(engine_options, board);
+    } else if (name == "NNUEFile") {
+        engine_options.nnue_file = value;
+        apply_evaluation_options(engine_options, board);
     }
 }
 
@@ -172,6 +247,7 @@ void handle_go(const std::string &command_args, const sirio::Board &board) {
         limits.max_depth = 64;
     }
 
+    apply_evaluation_options(engine_options, board);
     sirio::SearchResult result = sirio::search_best_move(board, limits);
     if (result.has_move) {
         int reported_depth = result.depth_reached > 0 ? result.depth_reached : limits.max_depth;
@@ -212,6 +288,7 @@ int main() {
                 send_ready();
             } else if (command == "ucinewgame") {
                 board = sirio::Board{};
+                apply_evaluation_options(engine_options, board);
             } else if (command == "position") {
                 std::string rest;
                 std::getline(stream, rest);
@@ -223,7 +300,7 @@ int main() {
             } else if (command == "setoption") {
                 std::string rest;
                 std::getline(stream, rest);
-                handle_setoption(rest);
+                handle_setoption(rest, board);
             } else if (command == "quit" || command == "stop") {
                 break;
             } else if (command == "d") {

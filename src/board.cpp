@@ -4,12 +4,14 @@
 #include <array>
 #include <cctype>
 #include <cstdlib>
+#include <optional>
 #include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 
 #include "sirio/move.hpp"
+#include "sirio/evaluation.hpp"
 
 namespace sirio {
 
@@ -398,6 +400,7 @@ void Board::set_from_fen(std::string_view fen) {
     }
 
     history_.push(state_);
+    notify_position_initialization(*this);
 }
 
 std::string Board::to_fen() const {
@@ -503,6 +506,7 @@ Board Board::apply_null_move() const {
     }
 
     result.history_.push(result.state_);
+    notify_move_applied(*this, std::nullopt, result);
     return result;
 }
 
@@ -680,6 +684,7 @@ Board Board::apply_move(const Move &move) const {
 
     result.history_.push(result.state_);
 
+    notify_move_applied(*this, std::optional<Move>{move}, result);
     return result;
 }
 
