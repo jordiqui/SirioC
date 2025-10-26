@@ -14,6 +14,7 @@ SirioC es un proyecto de motor de ajedrez en C++ inspirado en la guía de Rustic
 - Interfaz UCI multihilo con búsqueda *lazy SMP* configurable.
 - Suite de pruebas unitarias que cubre inicialización del tablero, compatibilidad FEN, reglas de tablas, heurísticas de evaluación y nuevas utilidades como el movimiento nulo.
 - Benchmarks reproducibles para medir nodos por segundo, precisión táctica y verificación opcional de tablebases.
+- Evaluación NNUE configurable con uno o dos ficheros, permitiendo redes especializadas para medio juego y finales.
 
 ## Documentación
 
@@ -86,6 +87,14 @@ setoption name SyzygyPath value /ruta/a/tablebases
 El directorio debe contener los archivos Syzygy de 3 a 7 piezas (`*.rtbw`, `*.rtbz`). Para disponer del conjunto completo de 7 piezas se requieren aproximadamente 150 GB de almacenamiento. Si no se establece la ruta o los archivos no están disponibles el motor continúa funcionando con su evaluación interna.
 
 La integración utiliza la biblioteca Fathom (licencia MIT) incluida en `third_party/fathom`. Consulte `third_party/fathom/LICENSE` para los términos completos.
+
+## Evaluación NNUE configurable
+
+SirioC puede operar con la evaluación clásica o con redes NNUE entrenadas externamente. Para activar NNUE es necesario habilitar la opción `UseNNUE` y proporcionar el fichero principal mediante `NNUEFile`.
+
+Opcionalmente se admite un segundo fichero (`NNUESecondaryFile`) y un umbral de fase (`NNUEPhaseThreshold`) para alternar entre ambos modelos. El umbral acepta el formato `material:NN`, donde `NN` es el número máximo de piezas en el tablero para activar la red secundaria, o `depth:NN` para intercambiar a partir de una profundidad de búsqueda determinada. Vaciar el valor restaura el comportamiento de una sola red.【F:src/main.cpp†L19-L106】【F:src/main.cpp†L116-L172】
+
+Las redes deben compartir la misma arquitectura y escala. Una combinación típica es utilizar una red rápida para medio juego y otra especializada en finales ligeros (por ejemplo, entrenada con ≤ 14 piezas). El umbral `material:16` suele separar bien ambas fases, mientras que `depth:10` permite experimentar con redes agresivas en el juego tardío.【F:src/nnue/backend.cpp†L18-L120】【F:src/nnue/backend.cpp†L122-L187】
 
 ## Próximos pasos sugeridos
 

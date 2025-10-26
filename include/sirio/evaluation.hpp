@@ -9,6 +9,11 @@
 
 namespace sirio {
 
+namespace nnue {
+enum class NetworkSelectionPolicy;
+struct MultiNetworkConfig;
+}
+
 class EvaluationBackend {
 public:
     virtual ~EvaluationBackend() = default;
@@ -26,6 +31,8 @@ public:
 std::unique_ptr<EvaluationBackend> make_classical_evaluation();
 std::unique_ptr<EvaluationBackend> make_nnue_evaluation(const std::string &path,
                                                         std::string *error_message = nullptr);
+std::unique_ptr<EvaluationBackend> make_nnue_evaluation(
+    const nnue::MultiNetworkConfig &config, std::string *error_message = nullptr);
 
 void set_evaluation_backend(std::unique_ptr<EvaluationBackend> backend);
 void use_classical_evaluation();
