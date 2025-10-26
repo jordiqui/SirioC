@@ -3,15 +3,12 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <bit>
 #include <chrono>
 #include <cstdlib>
-#include <fstream>
 #include <iostream>
 #include <limits>
 #include <mutex>
 #include <optional>
-#include <shared_mutex>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -25,6 +22,8 @@
 #include "sirio/evaluation.hpp"
 #include "sirio/move.hpp"
 #include "sirio/movegen.hpp"
+#include "sirio/time_manager.hpp"
+#include "sirio/transposition_table.hpp"
 #include "sirio/syzygy.hpp"
 
 namespace sirio {
@@ -36,261 +35,15 @@ struct SearchSharedState;
 constexpr int mate_score = 100000;
 constexpr int max_search_depth = 64;
 constexpr int mate_threshold = mate_score - max_search_depth;
-constexpr std::size_t default_tt_size_mb = 16;
-
 constexpr std::array<int, static_cast<std::size_t>(PieceType::Count)> mvv_values = {
     100, 320, 330, 500, 900, 20000};
 
-enum class TTNodeType { Exact, LowerBound, UpperBound };
-
 std::atomic<int> search_thread_count{1};
-std::atomic<std::size_t> transposition_table_size_mb{default_tt_size_mb};
-std::atomic<std::uint64_t> transposition_table_epoch{1};
-std::atomic<int> time_move_overhead{10};
-std::atomic<int> time_minimum_thinking{100};
-std::atomic<int> time_slow_mover{100};
-std::atomic<int> time_nodes_per_ms{0};
 
 std::mutex active_search_mutex;
 SearchSharedState *active_search_state = nullptr;
 std::mutex info_output_mutex;
 
-struct TTEntry {
-    Move best_move{};
-    int depth = 0;
-    int score = 0;
-    TTNodeType type = TTNodeType::Exact;
-    int static_eval = 0;
-    std::uint8_t generation = 0;
-};
-
-struct PackedTTEntry {
-    std::uint64_t key = 0;
-    std::int32_t score = 0;
-    std::int16_t depth = -1;
-    std::int32_t static_eval = 0;
-    std::uint8_t type = 0;
-    std::uint8_t generation = 0;
-    std::uint8_t from = 0;
-    std::uint8_t to = 0;
-    std::uint8_t piece = 0;
-    std::uint8_t captured = 0xFF;
-    std::uint8_t promotion = 0xFF;
-    std::uint8_t flags = 0;
-};
-
-constexpr std::size_t tt_mutex_shards = 64;
-
-Move unpack_move(const PackedTTEntry &slot) {
-    Move move{};
-    move.from = slot.from;
-    move.to = slot.to;
-    move.piece = static_cast<PieceType>(slot.piece);
-    if (slot.captured != 0xFF) {
-        move.captured = static_cast<PieceType>(slot.captured);
-    }
-    if (slot.promotion != 0xFF) {
-        move.promotion = static_cast<PieceType>(slot.promotion);
-    }
-    move.is_en_passant = (slot.flags & 0x1) != 0;
-    move.is_castling = (slot.flags & 0x2) != 0;
-    return move;
-}
-
-void pack_move(const Move &move, PackedTTEntry &slot) {
-    slot.from = static_cast<std::uint8_t>(move.from);
-    slot.to = static_cast<std::uint8_t>(move.to);
-    slot.piece = static_cast<std::uint8_t>(move.piece);
-    slot.captured = move.captured.has_value() ? static_cast<std::uint8_t>(*move.captured) : 0xFF;
-    slot.promotion = move.promotion.has_value() ? static_cast<std::uint8_t>(*move.promotion) : 0xFF;
-    slot.flags = (move.is_en_passant ? 0x1 : 0x0) | (move.is_castling ? 0x2 : 0x0);
-}
-
-class GlobalTranspositionTable {
-public:
-    std::uint8_t prepare_for_search() {
-        std::unique_lock lock(global_mutex_);
-        ensure_settings_locked();
-        ++generation_;
-        if (generation_ == 0) {
-            generation_ = 1;
-        }
-        return generation_;
-    }
-
-    void store(std::uint64_t key, const TTEntry &entry, std::uint8_t generation) {
-        std::shared_lock lock(global_mutex_);
-        if (entries_.empty()) {
-            return;
-        }
-        const std::size_t index = static_cast<std::size_t>(key & (entries_.size() - 1));
-        std::lock_guard shard_lock(shard_mutexes_[index % tt_mutex_shards]);
-        PackedTTEntry &slot = entries_[index];
-        if (slot.depth < entry.depth || slot.key != key || slot.generation != generation ||
-            entry.type == TTNodeType::Exact || slot.depth < 0) {
-            slot.key = key;
-            pack_move(entry.best_move, slot);
-            slot.score = entry.score;
-            slot.depth = static_cast<std::int16_t>(entry.depth);
-            slot.static_eval = entry.static_eval;
-            slot.type = static_cast<std::uint8_t>(entry.type);
-            slot.generation = generation;
-        }
-    }
-
-    std::optional<TTEntry> probe(std::uint64_t key) const {
-        std::shared_lock lock(global_mutex_);
-        if (entries_.empty()) {
-            return std::nullopt;
-        }
-        const std::size_t index = static_cast<std::size_t>(key & (entries_.size() - 1));
-        std::lock_guard shard_lock(shard_mutexes_[index % tt_mutex_shards]);
-        const PackedTTEntry &slot = entries_[index];
-        if (slot.depth < 0 || slot.key != key) {
-            return std::nullopt;
-        }
-        TTEntry entry;
-        entry.best_move = unpack_move(slot);
-        entry.score = slot.score;
-        entry.depth = slot.depth;
-        entry.type = static_cast<TTNodeType>(slot.type);
-        entry.static_eval = slot.static_eval;
-        entry.generation = slot.generation;
-        return entry;
-    }
-
-    bool save(const std::string &path, std::string *error) const {
-        std::unique_lock lock(global_mutex_);
-        std::ofstream out(path, std::ios::binary | std::ios::trunc);
-        if (!out) {
-            if (error != nullptr) {
-                *error = "No se pudo guardar la tabla de transposición: " + path;
-            }
-            return false;
-        }
-        const char magic[4] = {'S', 'R', 'T', 'T'};
-        const std::uint32_t version = 1;
-        const std::uint64_t count = static_cast<std::uint64_t>(entries_.size());
-        out.write(magic, sizeof(magic));
-        out.write(reinterpret_cast<const char *>(&version), sizeof(version));
-        out.write(reinterpret_cast<const char *>(&count), sizeof(count));
-        out.write(reinterpret_cast<const char *>(&configured_size_mb_), sizeof(configured_size_mb_));
-        out.write(reinterpret_cast<const char *>(&generation_), sizeof(generation_));
-        for (const auto &slot : entries_) {
-            out.write(reinterpret_cast<const char *>(&slot.key), sizeof(slot.key));
-            out.write(reinterpret_cast<const char *>(&slot.score), sizeof(slot.score));
-            out.write(reinterpret_cast<const char *>(&slot.depth), sizeof(slot.depth));
-            out.write(reinterpret_cast<const char *>(&slot.static_eval), sizeof(slot.static_eval));
-            out.write(reinterpret_cast<const char *>(&slot.type), sizeof(slot.type));
-            out.write(reinterpret_cast<const char *>(&slot.generation), sizeof(slot.generation));
-            out.write(reinterpret_cast<const char *>(&slot.from), sizeof(slot.from));
-            out.write(reinterpret_cast<const char *>(&slot.to), sizeof(slot.to));
-            out.write(reinterpret_cast<const char *>(&slot.piece), sizeof(slot.piece));
-            out.write(reinterpret_cast<const char *>(&slot.captured), sizeof(slot.captured));
-            out.write(reinterpret_cast<const char *>(&slot.promotion), sizeof(slot.promotion));
-            out.write(reinterpret_cast<const char *>(&slot.flags), sizeof(slot.flags));
-        }
-        if (!out.good() && error != nullptr) {
-            *error = "Error al escribir la tabla de transposición";
-        }
-        return out.good();
-    }
-
-    bool load(const std::string &path, std::string *error) {
-        std::ifstream in(path, std::ios::binary);
-        if (!in) {
-            if (error != nullptr) {
-                *error = "No se pudo abrir la tabla de transposición: " + path;
-            }
-            return false;
-        }
-        char magic[4];
-        std::uint32_t version = 0;
-        std::uint64_t count = 0;
-        std::size_t size_mb = 0;
-        std::uint8_t saved_generation = 1;
-        in.read(magic, sizeof(magic));
-        in.read(reinterpret_cast<char *>(&version), sizeof(version));
-        in.read(reinterpret_cast<char *>(&count), sizeof(count));
-        in.read(reinterpret_cast<char *>(&size_mb), sizeof(size_mb));
-        in.read(reinterpret_cast<char *>(&saved_generation), sizeof(saved_generation));
-        if (!in.good() || std::string_view(magic, sizeof(magic)) != "SRTT" || version != 1) {
-            if (error != nullptr) {
-                *error = "Formato de tabla de transposición inválido";
-            }
-            return false;
-        }
-        std::vector<PackedTTEntry> new_entries(static_cast<std::size_t>(count));
-        for (std::size_t i = 0; i < new_entries.size(); ++i) {
-            PackedTTEntry slot;
-            in.read(reinterpret_cast<char *>(&slot.key), sizeof(slot.key));
-            in.read(reinterpret_cast<char *>(&slot.score), sizeof(slot.score));
-            in.read(reinterpret_cast<char *>(&slot.depth), sizeof(slot.depth));
-            in.read(reinterpret_cast<char *>(&slot.static_eval), sizeof(slot.static_eval));
-            in.read(reinterpret_cast<char *>(&slot.type), sizeof(slot.type));
-            in.read(reinterpret_cast<char *>(&slot.generation), sizeof(slot.generation));
-            in.read(reinterpret_cast<char *>(&slot.from), sizeof(slot.from));
-            in.read(reinterpret_cast<char *>(&slot.to), sizeof(slot.to));
-            in.read(reinterpret_cast<char *>(&slot.piece), sizeof(slot.piece));
-            in.read(reinterpret_cast<char *>(&slot.captured), sizeof(slot.captured));
-            in.read(reinterpret_cast<char *>(&slot.promotion), sizeof(slot.promotion));
-            in.read(reinterpret_cast<char *>(&slot.flags), sizeof(slot.flags));
-            if (!in.good()) {
-                if (error != nullptr) {
-                    *error = "Archivo de tabla de transposición truncado";
-                }
-                return false;
-            }
-            new_entries[i] = slot;
-        }
-
-        std::unique_lock lock(global_mutex_);
-        entries_ = std::move(new_entries);
-        configured_size_mb_ = size_mb;
-        generation_ = saved_generation == 0 ? 1 : saved_generation;
-        epoch_marker_ = transposition_table_epoch.load(std::memory_order_relaxed);
-        transposition_table_size_mb.store(size_mb, std::memory_order_relaxed);
-        return true;
-    }
-
-private:
-    void ensure_settings_locked() {
-        const std::size_t desired =
-            transposition_table_size_mb.load(std::memory_order_relaxed);
-        const std::uint64_t epoch =
-            transposition_table_epoch.load(std::memory_order_relaxed);
-        if (configured_size_mb_ != desired || epoch_marker_ != epoch) {
-            rebuild_locked(desired);
-            epoch_marker_ = epoch;
-        }
-    }
-
-    void rebuild_locked(std::size_t size_mb) {
-        configured_size_mb_ = size_mb;
-        if (size_mb == 0) {
-            entries_.clear();
-            generation_ = 1;
-            return;
-        }
-        std::size_t bytes = size_mb * 1024ULL * 1024ULL;
-        std::size_t count = std::max<std::size_t>(1, bytes / sizeof(PackedTTEntry));
-        std::size_t pow2 = std::bit_ceil(count);
-        entries_.assign(pow2, PackedTTEntry{});
-        generation_ = 1;
-    }
-
-    mutable std::shared_mutex global_mutex_;
-    mutable std::array<std::mutex, tt_mutex_shards> shard_mutexes_{};
-    std::vector<PackedTTEntry> entries_;
-    std::uint8_t generation_ = 1;
-    std::size_t configured_size_mb_ = 0;
-    std::uint64_t epoch_marker_ = 0;
-};
-
-GlobalTranspositionTable &shared_transposition_table() {
-    static GlobalTranspositionTable table;
-    return table;
-}
 
 struct SearchSharedState {
     std::atomic<bool> stop{false};
@@ -345,46 +98,6 @@ void set_search_threads(int threads) {
 }
 
 int get_search_threads() { return search_thread_count.load(std::memory_order_relaxed); }
-
-void set_transposition_table_size(std::size_t size_mb) {
-    size_mb = std::clamp<std::size_t>(size_mb, 1, 33'554'432);
-    transposition_table_size_mb.store(size_mb, std::memory_order_relaxed);
-    transposition_table_epoch.fetch_add(1, std::memory_order_relaxed);
-}
-
-std::size_t get_transposition_table_size() {
-    return transposition_table_size_mb.load(std::memory_order_relaxed);
-}
-
-void clear_transposition_tables() {
-    transposition_table_epoch.fetch_add(1, std::memory_order_relaxed);
-}
-
-void set_move_overhead(int milliseconds) {
-    time_move_overhead.store(std::clamp(milliseconds, 0, 5000), std::memory_order_relaxed);
-}
-
-void set_minimum_thinking_time(int milliseconds) {
-    time_minimum_thinking.store(std::clamp(milliseconds, 0, 5000), std::memory_order_relaxed);
-}
-
-void set_slow_mover(int value) {
-    time_slow_mover.store(std::clamp(value, 10, 1000), std::memory_order_relaxed);
-}
-
-void set_nodestime(int value) {
-    time_nodes_per_ms.store(std::clamp(value, 0, 10000), std::memory_order_relaxed);
-}
-
-int get_move_overhead() { return time_move_overhead.load(std::memory_order_relaxed); }
-
-int get_minimum_thinking_time() {
-    return time_minimum_thinking.load(std::memory_order_relaxed);
-}
-
-int get_slow_mover() { return time_slow_mover.load(std::memory_order_relaxed); }
-
-int get_nodestime() { return time_nodes_per_ms.load(std::memory_order_relaxed); }
 
 namespace {
 
@@ -899,10 +612,9 @@ struct TimeAllocation {
 };
 
 void adjust_time_allocation(std::chrono::milliseconds &soft, std::chrono::milliseconds &hard) {
-    const int overhead = std::clamp(time_move_overhead.load(std::memory_order_relaxed), 0, 5000);
-    const int min_thinking =
-        std::clamp(time_minimum_thinking.load(std::memory_order_relaxed), 0, 5000);
-    const int slow = std::clamp(time_slow_mover.load(std::memory_order_relaxed), 10, 1000);
+    const int overhead = std::clamp(get_move_overhead(), 0, 5000);
+    const int min_thinking = std::clamp(get_minimum_thinking_time(), 0, 5000);
+    const int slow = std::clamp(get_slow_mover(), 10, 1000);
     const auto overhead_ms = std::chrono::milliseconds{overhead};
     const auto minimum_ms = std::chrono::milliseconds{min_thinking};
 
@@ -930,7 +642,7 @@ void adjust_time_allocation(std::chrono::milliseconds &soft, std::chrono::millis
 }
 
 std::uint64_t nodes_budget_for_time(std::chrono::milliseconds hard) {
-    const int nodes_per_ms = time_nodes_per_ms.load(std::memory_order_relaxed);
+    const int nodes_per_ms = get_nodestime();
     if (nodes_per_ms <= 0 || hard.count() <= 0) {
         return 0;
     }
@@ -1326,14 +1038,6 @@ std::string principal_variation_to_uci(const Board &board, const std::vector<Mov
         first = false;
     }
     return stream.str();
-}
-
-bool save_transposition_table(const std::string &path, std::string *error) {
-    return shared_transposition_table().save(path, error);
-}
-
-bool load_transposition_table(const std::string &path, std::string *error) {
-    return shared_transposition_table().load(path, error);
 }
 
 void request_stop_search() {

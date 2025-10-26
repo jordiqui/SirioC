@@ -16,6 +16,8 @@ add_library(sirio_core
     src/movegen.cpp
     src/opening_book.cpp
     src/search.cpp
+    src/time_manager.cpp
+    src/transposition_table.cpp
     src/syzygy.cpp
     third_party/fathom/tbprobe.c
 )
