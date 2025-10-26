@@ -2,7 +2,7 @@
 
 SirioC expone una interfaz UCI mínima para integrarse con GUIs de ajedrez. El ejecutable lee
 comandos línea a línea desde `stdin` y responde en `stdout`, lo que facilita la integración con
-herramientas como Cute Chess o Arena.【F:src/main.cpp†L71-L116】
+herramientas como Cute Chess o Arena.【F:src/main.cpp†L17-L122】
 
 ## 7.1. Introduction
 
@@ -20,8 +20,10 @@ El comportamiento sigue la guía de Rustic Chess, priorizando claridad sobre ren
 
 ## 7.3. How it works
 
-- `uci`: envía la identificación del motor y confirma con `uciok` mediante `send_uci_id`.
-- `isready`: responde con `readyok` desde `send_ready`.
+- `uci`: envía la identificación del motor, publica las opciones (incluidas `EvalFile` y
+  `EvalFileSmall`) y confirma con `uciok` mediante `send_uci_id`.
+- `isready`: garantiza que cualquier ruta `EvalFile` pendiente se haya intentado cargar antes de
+  contestar `readyok` desde `send_ready`.
 - `ucinewgame`: restablece el `Board` a la posición inicial.
 - `position`: interpreta `startpos` o un bloque `fen`, aplica los movimientos listados y actualiza el
   tablero con `set_position`.
@@ -34,7 +36,8 @@ El comportamiento sigue la guía de Rustic Chess, priorizando claridad sobre ren
 
 La lógica se concentra en tres funciones auxiliares:
 
-1. `send_uci_id` encapsula la presentación del motor (nombre y autor) y la señal `uciok`.
+1. `send_uci_id` encapsula la presentación del motor (nombre y autor), declara las opciones UCI
+   soportadas y emite la señal `uciok`.
 2. `set_position` restaura la posición inicial o configura una FEN personalizada, procesando el
    historial de movimientos para mantener el estado coherente.
 3. `handle_go` abstrae la búsqueda (`search_best_move`) y emite tanto la información intermedia como
@@ -63,7 +66,8 @@ que probar cada comando de forma aislada sea más sencillo.
 Para integrarlo con GUIs como Fritz o Cute Chess se recomienda el siguiente intercambio:
 
 1. Enviar `uci` y esperar a `uciok`.
-2. Enviar `isready` antes de comenzar cada partida para asegurarse de que el motor está libre.
+2. Enviar `isready` antes de comenzar cada partida para asegurarse de que el motor está libre y que
+   el backend NNUE (si se configuró `EvalFile`) se haya inicializado correctamente.
 3. Reiniciar con `ucinewgame` y establecer la posición mediante `position startpos moves ...` o un
    bloque `position fen ...` seguido de la lista de jugadas.
 4. Lanzar la búsqueda con `go`, proporcionando parámetros de tiempo (`wtime`, `btime`, `winc`,
@@ -74,8 +78,15 @@ Para integrarlo con GUIs como Fritz o Cute Chess se recomienda el siguiente inte
    búsqueda no produjo PV válido, se recurre a la primera jugada generada en el estado actual, por lo
    que la GUI nunca recibe `0000` salvo que no existan movimientos legales.【F:src/main.cpp†L131-L144】
 
+ codex/integrate-stockfish-17.1-nnue-support
+Limitaciones actuales: el motor mantiene un único hilo principal de comunicación y la gestión del
+tiempo sigue siendo aproximada. Aun así respeta los márgenes duros/soft de tiempo y los topes de
+nodos establecidos por la GUI, y ahora ofrece opciones UCI básicas (`Threads`, `SyzygyPath` y las
+dos rutas NNUE) para integrarse mejor con entornos modernos.【F:src/main.cpp†L17-L207】【F:src/search.cpp†L31-L230】【F:src/search.cpp†L400-L470】
+=======
 Limitaciones actuales: el motor es monohilo y solo calcula una estimación simple del tiempo
 disponible por jugada. No obstante, respeta los márgenes duros/soft de tiempo y los topes de nodos
 establecidos por la GUI. Las opciones UCI incluyen selectores para NNUE (`UseNNUE`, `NNUEFile`,
 `NNUESecondaryFile`, `NNUEPhaseThreshold`) que permiten activar redes híbridas durante la
 búsqueda.【F:src/main.cpp†L19-L134】【F:src/main.cpp†L136-L172】【F:src/search.cpp†L31-L230】【F:src/search.cpp†L400-L470】
+ main
