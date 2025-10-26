@@ -36,3 +36,14 @@ resultado con signo desde la perspectiva de las blancas.【F:src/evaluation.cpp�
 La versión actual no aplica *tapering* ni pesos según la fase de la partida: tanto el material como
 las tablas pieza-casilla tienen la misma influencia en aperturas y finales. Incorporar escalados
 basados en el material total sería una mejora futura para adaptar la evaluación a cada fase.
+
+## 6.6. Redes NNUE híbridas
+
+Además del evaluador clásico, SirioC puede cargar redes NNUE entrenadas externamente. El backend
+acepta una configuración primaria y una secundaria; cuando ambas están presentes, el motor decide
+qué red utilizar según un umbral de fase basado en material total (`material:NN`) o en la profundidad
+de búsqueda (`depth:NN`).【F:src/main.cpp†L19-L116】【F:src/nnue/backend.cpp†L18-L187】
+
+Cada red mantiene su propio estado incremental (`push`/`pop`), por lo que la transición resulta
+transparente para la búsqueda. Si no se proporciona red secundaria o el umbral es cero, la red
+principal se emplea en todos los nodos.【F:src/nnue/backend.cpp†L118-L187】

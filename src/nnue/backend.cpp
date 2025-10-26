@@ -27,6 +27,17 @@ void clamp_non_negative(int &value) {
     }
 }
 
+int total_piece_count(const Board &board) {
+    int total = 0;
+    for (int color_index = 0; color_index < 2; ++color_index) {
+        Color color = color_index == 0 ? Color::White : Color::Black;
+        for (int type_index = 0; type_index < static_cast<int>(PieceType::Count); ++type_index) {
+            total += std::popcount(board.pieces(color, static_cast<PieceType>(type_index)));
+        }
+    }
+    return total;
+}
+
 }  // namespace
 
 SingleNetworkBackend::SingleNetworkBackend() = default;
@@ -168,6 +179,100 @@ int SingleNetworkBackend::evaluate(const Board &board) {
     }
     value *= params_.scale;
     return static_cast<int>(std::lround(value));
+}
+
+MultiNetworkBackend::MultiNetworkBackend(std::unique_ptr<SingleNetworkBackend> primary,
+                                         std::unique_ptr<SingleNetworkBackend> secondary,
+                                         NetworkSelectionPolicy policy, int phase_threshold)
+    : primary_(std::move(primary)),
+      secondary_(std::move(secondary)),
+      policy_(policy),
+      phase_threshold_(phase_threshold) {}
+
+std::unique_ptr<EvaluationBackend> MultiNetworkBackend::clone() const {
+    auto primary_copy = primary_ ? std::make_unique<SingleNetworkBackend>(*primary_) : nullptr;
+    std::unique_ptr<SingleNetworkBackend> secondary_copy = nullptr;
+    if (secondary_) {
+        secondary_copy = std::make_unique<SingleNetworkBackend>(*secondary_);
+    }
+    return std::make_unique<MultiNetworkBackend>(std::move(primary_copy), std::move(secondary_copy),
+                                                 policy_, phase_threshold_);
+}
+
+void MultiNetworkBackend::initialize(const Board &board) {
+    if (primary_) {
+        primary_->initialize(board);
+    }
+    if (secondary_) {
+        secondary_->initialize(board);
+    }
+    ply_ = 0;
+}
+
+void MultiNetworkBackend::reset(const Board &board) { initialize(board); }
+
+void MultiNetworkBackend::push(const Board &previous, const std::optional<Move> &move,
+                               const Board &current) {
+    if (primary_) {
+        primary_->push(previous, move, current);
+    }
+    if (secondary_) {
+        secondary_->push(previous, move, current);
+    }
+    ++ply_;
+}
+
+void MultiNetworkBackend::pop() {
+    if (primary_) {
+        primary_->pop();
+    }
+    if (secondary_) {
+        secondary_->pop();
+    }
+    if (ply_ > 0) {
+        --ply_;
+    }
+}
+
+SingleNetworkBackend *MultiNetworkBackend::active_backend(const Board &board) {
+    return const_cast<SingleNetworkBackend *>(
+        static_cast<const MultiNetworkBackend &>(*this).active_backend(board));
+}
+
+const SingleNetworkBackend *MultiNetworkBackend::active_backend(const Board &board) const {
+    if (!primary_ || !primary_->is_loaded()) {
+        return nullptr;
+    }
+    if (!secondary_ || !secondary_->is_loaded()) {
+        return primary_.get();
+    }
+    if (phase_threshold_ <= 0) {
+        return primary_.get();
+    }
+
+    switch (policy_) {
+        case NetworkSelectionPolicy::Material: {
+            int total_material = total_piece_count(board);
+            if (total_material <= phase_threshold_) {
+                return secondary_.get();
+            }
+            break;
+        }
+        case NetworkSelectionPolicy::Depth: {
+            if (ply_ >= phase_threshold_) {
+                return secondary_.get();
+            }
+            break;
+        }
+    }
+    return primary_.get();
+}
+
+int MultiNetworkBackend::evaluate(const Board &board) {
+    if (SingleNetworkBackend *backend = active_backend(board)) {
+        return backend->evaluate(board);
+    }
+    return 0;
 }
 
 }  // namespace sirio::nnue

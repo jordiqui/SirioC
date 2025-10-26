@@ -7,9 +7,10 @@
 #include <string_view>
 
 #include "sirio/board.hpp"
+#include "sirio/evaluation.hpp"
 #include "sirio/move.hpp"
 #include "sirio/movegen.hpp"
-#include "sirio/evaluation.hpp"
+#include "sirio/nnue/backend.hpp"
 #include "sirio/search.hpp"
 #include "sirio/syzygy.hpp"
 
@@ -18,11 +19,18 @@ namespace {
 struct EngineOptions {
     bool use_nnue = false;
     std::string nnue_file;
+    std::string nnue_secondary_file;
+    sirio::nnue::NetworkSelectionPolicy nnue_phase_policy =
+        sirio::nnue::NetworkSelectionPolicy::Material;
+    int nnue_phase_threshold = 0;
 };
 
 struct BackendState {
     bool nnue_active = false;
-    std::string nnue_path;
+    std::string primary_path;
+    std::string secondary_path;
+    sirio::nnue::NetworkSelectionPolicy policy = sirio::nnue::NetworkSelectionPolicy::Material;
+    int phase_threshold = 0;
 };
 
 EngineOptions engine_options;
@@ -33,7 +41,9 @@ void apply_evaluation_options(const EngineOptions &options, const sirio::Board &
         if (backend_state.nnue_active) {
             sirio::use_classical_evaluation();
             backend_state.nnue_active = false;
-            backend_state.nnue_path.clear();
+            backend_state.primary_path.clear();
+            backend_state.secondary_path.clear();
+            backend_state.phase_threshold = 0;
         } else {
             sirio::use_classical_evaluation();
         }
@@ -45,27 +55,43 @@ void apply_evaluation_options(const EngineOptions &options, const sirio::Board &
         std::cout << "info string NNUE is enabled but NNUEFile is empty" << std::endl;
         sirio::use_classical_evaluation();
         backend_state.nnue_active = false;
-        backend_state.nnue_path.clear();
+        backend_state.primary_path.clear();
+        backend_state.secondary_path.clear();
+        backend_state.phase_threshold = 0;
         sirio::initialize_evaluation(board);
         return;
     }
 
-    if (backend_state.nnue_active && backend_state.nnue_path == options.nnue_file) {
+    if (backend_state.nnue_active && backend_state.primary_path == options.nnue_file &&
+        backend_state.secondary_path == options.nnue_secondary_file &&
+        backend_state.policy == options.nnue_phase_policy &&
+        backend_state.phase_threshold == options.nnue_phase_threshold) {
         sirio::initialize_evaluation(board);
         return;
     }
 
     std::string error;
-    if (auto backend = sirio::make_nnue_evaluation(options.nnue_file, &error)) {
+    sirio::nnue::MultiNetworkConfig config;
+    config.primary_path = options.nnue_file;
+    config.secondary_path = options.nnue_secondary_file;
+    config.policy = options.nnue_phase_policy;
+    config.phase_threshold = options.nnue_phase_threshold;
+
+    if (auto backend = sirio::make_nnue_evaluation(config, &error)) {
         sirio::set_evaluation_backend(std::move(backend));
         backend_state.nnue_active = true;
-        backend_state.nnue_path = options.nnue_file;
+        backend_state.primary_path = options.nnue_file;
+        backend_state.secondary_path = options.nnue_secondary_file;
+        backend_state.policy = options.nnue_phase_policy;
+        backend_state.phase_threshold = options.nnue_phase_threshold;
         sirio::initialize_evaluation(board);
     } else {
         std::cout << "info string Failed to load NNUE: " << error << std::endl;
         sirio::use_classical_evaluation();
         backend_state.nnue_active = false;
-        backend_state.nnue_path.clear();
+        backend_state.primary_path.clear();
+        backend_state.secondary_path.clear();
+        backend_state.phase_threshold = 0;
         sirio::initialize_evaluation(board);
     }
 }
@@ -77,6 +103,8 @@ void send_uci_id() {
     std::cout << "option name SyzygyPath type string default" << std::endl;
     std::cout << "option name UseNNUE type check default false" << std::endl;
     std::cout << "option name NNUEFile type string default" << std::endl;
+    std::cout << "option name NNUESecondaryFile type string default" << std::endl;
+    std::cout << "option name NNUEPhaseThreshold type string default" << std::endl;
     std::cout << "uciok" << std::endl;
 }
 
@@ -88,6 +116,74 @@ std::string trim_leading(std::string_view view) {
         ++pos;
     }
     return std::string{view.substr(pos)};
+}
+
+std::string trim(std::string_view view) {
+    std::size_t start = 0;
+    while (start < view.size() && std::isspace(static_cast<unsigned char>(view[start]))) {
+        ++start;
+    }
+    std::size_t end = view.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(view[end - 1]))) {
+        --end;
+    }
+    return std::string{view.substr(start, end - start)};
+}
+
+bool parse_phase_threshold(const std::string &input, sirio::nnue::NetworkSelectionPolicy &policy,
+                           int &threshold) {
+    std::string trimmed = trim(input);
+    if (trimmed.empty()) {
+        policy = sirio::nnue::NetworkSelectionPolicy::Material;
+        threshold = 0;
+        return true;
+    }
+
+    std::string normalized;
+    normalized.reserve(trimmed.size());
+    for (char ch : trimmed) {
+        if (!std::isspace(static_cast<unsigned char>(ch))) {
+            normalized.push_back(ch);
+        }
+    }
+
+    std::string prefix;
+    std::string value_part;
+    auto colon = normalized.find(':');
+    if (colon != std::string::npos) {
+        prefix = normalized.substr(0, colon);
+        value_part = normalized.substr(colon + 1);
+    } else {
+        value_part = normalized;
+    }
+
+    std::transform(prefix.begin(), prefix.end(), prefix.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+
+    if (prefix.empty() || prefix == "material") {
+        policy = sirio::nnue::NetworkSelectionPolicy::Material;
+    } else if (prefix == "depth") {
+        policy = sirio::nnue::NetworkSelectionPolicy::Depth;
+    } else {
+        return false;
+    }
+
+    if (value_part.empty()) {
+        threshold = 0;
+        return true;
+    }
+
+    try {
+        threshold = std::stoi(value_part);
+    } catch (const std::exception &) {
+        return false;
+    }
+
+    if (threshold < 0) {
+        return false;
+    }
+    return true;
 }
 
 void set_position(sirio::Board &board, const std::string &command_args) {
@@ -184,6 +280,19 @@ void handle_setoption(const std::string &args, sirio::Board &board) {
     } else if (name == "NNUEFile") {
         engine_options.nnue_file = value;
         apply_evaluation_options(engine_options, board);
+    } else if (name == "NNUESecondaryFile") {
+        engine_options.nnue_secondary_file = value;
+        apply_evaluation_options(engine_options, board);
+    } else if (name == "NNUEPhaseThreshold") {
+        sirio::nnue::NetworkSelectionPolicy policy = engine_options.nnue_phase_policy;
+        int threshold = engine_options.nnue_phase_threshold;
+        if (parse_phase_threshold(value, policy, threshold)) {
+            engine_options.nnue_phase_policy = policy;
+            engine_options.nnue_phase_threshold = threshold;
+            apply_evaluation_options(engine_options, board);
+        } else {
+            std::cout << "info string Invalid NNUEPhaseThreshold value: " << value << std::endl;
+        }
     } else if (name == "Threads") {
         try {
             int parsed = std::stoi(value);

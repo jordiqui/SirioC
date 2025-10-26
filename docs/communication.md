@@ -74,6 +74,8 @@ Para integrarlo con GUIs como Fritz o Cute Chess se recomienda el siguiente inte
    búsqueda no produjo PV válido, se recurre a la primera jugada generada en el estado actual, por lo
    que la GUI nunca recibe `0000` salvo que no existan movimientos legales.【F:src/main.cpp†L131-L144】
 
-Limitaciones actuales: el motor es monohilo, no expone opciones UCI configurables y solo calcula una
-estimación simple del tiempo disponible por jugada. No obstante, respeta los márgenes duros/soft de
-tiempo y los topes de nodos establecidos por la GUI.【F:src/search.cpp†L31-L230】【F:src/search.cpp†L400-L470】
+Limitaciones actuales: el motor es monohilo y solo calcula una estimación simple del tiempo
+disponible por jugada. No obstante, respeta los márgenes duros/soft de tiempo y los topes de nodos
+establecidos por la GUI. Las opciones UCI incluyen selectores para NNUE (`UseNNUE`, `NNUEFile`,
+`NNUESecondaryFile`, `NNUEPhaseThreshold`) que permiten activar redes híbridas durante la
+búsqueda.【F:src/main.cpp†L19-L134】【F:src/main.cpp†L136-L172】【F:src/search.cpp†L31-L230】【F:src/search.cpp†L400-L470】

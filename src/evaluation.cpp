@@ -478,23 +478,45 @@ std::unique_ptr<EvaluationBackend> make_classical_evaluation() {
     return std::make_unique<ClassicalEvaluation>();
 }
 
-std::unique_ptr<EvaluationBackend> make_nnue_evaluation(const std::string &path,
-                                                        std::string *error_message) {
-    auto backend = std::make_unique<nnue::SingleNetworkBackend>();
-    if (path.empty()) {
+std::unique_ptr<EvaluationBackend> make_nnue_evaluation(
+    const nnue::MultiNetworkConfig &config, std::string *error_message) {
+    if (config.primary_path.empty()) {
         if (error_message) {
             *error_message = "NNUE file path is empty";
         }
         return nullptr;
     }
     std::string local_error;
-    if (!backend->load(path, &local_error)) {
+    auto primary = std::make_unique<nnue::SingleNetworkBackend>();
+    if (!primary->load(config.primary_path, &local_error)) {
         if (error_message) {
             *error_message = local_error;
         }
         return nullptr;
     }
-    return backend;
+    if (config.secondary_path.empty()) {
+        return primary;
+    }
+
+    auto secondary = std::make_unique<nnue::SingleNetworkBackend>();
+    if (!secondary->load(config.secondary_path, &local_error)) {
+        if (error_message) {
+            *error_message = local_error;
+        }
+        return nullptr;
+    }
+
+    return std::make_unique<nnue::MultiNetworkBackend>(std::move(primary), std::move(secondary),
+                                                       config.policy, config.phase_threshold);
+}
+
+std::unique_ptr<EvaluationBackend> make_nnue_evaluation(const std::string &path,
+                                                        std::string *error_message) {
+    nnue::MultiNetworkConfig config;
+    config.primary_path = path;
+    config.policy = nnue::NetworkSelectionPolicy::Material;
+    config.phase_threshold = 0;
+    return make_nnue_evaluation(config, error_message);
 }
 
 namespace {
