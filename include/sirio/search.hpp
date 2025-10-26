@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <optional>
 
 #include "sirio/board.hpp"
@@ -15,6 +16,7 @@ struct SearchLimits {
     int increment_white = 0;
     int increment_black = 0;
     int moves_to_go = 0;
+    std::uint64_t max_nodes = 0;
 };
 
 struct SearchResult {

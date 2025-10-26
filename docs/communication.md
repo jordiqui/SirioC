@@ -57,3 +57,23 @@ Para añadir nuevos comandos, conviene seguir el patrón existente: analizar tok
 Las funciones auxiliares deben recibir solo los datos necesarios (por ejemplo, argumentos del
 comando y una referencia const o mutable al `Board`). Este enfoque minimiza el acoplamiento y hace
 que probar cada comando de forma aislada sea más sencillo.
+
+## 7.7. Recommended UCI flow
+
+Para integrarlo con GUIs como Fritz o Cute Chess se recomienda el siguiente intercambio:
+
+1. Enviar `uci` y esperar a `uciok`.
+2. Enviar `isready` antes de comenzar cada partida para asegurarse de que el motor está libre.
+3. Reiniciar con `ucinewgame` y establecer la posición mediante `position startpos moves ...` o un
+   bloque `position fen ...` seguido de la lista de jugadas.
+4. Lanzar la búsqueda con `go`, proporcionando parámetros de tiempo (`wtime`, `btime`, `winc`,
+   `binc`, `movestogo`, `movetime`) o límites explícitos (`depth`, `nodes`). El motor calcula los
+   márgenes de tiempo a partir de esos valores y mantiene un contador de nodos para las búsquedas
+   recortadas.【F:src/main.cpp†L79-L139】【F:src/search.cpp†L31-L230】【F:src/search.cpp†L400-L470】
+5. Cuando la GUI envía `stop` o el límite expira, SirioC devuelve siempre un `bestmove` legal: si la
+   búsqueda no produjo PV válido, se recurre a la primera jugada generada en el estado actual, por lo
+   que la GUI nunca recibe `0000` salvo que no existan movimientos legales.【F:src/main.cpp†L131-L144】
+
+Limitaciones actuales: el motor es monohilo, no expone opciones UCI configurables y solo calcula una
+estimación simple del tiempo disponible por jugada. No obstante, respeta los márgenes duros/soft de
+tiempo y los topes de nodos establecidos por la GUI.【F:src/search.cpp†L31-L230】【F:src/search.cpp†L400-L470】
