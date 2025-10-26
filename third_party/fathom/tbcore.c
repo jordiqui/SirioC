@@ -21,6 +21,8 @@
 #endif
 #include "tbcore.h"
 
+extern unsigned TB_LARGEST;
+
 #if !defined(DECOMP64) && defined(_LP64)
 // use 64-bit decompression if OS is 64-bit
 // (appears not to work so commented out for now)

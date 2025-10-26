@@ -16,7 +16,7 @@ OBJDIR := $(BUILDDIR)/obj
 BINDIR := $(BUILDDIR)/bin
 
 CORE_CPP_SRCS := $(filter-out $(SRCDIR)/main.cpp,$(wildcard $(SRCDIR)/*.cpp))
-THIRDPARTY_SRCS := $(wildcard third_party/fathom/*.c)
+THIRDPARTY_SRCS := $(filter-out third_party/fathom/tbcore.c,$(wildcard third_party/fathom/*.c))
 CORE_OBJS := $(patsubst $(SRCDIR)/%.cpp,$(OBJDIR)/src/%.o,$(CORE_CPP_SRCS))
 THIRDPARTY_OBJS := $(patsubst third_party/%.c,$(OBJDIR)/third_party/%.o,$(THIRDPARTY_SRCS))
 MAIN_OBJ := $(OBJDIR)/src/main.o
@@ -40,34 +40,34 @@ sirio_tests: $(TEST_TARGET)
 sirio_bench: $(BENCH_TARGET)
 
 test: $(TEST_TARGET)
-        $(TEST_TARGET)
+	$(TEST_TARGET)
 
 bench: $(BENCH_TARGET)
-        $(BENCH_TARGET)
+	$(BENCH_TARGET)
 
 $(TARGET): $(CORE_OBJS) $(THIRDPARTY_OBJS) $(MAIN_OBJ) | dirs
-        $(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $@
+	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $@
 
 $(TEST_TARGET): $(CORE_OBJS) $(THIRDPARTY_OBJS) $(TEST_OBJS) | dirs
-        $(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $@
+	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $@
 
 $(BENCH_TARGET): $(CORE_OBJS) $(THIRDPARTY_OBJS) $(BENCH_OBJS) | dirs
-        $(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $@
+	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $@
 
 $(OBJDIR)/src/%.o: $(SRCDIR)/%.cpp | dirs
-        $(CXX) $(CPPFLAGS) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 $(OBJDIR)/tests/%.o: $(TESTDIR)/%.cpp | dirs
-        $(CXX) $(CPPFLAGS) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 $(OBJDIR)/bench/%.o: $(BENCHDIR)/%.cpp | dirs
-        $(CXX) $(CPPFLAGS) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 $(OBJDIR)/third_party/%.o: third_party/%.c | dirs
-        $(CC) $(CPPFLAGS) $(CFLAGS) $(INCLUDES) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 clean:
 	rm -rf $(BUILDDIR)
 
 dirs:
-        @mkdir -p $(OBJDIR)/src $(OBJDIR)/tests $(OBJDIR)/bench $(OBJDIR)/third_party/fathom $(BINDIR)
+	@mkdir -p $(OBJDIR)/src $(OBJDIR)/tests $(OBJDIR)/bench $(OBJDIR)/third_party/fathom $(BINDIR)

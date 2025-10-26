@@ -246,13 +246,10 @@ int main() {
     test_draw_by_fifty_move_rule();
     test_draw_by_repetition_rule();
     test_draw_by_insufficient_material_rule();
-codex/implement-iterative-search-with-adaptive-time
     test_null_move();
     test_evaluation_passed_pawn();
     test_syzygy_option_configuration();
-=======
     run_perft_tests();
- main
     std::cout << "All tests passed.\n";
     return 0;
 }
