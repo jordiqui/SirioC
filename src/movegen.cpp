@@ -1,6 +1,7 @@
 #include "sirio/movegen.hpp"
 
 #include <array>
+#include <exception>
 #include <optional>
 
 namespace sirio {
@@ -285,16 +286,36 @@ std::vector<Move> generate_pseudo_legal_moves(const Board &board) {
     return moves;
 }
 
-std::vector<Move> generate_legal_moves(const Board &board) {
+std::vector<Move> generate_legal_moves(Board &board) {
     std::vector<Move> legal_moves;
     auto pseudo = generate_pseudo_legal_moves(board);
+    legal_moves.reserve(pseudo.size());
     for (const Move &move : pseudo) {
-        if (validate_move(board, move)) {
+        Board::UndoState undo;
+        bool legal = true;
+        try {
+            board.make_move(move, undo);
+        } catch (const std::exception &) {
+            legal = false;
+        }
+        if (legal) {
+            Color mover = opposite(board.side_to_move());
+            if (board.king_square(mover) >= 0 && board.in_check(mover)) {
+                legal = false;
+            }
+        }
+        if (legal) {
             legal_moves.push_back(move);
         }
+        board.undo_move(move, undo);
     }
 
     return legal_moves;
+}
+
+std::vector<Move> generate_legal_moves(const Board &board) {
+    Board copy = board;
+    return generate_legal_moves(copy);
 }
 
 }  // namespace sirio

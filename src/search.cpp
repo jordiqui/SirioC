@@ -55,37 +55,6 @@ std::mutex active_search_mutex;
 SearchSharedState *active_search_state = nullptr;
 std::mutex info_output_mutex;
 
-class EvaluationStateGuard {
-public:
-    EvaluationStateGuard() = default;
-    explicit EvaluationStateGuard(bool active) : active_(active) {}
-    EvaluationStateGuard(const EvaluationStateGuard &) = delete;
-    EvaluationStateGuard &operator=(const EvaluationStateGuard &) = delete;
-    EvaluationStateGuard(EvaluationStateGuard &&other) noexcept
-        : active_(other.active_) {
-        other.active_ = false;
-    }
-    EvaluationStateGuard &operator=(EvaluationStateGuard &&other) noexcept {
-        if (this != &other) {
-            if (active_) {
-                pop_evaluation_state();
-            }
-            active_ = other.active_;
-            other.active_ = false;
-        }
-        return *this;
-    }
-    ~EvaluationStateGuard() {
-        if (active_) {
-            pop_evaluation_state();
-        }
-    }
-    void release() { active_ = false; }
-
-private:
-    bool active_ = false;
-};
-
 struct TTEntry {
     Move best_move{};
     int depth = 0;
@@ -639,9 +608,9 @@ void store_killer(const Move &move, SearchContext &context, int ply) {
     }
 }
 
-int quiescence(const Board &board, int alpha, int beta, int ply, SearchContext &context);
+int quiescence(Board &board, int alpha, int beta, int ply, SearchContext &context);
 
-int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *best_move,
+int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_move,
             bool *found_best, SearchContext &context, int parent_static_eval,
             bool allow_null_move) {
     context.selective_depth = std::max(context.selective_depth, ply + 1);
@@ -744,19 +713,22 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
 
     if (allow_null_move && !in_check && depth_left >= 3 && static_eval >= beta &&
         has_non_pawn_material(board, board.side_to_move())) {
-        Board null_board = board.apply_null_move();
-        EvaluationStateGuard null_guard{true};
+        Board::NullUndoState null_undo;
+        board.make_null_move(null_undo);
         int reduction = 2 + depth_left / 4;
         int null_depth = depth_left - 1 - reduction;
         if (null_depth >= 0) {
-            int null_score = -negamax(null_board, null_depth, -beta, -beta + 1, ply + 1, nullptr,
-                                      nullptr, context, static_eval, false);
+            int null_score = -negamax(board, null_depth, -beta, -beta + 1, ply + 1, nullptr, nullptr,
+                                      context, static_eval, false);
+            board.undo_null_move(null_undo);
             if (context.shared->stop.load(std::memory_order_relaxed)) {
                 return 0;
             }
             if (null_score >= beta) {
                 return beta;
             }
+        } else {
+            board.undo_null_move(null_undo);
         }
     }
 
@@ -778,9 +750,9 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
     int move_index = 0;
     for (const Move &move : moves) {
         ++move_index;
-        Board next = board.apply_move(move);
-        EvaluationStateGuard eval_guard{true};
-        bool gives_check = next.in_check(next.side_to_move());
+        Board::UndoState undo;
+        board.make_move(move, undo);
+        bool gives_check = board.in_check(board.side_to_move());
 
         int child_depth = depth_left - 1;
         if (gives_check && child_depth < max_search_depth - (ply + 1)) {
@@ -809,11 +781,12 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
         int new_depth = std::max(0, child_depth - reduction);
         int score;
         if (new_depth <= 0) {
-            score = -quiescence(next, -beta, -alpha, ply + 1, context);
+            score = -quiescence(board, -beta, -alpha, ply + 1, context);
         } else {
-            score = -negamax(next, new_depth, -beta, -alpha, ply + 1, nullptr, nullptr, context,
+            score = -negamax(board, new_depth, -beta, -alpha, ply + 1, nullptr, nullptr, context,
                              static_eval, true);
         }
+        board.undo_move(move, undo);
         if (context.shared->stop.load(std::memory_order_relaxed)) {
             return 0;
         }
@@ -866,7 +839,7 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
     return best_score;
 }
 
-int quiescence(const Board &board, int alpha, int beta, int ply, SearchContext &context) {
+int quiescence(Board &board, int alpha, int beta, int ply, SearchContext &context) {
     context.selective_depth = std::max(context.selective_depth, ply + 1);
     if (should_stop(context)) {
         return alpha;
@@ -900,9 +873,10 @@ int quiescence(const Board &board, int alpha, int beta, int ply, SearchContext &
     order_moves(tactical_moves, context, ply, std::nullopt);
 
     for (const Move &move : tactical_moves) {
-        Board next = board.apply_move(move);
-        EvaluationStateGuard eval_guard{true};
-        int score = -quiescence(next, -beta, -alpha, ply + 1, context);
+        Board::UndoState undo;
+        board.make_move(move, undo);
+        int score = -quiescence(board, -beta, -alpha, ply + 1, context);
+        board.undo_move(move, undo);
         if (context.shared->stop.load(std::memory_order_relaxed)) {
             return alpha;
         }
@@ -1076,7 +1050,7 @@ bool publish_best_result(const SearchResult &candidate, SharedBestResult &shared
     return true;
 }
 
-SearchResult run_search_thread(const Board &board, int max_depth_limit, SearchSharedState &shared,
+SearchResult run_search_thread(Board board, int max_depth_limit, SearchSharedState &shared,
                                SharedBestResult &shared_result, const SearchResult &seed,
                                int thread_index, bool is_primary, GlobalTranspositionTable &tt,
                                std::uint8_t tt_generation) {
