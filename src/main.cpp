@@ -22,6 +22,8 @@
 #include "sirio/nnue/api.hpp"
 #include "sirio/opening_book.hpp"
 #include "sirio/search.hpp"
+#include "sirio/time_manager.hpp"
+#include "sirio/transposition_table.hpp"
 #include "sirio/syzygy.hpp"
 
 namespace {
