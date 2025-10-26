@@ -17,6 +17,7 @@
 #include "sirio/move.hpp"
 #include "sirio/movegen.hpp"
 #include "sirio/nnue/api.hpp"
+#include "sirio/opening_book.hpp"
 #include "sirio/search.hpp"
 #include "sirio/syzygy.hpp"
 
@@ -51,6 +52,10 @@ struct EngineOptions {
     int syzygy_probe_depth = 1;
     bool syzygy_50_move_rule = true;
     int syzygy_probe_limit = 7;
+    bool hash_persist = false;
+    std::string hash_persist_file;
+    bool use_book = false;
+    std::string book_file;
 };
 
 EngineOptions options;
@@ -170,6 +175,8 @@ void send_uci_id() {
     std::cout << "option name NumaPolicy type string default auto" << std::endl;
     std::cout << "option name Threads type spin default 1 min 1 max 1024" << std::endl;
     std::cout << "option name Hash type spin default 16 min 1 max 33554432" << std::endl;
+    std::cout << "option name HashFile type string default <empty>" << std::endl;
+    std::cout << "option name HashPersist type check default false" << std::endl;
     std::cout << "option name Clear Hash type button" << std::endl;
     std::cout << "option name Ponder type check default false" << std::endl;
     std::cout << "option name MultiPV type spin default 1 min 1 max 256" << std::endl;
@@ -193,6 +200,8 @@ void send_uci_id() {
     std::cout << "option name EvalFile type string default " << kDefaultEvalFile << std::endl;
     std::cout << "option name EvalFileSmall type string default " << kDefaultEvalFileSmall
               << std::endl;
+    std::cout << "option name UseBook type check default false" << std::endl;
+    std::cout << "option name BookFile type string default <empty>" << std::endl;
     std::cout << "uciok" << std::endl;
 }
 
@@ -348,6 +357,30 @@ void handle_setoption(const std::string &args, sirio::Board &board) {
             options.hash_size_mb = clamped;
             sirio::set_transposition_table_size(options.hash_size_mb);
         }
+    } else if (name == "HashFile") {
+        std::string path = normalize_string_option(normalized_value);
+        options.hash_persist_file = path;
+        if (path.empty()) {
+            std::cout << "info string Hash persistence file cleared" << std::endl;
+        } else {
+            std::string error;
+            if (sirio::load_transposition_table(path, &error)) {
+                std::cout << "info string Transposition table loaded from " << path << std::endl;
+            } else {
+                std::cout << "info string Failed to load transposition table: " << error << std::endl;
+            }
+        }
+    } else if (name == "HashPersist") {
+        options.hash_persist = parse_boolean_option(normalized_value);
+        if (options.hash_persist && !options.hash_persist_file.empty()) {
+            std::string error;
+            if (sirio::load_transposition_table(options.hash_persist_file, &error)) {
+                std::cout << "info string Transposition table ready from " << options.hash_persist_file
+                          << std::endl;
+            } else {
+                std::cout << "info string Failed to load transposition table: " << error << std::endl;
+            }
+        }
     } else if (name == "Clear Hash") {
         sirio::clear_transposition_tables();
         std::cout << "info string Transposition table cleared" << std::endl;
@@ -426,6 +459,32 @@ void handle_setoption(const std::string &args, sirio::Board &board) {
     } else if (name == "EvalFileSmall") {
         pending_eval_file_small = normalize_eval_path(normalized_value);
         nnue_try_load(pending_eval_file_small, board);
+    } else if (name == "UseBook") {
+        options.use_book = parse_boolean_option(normalized_value);
+        if (options.use_book && !options.book_file.empty() && !sirio::book::is_loaded()) {
+            std::string error;
+            if (sirio::book::load(options.book_file, &error)) {
+                std::cout << "info string Opening book loaded from " << options.book_file << std::endl;
+            } else {
+                std::cout << "info string Failed to load opening book: " << error << std::endl;
+                options.book_file.clear();
+            }
+        }
+    } else if (name == "BookFile") {
+        std::string path = normalize_string_option(normalized_value);
+        options.book_file = path;
+        if (path.empty()) {
+            sirio::book::clear();
+            std::cout << "info string Opening book cleared" << std::endl;
+        } else {
+            std::string error;
+            if (sirio::book::load(path, &error)) {
+                std::cout << "info string Opening book loaded from " << path << std::endl;
+            } else {
+                std::cout << "info string Failed to load opening book: " << error << std::endl;
+                options.book_file.clear();
+            }
+        }
     } else if (name == "UseNNUE" || name == "NNUEFile") {
         if (name == "UseNNUE") {
             if (!parse_boolean_option(normalized_value)) {
@@ -518,6 +577,14 @@ void handle_go(const std::string &command_args, const sirio::Board &board) {
     }
 
     sirio::initialize_evaluation(board);
+    if (options.use_book && !options.book_file.empty() && sirio::book::is_loaded()) {
+        if (auto book_move = sirio::book::choose_move(board); book_move.has_value()) {
+            std::string uci = sirio::move_to_uci(*book_move);
+            std::cout << "info string book move " << uci << std::endl;
+            std::cout << "bestmove " << uci << std::endl;
+            return;
+        }
+    }
     sirio::SearchResult result = sirio::search_best_move(board, limits);
     if (result.has_move) {
         int reported_depth = result.depth_reached > 0 ? result.depth_reached : limits.max_depth;
@@ -534,6 +601,13 @@ void handle_go(const std::string &command_args, const sirio::Board &board) {
             std::cout << "bestmove " << sirio::move_to_uci(fallback) << std::endl;
         } else {
             std::cout << "bestmove 0000" << std::endl;
+        }
+    }
+
+    if (options.hash_persist && !options.hash_persist_file.empty()) {
+        std::string error;
+        if (!sirio::save_transposition_table(options.hash_persist_file, &error)) {
+            std::cout << "info string Failed to save transposition table: " << error << std::endl;
         }
     }
 }
