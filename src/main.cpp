@@ -31,48 +31,49 @@ BackendState backend_state;
 void apply_evaluation_options(const EngineOptions &options, const sirio::Board &board) {
     if (!options.use_nnue) {
         if (backend_state.nnue_active) {
-            use_classical_evaluation();
+            sirio::use_classical_evaluation();
             backend_state.nnue_active = false;
             backend_state.nnue_path.clear();
         } else {
-            use_classical_evaluation();
+            sirio::use_classical_evaluation();
         }
-        initialize_evaluation(board);
+        sirio::initialize_evaluation(board);
         return;
     }
 
     if (options.nnue_file.empty()) {
         std::cout << "info string NNUE is enabled but NNUEFile is empty" << std::endl;
-        use_classical_evaluation();
+        sirio::use_classical_evaluation();
         backend_state.nnue_active = false;
         backend_state.nnue_path.clear();
-        initialize_evaluation(board);
+        sirio::initialize_evaluation(board);
         return;
     }
 
     if (backend_state.nnue_active && backend_state.nnue_path == options.nnue_file) {
-        initialize_evaluation(board);
+        sirio::initialize_evaluation(board);
         return;
     }
 
     std::string error;
-    if (auto backend = make_nnue_evaluation(options.nnue_file, &error)) {
-        set_evaluation_backend(std::move(backend));
+    if (auto backend = sirio::make_nnue_evaluation(options.nnue_file, &error)) {
+        sirio::set_evaluation_backend(std::move(backend));
         backend_state.nnue_active = true;
         backend_state.nnue_path = options.nnue_file;
-        initialize_evaluation(board);
+        sirio::initialize_evaluation(board);
     } else {
         std::cout << "info string Failed to load NNUE: " << error << std::endl;
-        use_classical_evaluation();
+        sirio::use_classical_evaluation();
         backend_state.nnue_active = false;
         backend_state.nnue_path.clear();
-        initialize_evaluation(board);
+        sirio::initialize_evaluation(board);
     }
 }
 
 void send_uci_id() {
     std::cout << "id name SirioC" << std::endl;
     std::cout << "id author OpenAI" << std::endl;
+    std::cout << "option name Threads type spin default 1 min 1 max 1024" << std::endl;
     std::cout << "option name SyzygyPath type string default" << std::endl;
     std::cout << "option name UseNNUE type check default false" << std::endl;
     std::cout << "option name NNUEFile type string default" << std::endl;
@@ -140,7 +141,7 @@ void set_position(sirio::Board &board, const std::string &command_args) {
         }
     }
 
-    initialize_evaluation(board);
+    sirio::initialize_evaluation(board);
 }
 
 void handle_setoption(const std::string &args, sirio::Board &board) {
@@ -183,6 +184,15 @@ void handle_setoption(const std::string &args, sirio::Board &board) {
     } else if (name == "NNUEFile") {
         engine_options.nnue_file = value;
         apply_evaluation_options(engine_options, board);
+    } else if (name == "Threads") {
+        try {
+            int parsed = std::stoi(value);
+            if (parsed > 0) {
+                sirio::set_search_threads(parsed);
+            }
+        } catch (const std::exception &) {
+            // Ignore invalid values to keep engine responsive.
+        }
     }
 }
 

@@ -2,11 +2,14 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <bit>
 #include <chrono>
 #include <cstdlib>
 #include <limits>
+#include <mutex>
 #include <optional>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -144,22 +147,40 @@ private:
     std::uint8_t generation_ = 1;
 };
 
-struct SearchContext {
-    std::array<std::array<std::optional<Move>, 2>, max_search_depth> killer_moves{};
-    TranspositionTable tt{};
-    bool stop = false;
+struct SearchSharedState {
+    std::atomic<bool> stop{false};
+    std::atomic<bool> soft_limit_reached{false};
+    std::atomic<bool> timed_out{false};
+    std::atomic<std::uint64_t> node_counter{0};
     bool has_time_limit = false;
     bool has_node_limit = false;
-    bool soft_limit_reached = false;
     std::chrono::steady_clock::time_point start_time{};
     std::chrono::milliseconds soft_time_limit{0};
     std::chrono::milliseconds hard_time_limit{0};
-    std::uint64_t node_counter = 0;
-    std::chrono::milliseconds last_iteration_time{0};
     std::uint64_t node_limit = 0;
 };
 
+struct SearchContext {
+    std::array<std::array<std::optional<Move>, 2>, max_search_depth> killer_moves{};
+    TranspositionTable tt{};
+    SearchSharedState *shared = nullptr;
+    std::chrono::milliseconds last_iteration_time{0};
+};
+
 constexpr std::uint64_t time_check_interval = 2048;
+
+std::atomic<int> search_thread_count{1};
+
+}  // namespace
+
+void set_search_threads(int threads) {
+    int clamped = std::clamp(threads, 1, 1024);
+    search_thread_count.store(clamped, std::memory_order_relaxed);
+}
+
+int get_search_threads() { return search_thread_count.load(std::memory_order_relaxed); }
+
+namespace {
 
 int total_piece_count(const Board &board) {
     int total = 0;
@@ -239,30 +260,33 @@ int score_move(const Move &move, const SearchContext &context, int ply,
 }
 
 bool should_stop(SearchContext &context) {
-    ++context.node_counter;
-    if (context.stop) {
+    SearchSharedState &shared = *context.shared;
+    std::uint64_t nodes = shared.node_counter.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (shared.stop.load(std::memory_order_relaxed)) {
         return true;
     }
-    if (context.has_node_limit && context.node_counter >= context.node_limit) {
-        context.stop = true;
+    if (shared.has_node_limit && nodes >= shared.node_limit) {
+        shared.stop.store(true, std::memory_order_relaxed);
         return true;
     }
-    if (!context.has_time_limit) {
+    if (!shared.has_time_limit) {
         return false;
     }
-    if ((context.node_counter & (time_check_interval - 1)) != 0) {
+    if ((nodes & (time_check_interval - 1)) != 0) {
         return false;
     }
     auto now = std::chrono::steady_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - context.start_time);
-    if (!context.soft_limit_reached && elapsed >= context.soft_time_limit) {
-        context.soft_limit_reached = true;
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - shared.start_time);
+    if (!shared.soft_limit_reached.load(std::memory_order_relaxed) &&
+        elapsed >= shared.soft_time_limit) {
+        shared.soft_limit_reached.store(true, std::memory_order_relaxed);
     }
-    if (elapsed >= context.hard_time_limit) {
-        context.stop = true;
+    if (elapsed >= shared.hard_time_limit) {
+        shared.stop.store(true, std::memory_order_relaxed);
+        shared.timed_out.store(true, std::memory_order_relaxed);
         return true;
     }
-    return false;
+    return shared.stop.load(std::memory_order_relaxed);
 }
 
 int evaluate_for_current_player(const Board &board) {
@@ -423,7 +447,7 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
         if (null_depth >= 0) {
             int null_score = -negamax(null_board, null_depth, -beta, -beta + 1, ply + 1, nullptr,
                                       nullptr, context, static_eval, false);
-            if (context.stop) {
+            if (context.shared->stop.load(std::memory_order_relaxed)) {
                 return 0;
             }
             if (null_score >= beta) {
@@ -486,7 +510,7 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
             score = -negamax(next, new_depth, -beta, -alpha, ply + 1, nullptr, nullptr, context,
                              static_eval, true);
         }
-        if (context.stop) {
+        if (context.shared->stop.load(std::memory_order_relaxed)) {
             return 0;
         }
 
@@ -513,7 +537,7 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
         *found_best = local_found;
     }
 
-    if (context.stop) {
+    if (context.shared->stop.load(std::memory_order_relaxed)) {
         return best_score;
     }
 
@@ -572,7 +596,7 @@ int quiescence(const Board &board, int alpha, int beta, int ply, SearchContext &
         Board next = board.apply_move(move);
         EvaluationStateGuard eval_guard{true};
         int score = -quiescence(next, -beta, -alpha, ply + 1, context);
-        if (context.stop) {
+        if (context.shared->stop.load(std::memory_order_relaxed)) {
             return alpha;
         }
         if (score >= beta) {
@@ -639,51 +663,46 @@ std::optional<TimeAllocation> compute_time_allocation(const Board &board,
     return std::nullopt;
 }
 
-SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
+struct SharedBestResult {
+    std::mutex mutex;
     SearchResult result;
-    int max_depth_limit = limits.max_depth > 0 ? limits.max_depth : max_search_depth;
-    max_depth_limit = std::min(max_depth_limit, max_search_depth);
+};
 
+void publish_best_result(const SearchResult &candidate, SharedBestResult &shared) {
+    if (!candidate.has_move) {
+        return;
+    }
+    std::lock_guard lock(shared.mutex);
+    if (!shared.result.has_move ||
+        candidate.depth_reached > shared.result.depth_reached ||
+        (candidate.depth_reached == shared.result.depth_reached &&
+         std::abs(candidate.score) >= std::abs(shared.result.score))) {
+        shared.result = candidate;
+    }
+}
+
+SearchResult run_search_thread(const Board &board, int max_depth_limit, SearchSharedState &shared,
+                               SharedBestResult &shared_result, const SearchResult &seed,
+                               int thread_index, bool is_primary) {
     SearchContext context;
+    context.shared = &shared;
+    SearchResult local = seed;
+    Move best_move = seed.has_move ? seed.best_move : Move{};
+    bool best_found = seed.has_move;
+    int previous_score = seed.score;
+    bool have_previous = seed.has_move;
+
     initialize_evaluation(board);
-    if (auto allocation = compute_time_allocation(board, limits); allocation.has_value()) {
-        context.has_time_limit = true;
-        context.soft_time_limit = allocation->soft;
-        context.hard_time_limit = allocation->hard;
-        context.start_time = std::chrono::steady_clock::now();
-        if (context.soft_time_limit.count() <= 0) {
-            context.soft_time_limit = std::chrono::milliseconds{1};
-        }
-        if (context.hard_time_limit.count() <= 0) {
-            context.hard_time_limit = context.soft_time_limit;
-        }
-    }
 
-    if (limits.max_nodes > 0) {
-        context.has_node_limit = true;
-        context.node_limit = limits.max_nodes;
+    if (thread_index > 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds{15 * thread_index});
     }
-
-    if (syzygy::available() && syzygy::max_pieces() >= total_piece_count(board)) {
-        if (auto root_probe = syzygy::probe_root(board); root_probe.has_value()) {
-            result.score = syzygy_wdl_to_score(root_probe->wdl, 0);
-            if (root_probe->best_move.has_value()) {
-                result.best_move = *root_probe->best_move;
-                result.has_move = true;
-                result.depth_reached = 0;
-                if (std::abs(result.score) >= mate_threshold || root_probe->wdl == 0) {
-                    return result;
-                }
-            }
-        }
-    }
-
-    Move best_move{};
-    bool best_found = false;
-    int previous_score = result.score;
-    bool have_previous = result.has_move;
 
     for (int depth = 1; depth <= max_depth_limit; ++depth) {
+        if (shared.stop.load(std::memory_order_relaxed)) {
+            break;
+        }
+
         context.tt.new_search();
 
         const int full_min = std::numeric_limits<int>::min() / 2;
@@ -699,8 +718,8 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
 
         while (true) {
             score = negamax(board, depth, alpha, beta, 0, &current_best, &found, context, 0, true);
-            if (context.stop) {
-                result.timed_out = true;
+            if (shared.stop.load(std::memory_order_relaxed)) {
+                local.timed_out = shared.timed_out.load(std::memory_order_relaxed);
                 break;
             }
             if (have_previous && score <= alpha) {
@@ -722,45 +741,142 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
         context.last_iteration_time = std::chrono::duration_cast<std::chrono::milliseconds>(
             iteration_end - iteration_start);
 
-        if (context.stop) {
+        if (shared.stop.load(std::memory_order_relaxed)) {
             break;
         }
 
         previous_score = score;
         have_previous = true;
-        result.score = score;
+        local.score = score;
         if (found) {
             best_move = current_best;
             best_found = true;
-            result.best_move = current_best;
-            result.has_move = true;
-            result.depth_reached = depth;
+            local.best_move = current_best;
+            local.has_move = true;
+            local.depth_reached = depth;
+            publish_best_result(local, shared_result);
         }
 
-        if (context.has_time_limit) {
+        if (is_primary && shared.has_time_limit) {
             auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                iteration_end - context.start_time);
-            if (elapsed >= context.hard_time_limit) {
-                context.stop = true;
-                result.timed_out = true;
+                iteration_end - shared.start_time);
+            if (elapsed >= shared.hard_time_limit) {
+                shared.stop.store(true, std::memory_order_relaxed);
+                shared.timed_out.store(true, std::memory_order_relaxed);
+                local.timed_out = true;
                 break;
             }
             auto projected = context.last_iteration_time * 3 / 2;
-            if (elapsed + projected >= context.soft_time_limit ||
-                elapsed >= context.soft_time_limit) {
+            if (elapsed + projected >= shared.soft_time_limit ||
+                elapsed >= shared.soft_time_limit) {
+                shared.stop.store(true, std::memory_order_relaxed);
                 break;
             }
         }
     }
 
     if (best_found) {
-        result.best_move = best_move;
+        local.best_move = best_move;
+        local.has_move = true;
+    }
+    publish_best_result(local, shared_result);
+
+    return local;
+}
+
+SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
+    SearchResult result;
+    int max_depth_limit = limits.max_depth > 0 ? limits.max_depth : max_search_depth;
+    max_depth_limit = std::min(max_depth_limit, max_search_depth);
+
+    SearchSharedState shared;
+    shared.start_time = std::chrono::steady_clock::now();
+
+    if (auto allocation = compute_time_allocation(board, limits); allocation.has_value()) {
+        shared.has_time_limit = true;
+        shared.soft_time_limit = allocation->soft;
+        shared.hard_time_limit = allocation->hard;
+        if (shared.soft_time_limit.count() <= 0) {
+            shared.soft_time_limit = std::chrono::milliseconds{1};
+        }
+        if (shared.hard_time_limit.count() <= 0) {
+            shared.hard_time_limit = shared.soft_time_limit;
+        }
+        shared.start_time = std::chrono::steady_clock::now();
     }
 
-    result.nodes = context.node_counter;
+    if (limits.max_nodes > 0) {
+        shared.has_node_limit = true;
+        shared.node_limit = limits.max_nodes;
+    }
 
-    return result;
+    if (syzygy::available() && syzygy::max_pieces() >= total_piece_count(board)) {
+        if (auto root_probe = syzygy::probe_root(board); root_probe.has_value()) {
+            result.score = syzygy_wdl_to_score(root_probe->wdl, 0);
+            if (root_probe->best_move.has_value()) {
+                result.best_move = *root_probe->best_move;
+                result.has_move = true;
+                result.depth_reached = 0;
+                if (std::abs(result.score) >= mate_threshold || root_probe->wdl == 0) {
+                    return result;
+                }
+            }
+        }
+    }
+
+    SearchResult seed = result;
+
+    SharedBestResult shared_result;
+    shared_result.result = seed;
+
+    int thread_count = std::max(1, get_search_threads());
+    std::vector<std::thread> workers;
+    workers.reserve(static_cast<std::size_t>(std::max(0, thread_count - 1)));
+    std::vector<SearchResult> thread_results(static_cast<std::size_t>(thread_count));
+
+    auto worker_fn = [&](int index, bool is_primary) {
+        thread_results[static_cast<std::size_t>(index)] =
+            run_search_thread(board, max_depth_limit, shared, shared_result, seed, index, is_primary);
+    };
+
+    for (int index = 1; index < thread_count; ++index) {
+        workers.emplace_back(worker_fn, index, false);
+    }
+
+    worker_fn(0, true);
+
+    shared.stop.store(true, std::memory_order_relaxed);
+
+    for (auto &thread : workers) {
+        thread.join();
+    }
+
+    SearchResult best = shared_result.result;
+    for (const auto &candidate : thread_results) {
+        if (!candidate.has_move) {
+            continue;
+        }
+        if (!best.has_move || candidate.depth_reached > best.depth_reached ||
+            (candidate.depth_reached == best.depth_reached &&
+             std::abs(candidate.score) >= std::abs(best.score))) {
+            best = candidate;
+        }
+    }
+
+    if (!best.has_move) {
+        auto legal_moves = generate_legal_moves(board);
+        if (!legal_moves.empty()) {
+            best.best_move = legal_moves.front();
+            best.has_move = true;
+        }
+    }
+
+    best.nodes = shared.node_counter.load(std::memory_order_relaxed);
+    if (shared.timed_out.load(std::memory_order_relaxed)) {
+        best.timed_out = true;
+    }
+
+    return best;
 }
 
 }  // namespace sirio
-

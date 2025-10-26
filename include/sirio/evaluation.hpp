@@ -19,6 +19,8 @@ public:
                       const Board &current) = 0;
     virtual void pop() = 0;
     virtual int evaluate(const Board &board) = 0;
+
+    [[nodiscard]] virtual std::unique_ptr<EvaluationBackend> clone() const = 0;
 };
 
 std::unique_ptr<EvaluationBackend> make_classical_evaluation();

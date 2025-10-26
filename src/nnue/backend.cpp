@@ -77,6 +77,14 @@ bool SingleNetworkBackend::load(const std::string &path, std::string *error_mess
     return true;
 }
 
+std::unique_ptr<EvaluationBackend> SingleNetworkBackend::clone() const {
+    auto copy = std::make_unique<SingleNetworkBackend>();
+    copy->loaded_ = loaded_;
+    copy->path_ = path_;
+    copy->params_ = params_;
+    return copy;
+}
+
 FeatureState SingleNetworkBackend::compute_state(const Board &board) const {
     FeatureState state{};
     for (int color_idx = 0; color_idx < 2; ++color_idx) {

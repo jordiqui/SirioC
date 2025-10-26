@@ -68,3 +68,8 @@ Al alcanzar profundidad cero, SirioC no se detiene en una evaluación estática 
 lugar ejecuta una quiescence search que examina todas las capturas, promociones y capturas al paso
 legales. Esta extensión evita el horizonte táctico y estabiliza la valoración al descartar ruidos
 producidos por entregas superficiales.【F:src/search.cpp†L254-L289】
+
+
+## 5.4. Lazy SMP multihilo
+
+La búsqueda principal se ejecuta ahora en varios hilos siguiendo el modelo *lazy SMP*: el hilo principal avanza con profundidades crecientes mientras que los hilos secundarios se incorporan con un ligero retardo y comparten el mejor resultado global mediante `publish_best_result`. Cada hilo tiene su propio `SearchContext` y tabla de transposición, pero comparten un `SearchSharedState` que controla los límites de tiempo y nodos, además del contador total de nodos visitados. Cuando el hilo primario detecta que se alcanza el límite de tiempo blando o duro, propaga la orden de parada al resto estableciendo `stop` en el estado compartido.【F:src/search.cpp†L688-L857】

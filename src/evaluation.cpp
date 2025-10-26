@@ -4,6 +4,8 @@
 #include <array>
 #include <memory>
 #include <cstdlib>
+#include <atomic>
+#include <mutex>
 #include <optional>
 #include <string>
 
@@ -22,6 +24,10 @@ public:
     void push(const Board &, const std::optional<Move> &, const Board &) override {}
     void pop() override {}
     int evaluate(const Board &board) override;
+
+    [[nodiscard]] std::unique_ptr<EvaluationBackend> clone() const override {
+        return std::make_unique<ClassicalEvaluation>(*this);
+    }
 };
 
 constexpr std::array<int, 6> piece_values = {100, 320, 330, 500, 900, 0};
@@ -492,39 +498,92 @@ std::unique_ptr<EvaluationBackend> make_nnue_evaluation(const std::string &path,
 }
 
 namespace {
-std::unique_ptr<EvaluationBackend> &backend_instance() {
-    static std::unique_ptr<EvaluationBackend> instance;
-    return instance;
+
+struct EvaluationGlobalState {
+    std::mutex mutex;
+    std::unique_ptr<EvaluationBackend> prototype;
+    std::atomic<std::uint64_t> generation{1};
+};
+
+EvaluationGlobalState &global_state() {
+    static EvaluationGlobalState state;
+    return state;
 }
 
-bool &backend_initialized_flag() {
-    static bool initialized = false;
-    return initialized;
+struct EvaluationThreadState {
+    std::unique_ptr<EvaluationBackend> backend;
+    bool initialized = false;
+    int stack_depth = 0;
+    bool notifications_enabled = false;
+    std::uint64_t generation = 0;
+};
+
+EvaluationThreadState &thread_state() {
+    thread_local EvaluationThreadState state;
+    return state;
 }
 
-int &backend_stack_depth() {
-    static int depth = 0;
-    return depth;
+void ensure_global_backend() {
+    EvaluationGlobalState &global = global_state();
+    if (!global.prototype) {
+        std::lock_guard lock(global.mutex);
+        if (!global.prototype) {
+            global.prototype = make_classical_evaluation();
+            global.generation.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
 }
 
-bool &notifications_enabled() {
-    static bool enabled = false;
-    return enabled;
+void ensure_thread_backend() {
+    ensure_global_backend();
+    EvaluationGlobalState &global = global_state();
+    EvaluationThreadState &state = thread_state();
+    std::uint64_t current_generation = global.generation.load(std::memory_order_acquire);
+    if (!state.backend || state.generation != current_generation) {
+        std::lock_guard lock(global.mutex);
+        if (!global.prototype) {
+            global.prototype = make_classical_evaluation();
+            current_generation = global.generation.fetch_add(1, std::memory_order_relaxed) + 1;
+        } else {
+            current_generation = global.generation.load(std::memory_order_relaxed);
+        }
+        state.backend = global.prototype->clone();
+        state.initialized = false;
+        state.stack_depth = 0;
+        state.notifications_enabled = false;
+        state.generation = current_generation;
+    }
 }
 
 void ensure_initialized(const Board &board) {
-    if (!backend_initialized_flag()) {
-        initialize_evaluation(board);
+    ensure_thread_backend();
+    EvaluationThreadState &state = thread_state();
+    if (!state.initialized) {
+        state.backend->initialize(board);
+        state.initialized = true;
+        state.stack_depth = 1;
+        state.notifications_enabled = true;
     }
 }
 
 }  // namespace
 
 void set_evaluation_backend(std::unique_ptr<EvaluationBackend> backend) {
-    backend_instance() = std::move(backend);
-    backend_initialized_flag() = false;
-    backend_stack_depth() = 0;
-    notifications_enabled() = false;
+    if (!backend) {
+        backend = make_classical_evaluation();
+    }
+    EvaluationGlobalState &global = global_state();
+    {
+        std::lock_guard lock(global.mutex);
+        global.prototype = std::move(backend);
+        global.generation.fetch_add(1, std::memory_order_release);
+    }
+    EvaluationThreadState &state = thread_state();
+    state.backend.reset();
+    state.initialized = false;
+    state.stack_depth = 0;
+    state.notifications_enabled = false;
+    state.generation = 0;
 }
 
 void use_classical_evaluation() {
@@ -532,48 +591,52 @@ void use_classical_evaluation() {
 }
 
 EvaluationBackend &active_evaluation_backend() {
-    auto &instance = backend_instance();
-    if (!instance) {
-        instance = make_classical_evaluation();
-    }
-    return *instance;
+    ensure_thread_backend();
+    return *thread_state().backend;
 }
 
 void initialize_evaluation(const Board &board) {
-    EvaluationBackend &backend = active_evaluation_backend();
-    if (!backend_initialized_flag()) {
-        backend.initialize(board);
-        backend_initialized_flag() = true;
+    ensure_thread_backend();
+    EvaluationThreadState &state = thread_state();
+    if (!state.initialized) {
+        state.backend->initialize(board);
+        state.initialized = true;
     } else {
-        backend.reset(board);
+        state.backend->reset(board);
     }
-    backend_stack_depth() = 1;
-    notifications_enabled() = true;
+    state.stack_depth = 1;
+    state.notifications_enabled = true;
 }
 
 void push_evaluation_state(const Board &previous, const std::optional<Move> &move,
                            const Board &current) {
-    if (!notifications_enabled()) {
+    ensure_thread_backend();
+    EvaluationThreadState &state = thread_state();
+    if (!state.notifications_enabled) {
         return;
     }
     ensure_initialized(previous);
-    active_evaluation_backend().push(previous, move, current);
-    ++backend_stack_depth();
+    state.backend->push(previous, move, current);
+    ++state.stack_depth;
 }
 
 void pop_evaluation_state() {
-    if (!notifications_enabled()) {
+    ensure_thread_backend();
+    EvaluationThreadState &state = thread_state();
+    if (!state.notifications_enabled) {
         return;
     }
-    if (backend_stack_depth() <= 1) {
+    if (state.stack_depth <= 1) {
         return;
     }
-    active_evaluation_backend().pop();
-    --backend_stack_depth();
+    state.backend->pop();
+    --state.stack_depth;
 }
 
 void notify_position_initialization(const Board &board) {
-    if (!notifications_enabled()) {
+    ensure_thread_backend();
+    EvaluationThreadState &state = thread_state();
+    if (!state.notifications_enabled) {
         return;
     }
     initialize_evaluation(board);
@@ -581,7 +644,9 @@ void notify_position_initialization(const Board &board) {
 
 void notify_move_applied(const Board &previous, const std::optional<Move> &move,
                          const Board &current) {
-    if (!notifications_enabled()) {
+    ensure_thread_backend();
+    EvaluationThreadState &state = thread_state();
+    if (!state.notifications_enabled) {
         return;
     }
     push_evaluation_state(previous, move, current);
@@ -589,7 +654,7 @@ void notify_move_applied(const Board &previous, const std::optional<Move> &move,
 
 int evaluate(const Board &board) {
     ensure_initialized(board);
-    return active_evaluation_backend().evaluate(board);
+    return thread_state().backend->evaluate(board);
 }
 
 }  // namespace sirio
