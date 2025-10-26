@@ -39,8 +39,10 @@ struct SearchContext {
     std::unordered_map<std::uint64_t, TTEntry> tt_entries{};
     bool stop = false;
     bool has_time_limit = false;
+    bool soft_limit_reached = false;
     std::chrono::steady_clock::time_point start_time{};
-    std::chrono::milliseconds time_limit{0};
+    std::chrono::milliseconds soft_time_limit{0};
+    std::chrono::milliseconds hard_time_limit{0};
     std::uint64_t node_counter = 0;
 };
 
@@ -104,7 +106,10 @@ bool should_stop(SearchContext &context) {
     }
     auto now = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - context.start_time);
-    if (elapsed >= context.time_limit) {
+    if (!context.soft_limit_reached && elapsed >= context.soft_time_limit) {
+        context.soft_limit_reached = true;
+    }
+    if (elapsed >= context.hard_time_limit) {
         context.stop = true;
         return true;
     }
@@ -179,8 +184,29 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
         return 0;
     }
 
-    if (depth == 0) {
+    bool in_check = board.in_check(board.side_to_move());
+    int static_eval = 0;
+    if (!in_check) {
+        static_eval = evaluate_for_current_player(board);
+    }
+    int max_remaining_depth = max_search_depth - ply;
+    int depth_left = std::min(depth, max_remaining_depth);
+    if (in_check && depth_left < max_remaining_depth) {
+        ++depth_left;
+    }
+
+    if (depth_left <= 0) {
         return quiescence(board, alpha, beta, ply, context);
+    }
+
+    if (!in_check && depth_left == 1) {
+        int futility_margin = 150;
+        if (static_eval - futility_margin >= beta) {
+            return static_eval - futility_margin;
+        }
+        if (static_eval + futility_margin <= alpha) {
+            return static_eval + futility_margin;
+        }
     }
 
     auto moves = generate_legal_moves(board);
@@ -197,7 +223,7 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
     if (tt_it != context.tt_entries.end()) {
         tt_move = tt_it->second.best_move;
         const TTEntry &entry = tt_it->second;
-        if (entry.depth >= depth) {
+        if (entry.depth >= depth_left) {
             int tt_score = from_tt_score(entry.score, ply);
             switch (entry.type) {
                 case TTNodeType::Exact:
@@ -235,10 +261,41 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
     Move local_best;
     bool local_found = false;
 
+    int moves_searched = 0;
+    int max_child_remaining_base = std::max(0, max_search_depth - (ply + 1));
     for (const Move &move : moves) {
+        ++moves_searched;
         Board next = board.apply_move(move);
-        int score =
-            -negamax(next, depth - 1, -beta, -alpha, ply + 1, nullptr, nullptr, context);
+        bool gives_check = next.in_check(next.side_to_move());
+
+        int extension = 0;
+        int max_child_remaining = max_child_remaining_base;
+        if (gives_check && (depth_left - 1) < max_child_remaining) {
+            extension = 1;
+        }
+
+        int reduction = 0;
+        if (!in_check && !gives_check && is_quiet(move) && depth_left >= 3 && moves_searched > 3) {
+            reduction = 1;
+            if (depth_left >= 5 && moves_searched > 6) {
+                reduction = 2;
+            }
+        }
+
+        int child_depth = depth_left - 1 + extension - reduction;
+        if (child_depth > max_child_remaining) {
+            child_depth = max_child_remaining;
+        }
+        if (child_depth < 0) {
+            child_depth = 0;
+        }
+
+        int score;
+        if (child_depth <= 0) {
+            score = -quiescence(next, -beta, -alpha, ply + 1, context);
+        } else {
+            score = -negamax(next, child_depth, -beta, -alpha, ply + 1, nullptr, nullptr, context);
+        }
         if (context.stop) {
             break;
         }
@@ -270,7 +327,7 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
     if (local_found) {
         TTEntry entry;
         entry.best_move = local_best;
-        entry.depth = depth;
+        entry.depth = depth_left;
         entry.score = to_tt_score(best_score, ply);
         if (best_score <= alpha_original) {
             entry.type = TTNodeType::UpperBound;
@@ -335,10 +392,20 @@ int quiescence(const Board &board, int alpha, int beta, int ply, SearchContext &
 
 }  // namespace
 
-std::optional<std::chrono::milliseconds> compute_time_limit(const Board &board,
-                                                            const SearchLimits &limits) {
+struct TimeAllocation {
+    std::chrono::milliseconds soft;
+    std::chrono::milliseconds hard;
+};
+
+std::optional<TimeAllocation> compute_time_allocation(const Board &board,
+                                                      const SearchLimits &limits) {
     if (limits.move_time > 0) {
-        return std::chrono::milliseconds{limits.move_time};
+        auto hard = std::chrono::milliseconds{limits.move_time};
+        auto soft = std::chrono::milliseconds{std::max<int>(1, limits.move_time * 9 / 10)};
+        if (soft > hard) {
+            soft = hard;
+        }
+        return TimeAllocation{soft, hard};
     }
 
     Color stm = board.side_to_move();
@@ -359,12 +426,18 @@ std::optional<std::chrono::milliseconds> compute_time_limit(const Board &board,
         }
         allocation = std::min(allocation, max_allocation);
         allocation = std::max(allocation, 1);
-        return std::chrono::milliseconds{allocation};
+        auto hard = std::chrono::milliseconds{allocation};
+        auto soft = std::chrono::milliseconds{std::max(1, allocation * 9 / 10)};
+        if (soft > hard) {
+            soft = hard;
+        }
+        return TimeAllocation{soft, hard};
     }
 
     if (increment > 0) {
         int allocation = std::max(increment / 2, 1);
-        return std::chrono::milliseconds{allocation};
+        auto hard = std::chrono::milliseconds{allocation};
+        return TimeAllocation{hard, hard};
     }
 
     return std::nullopt;
@@ -372,18 +445,26 @@ std::optional<std::chrono::milliseconds> compute_time_limit(const Board &board,
 
 SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     SearchResult result;
-    int target_depth = limits.max_depth > 0 ? limits.max_depth : 1;
+    int max_depth_limit = limits.max_depth > 0 ? limits.max_depth : max_search_depth;
+    max_depth_limit = std::min(max_depth_limit, max_search_depth);
 
     SearchContext context;
-    if (auto time_limit = compute_time_limit(board, limits); time_limit.has_value()) {
+    if (auto allocation = compute_time_allocation(board, limits); allocation.has_value()) {
         context.has_time_limit = true;
-        context.time_limit = *time_limit;
+        context.soft_time_limit = allocation->soft;
+        context.hard_time_limit = allocation->hard;
         context.start_time = std::chrono::steady_clock::now();
+        if (context.soft_time_limit.count() <= 0) {
+            context.soft_time_limit = std::chrono::milliseconds{1};
+        }
+        if (context.hard_time_limit.count() <= 0) {
+            context.hard_time_limit = context.soft_time_limit;
+        }
     }
 
     Move best_move{};
     bool best_found = false;
-    for (int depth = 1; depth <= target_depth; ++depth) {
+    for (int depth = 1; depth <= max_depth_limit; ++depth) {
         Move current_best;
         bool found = false;
         int score = negamax(board, depth, std::numeric_limits<int>::min() / 2,
@@ -400,6 +481,20 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
             result.best_move = current_best;
             result.has_move = true;
             result.depth_reached = depth;
+        }
+
+        if (context.has_time_limit) {
+            auto now = std::chrono::steady_clock::now();
+            auto elapsed =
+                std::chrono::duration_cast<std::chrono::milliseconds>(now - context.start_time);
+            if (elapsed >= context.hard_time_limit) {
+                context.stop = true;
+                result.timed_out = true;
+                break;
+            }
+            if (elapsed >= context.soft_time_limit) {
+                break;
+            }
         }
     }
 

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 
 #include "sirio/bitboard.hpp"
 
@@ -13,6 +14,8 @@ constexpr std::array<int, 6> piece_values = {100, 320, 330, 500, 900, 0};
 constexpr int bishop_pair_bonus = 40;
 constexpr int endgame_material_threshold = 1300;
 constexpr int king_distance_scale = 12;
+constexpr int king_corner_scale = 6;
+constexpr int king_opposition_bonus = 20;
 
 constexpr std::array<int, 64> pawn_table = {
     0,  0,  0,  0,  0,  0,  0,  0,
@@ -98,7 +101,32 @@ constexpr std::array<int, 64 * 64> generate_king_distance_table() {
     return table;
 }
 
+constexpr std::array<int, 64> generate_corner_distance_table() {
+    std::array<int, 64> table{};
+    constexpr std::array<int, 4> corners = {0, 7, 56, 63};
+    for (int square = 0; square < 64; ++square) {
+        int best = 8;
+        for (int corner : corners) {
+            int file_diff = (square % 8) - (corner % 8);
+            if (file_diff < 0) {
+                file_diff = -file_diff;
+            }
+            int rank_diff = (square / 8) - (corner / 8);
+            if (rank_diff < 0) {
+                rank_diff = -rank_diff;
+            }
+            int distance = std::max(file_diff, rank_diff);
+            if (distance < best) {
+                best = distance;
+            }
+        }
+        table[static_cast<std::size_t>(square)] = best;
+    }
+    return table;
+}
+
 constexpr auto king_distance_table = generate_king_distance_table();
+constexpr auto king_corner_distance_table = generate_corner_distance_table();
 
 }  // namespace
 
@@ -147,8 +175,28 @@ int evaluate(const Board &board) {
         int advantage = material_white - material_black;
         if (advantage > 0) {
             score += closeness * king_distance_scale;
+            int corner_distance = king_corner_distance_table[static_cast<std::size_t>(black_king)];
+            score += (7 - corner_distance) * king_corner_scale;
+            int friendly_corner_distance =
+                king_corner_distance_table[static_cast<std::size_t>(white_king)];
+            score -= friendly_corner_distance * (king_corner_scale / 2);
+            int file_diff = std::abs((white_king % 8) - (black_king % 8));
+            int rank_diff = std::abs((white_king / 8) - (black_king / 8));
+            if ((file_diff == 0 || rank_diff == 0) && ((distance & 1) == 1)) {
+                score += king_opposition_bonus;
+            }
         } else if (advantage < 0) {
             score -= closeness * king_distance_scale;
+            int corner_distance = king_corner_distance_table[static_cast<std::size_t>(white_king)];
+            score -= (7 - corner_distance) * king_corner_scale;
+            int friendly_corner_distance =
+                king_corner_distance_table[static_cast<std::size_t>(black_king)];
+            score += friendly_corner_distance * (king_corner_scale / 2);
+            int file_diff = std::abs((white_king % 8) - (black_king % 8));
+            int rank_diff = std::abs((white_king / 8) - (black_king / 8));
+            if ((file_diff == 0 || rank_diff == 0) && ((distance & 1) == 1)) {
+                score -= king_opposition_bonus;
+            }
         }
     }
 

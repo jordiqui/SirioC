@@ -8,7 +8,7 @@
 namespace sirio {
 
 struct SearchLimits {
-    int max_depth = 4;
+    int max_depth = 0;
     int move_time = 0;
     int time_left_white = 0;
     int time_left_black = 0;
