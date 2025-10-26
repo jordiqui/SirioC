@@ -71,6 +71,23 @@ class Board {
 public:
     using PieceList = std::vector<int>;
 
+    struct UndoState {
+        GameState previous_state{};
+        std::optional<std::pair<Color, PieceType>> captured{};
+        int captured_square = -1;
+        PieceType moved_piece = PieceType::Pawn;
+        PieceType placed_piece = PieceType::Pawn;
+        bool was_castling = false;
+        int rook_from = -1;
+        int rook_to = -1;
+        bool was_en_passant = false;
+    };
+
+    struct NullUndoState {
+        GameState previous_state{};
+        bool removed_en_passant_hash = false;
+    };
+
     Board();
     explicit Board(std::string_view fen);
 
@@ -91,6 +108,10 @@ public:
     [[nodiscard]] bool in_check(Color color) const;
     [[nodiscard]] Board apply_null_move() const;
     [[nodiscard]] Board apply_move(const Move &move) const;
+    void make_move(const Move &move, UndoState &undo);
+    void undo_move(const Move &move, const UndoState &undo);
+    void make_null_move(NullUndoState &undo);
+    void undo_null_move(const NullUndoState &undo);
     [[nodiscard]] const PieceList &piece_list(Color color, PieceType type) const;
     [[nodiscard]] std::uint64_t zobrist_hash() const { return state_.zobrist_hash; }
     [[nodiscard]] const GameState &game_state() const { return state_; }

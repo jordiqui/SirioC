@@ -172,6 +172,11 @@ int SingleNetworkBackend::evaluate(const Board &board) {
     if (!loaded_) {
         return 0;
     }
+    std::size_t expected = board.history().size();
+    if (stack_.size() != expected) {
+        stack_.clear();
+        stack_.push_back(compute_state(board));
+    }
     const FeatureState &state = stack_.back();
     double value = params_.bias;
     for (std::size_t index = 0; index < state.piece_counts.size(); ++index) {

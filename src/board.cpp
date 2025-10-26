@@ -557,86 +557,76 @@ Board Board::apply_null_move() const {
 
 Board Board::apply_move(const Move &move) const {
     Board result = *this;
+    UndoState undo;
+    result.make_move(move, undo);
+    notify_move_applied(*this, std::optional<Move>{move}, result);
+    return result;
+}
+
+void Board::make_move(const Move &move, UndoState &undo) {
     const Color us = state_.side_to_move;
     const Color them = opposite(us);
     const Bitboard from_mask = one_bit(move.from);
     const Bitboard to_mask = one_bit(move.to);
 
+    undo.previous_state = state_;
+    undo.captured.reset();
+    undo.captured_square = -1;
+    undo.moved_piece = move.piece;
+    undo.placed_piece = move.promotion.has_value() ? *move.promotion : move.piece;
+    undo.was_castling = move.is_castling;
+    undo.rook_from = -1;
+    undo.rook_to = -1;
+    undo.was_en_passant = move.is_en_passant;
+
     auto remove_piece_hash = [&](Color color, PieceType type, int square) {
-        result.state_.zobrist_hash ^= piece_hash(color, type, square);
+        state_.zobrist_hash ^= piece_hash(color, type, square);
     };
 
     auto add_piece_hash = [&](Color color, PieceType type, int square) {
-        result.state_.zobrist_hash ^= piece_hash(color, type, square);
+        state_.zobrist_hash ^= piece_hash(color, type, square);
     };
 
     const bool had_en_passant_hash =
         state_.en_passant_square >= 0 &&
         en_passant_capture_possible(*this, state_.en_passant_square, us);
 
-    auto clear_en_passant_hash = [&]() {
-        if (result.state_.en_passant_square >= 0) {
-            if (had_en_passant_hash) {
-                result.state_.zobrist_hash ^=
-                    en_passant_hash(file_of(result.state_.en_passant_square));
-            }
-            result.state_.en_passant_square = -1;
+    if (state_.en_passant_square >= 0) {
+        if (had_en_passant_hash) {
+            state_.zobrist_hash ^=
+                en_passant_hash(file_of(state_.en_passant_square));
         }
-    };
+        state_.en_passant_square = -1;
+    }
 
-    Bitboard &moving_bb = result.pieces_ref(us, move.piece);
+    Bitboard &moving_bb = pieces_ref(us, move.piece);
     if ((moving_bb & from_mask) == 0) {
         throw std::invalid_argument("Move does not match board state");
     }
     moving_bb &= ~from_mask;
-    result.remove_from_piece_list(us, move.piece, move.from);
+    remove_from_piece_list(us, move.piece, move.from);
     remove_piece_hash(us, move.piece, move.from);
+    occupancy_ &= ~from_mask;
 
-    clear_en_passant_hash();
-
-    auto reset_castling_rights = [&](Color color) {
-        auto disable_castling = [&](Color target, bool kingside) {
-            bool &right = [&]() -> bool & {
-                if (target == Color::White) {
-                    return kingside ? result.state_.castling.white_kingside
-                                    : result.state_.castling.white_queenside;
-                }
-                return kingside ? result.state_.castling.black_kingside
-                                : result.state_.castling.black_queenside;
-            }();
-            if (right) {
-                result.state_.zobrist_hash ^= castling_hash(target, kingside);
-                right = false;
+    auto disable_castling = [&](Color target, bool kingside) {
+        bool &right = [&]() -> bool & {
+            if (target == Color::White) {
+                return kingside ? state_.castling.white_kingside : state_.castling.white_queenside;
             }
-        };
-        if (color == Color::White) {
-            disable_castling(Color::White, true);
-            disable_castling(Color::White, false);
-        } else {
-            disable_castling(Color::Black, true);
-            disable_castling(Color::Black, false);
+            return kingside ? state_.castling.black_kingside : state_.castling.black_queenside;
+        }();
+        if (right) {
+            state_.zobrist_hash ^= castling_hash(target, kingside);
+            right = false;
         }
     };
 
-    if (move.piece == PieceType::King) {
-        reset_castling_rights(us);
-    }
+    auto reset_castling_rights = [&](Color color) {
+        disable_castling(color, true);
+        disable_castling(color, false);
+    };
 
     auto update_rook_rights_on_move = [&](Color color, int square) {
-        auto disable_castling = [&](Color target, bool kingside) {
-            bool &right = [&]() -> bool & {
-                if (target == Color::White) {
-                    return kingside ? result.state_.castling.white_kingside
-                                    : result.state_.castling.white_queenside;
-                }
-                return kingside ? result.state_.castling.black_kingside
-                                : result.state_.castling.black_queenside;
-            }();
-            if (right) {
-                result.state_.zobrist_hash ^= castling_hash(target, kingside);
-                right = false;
-            }
-        };
         if (color == Color::White) {
             if (square == 0) {
                 disable_castling(Color::White, false);
@@ -652,6 +642,10 @@ Board Board::apply_move(const Move &move) const {
         }
     };
 
+    if (move.piece == PieceType::King) {
+        reset_castling_rights(us);
+    }
+
     if (move.piece == PieceType::Rook) {
         update_rook_rights_on_move(us, move.from);
     }
@@ -660,87 +654,163 @@ Board Board::apply_move(const Move &move) const {
 
     if (move.is_en_passant) {
         const int capture_square = us == Color::White ? move.to - 8 : move.to + 8;
-        Bitboard &capture_bb = result.pieces_ref(them, PieceType::Pawn);
         Bitboard capture_mask = one_bit(capture_square);
+        Bitboard &capture_bb = pieces_ref(them, PieceType::Pawn);
         if ((capture_bb & capture_mask) == 0) {
             throw std::invalid_argument("En passant capture missing pawn");
         }
         capture_bb &= ~capture_mask;
-        result.remove_from_piece_list(them, PieceType::Pawn, capture_square);
+        remove_from_piece_list(them, PieceType::Pawn, capture_square);
         remove_piece_hash(them, PieceType::Pawn, capture_square);
+        occupancy_ &= ~capture_mask;
+        undo.captured = std::make_pair(them, PieceType::Pawn);
+        undo.captured_square = capture_square;
         is_capture = true;
     } else if (move.captured.has_value()) {
-        Bitboard &capture_bb = result.pieces_ref(them, *move.captured);
+        Bitboard &capture_bb = pieces_ref(them, *move.captured);
         if ((capture_bb & to_mask) == 0) {
             throw std::invalid_argument("Capture square empty");
         }
         capture_bb &= ~to_mask;
         update_rook_rights_on_move(them, move.to);
-        result.remove_from_piece_list(them, *move.captured, move.to);
+        remove_from_piece_list(them, *move.captured, move.to);
         remove_piece_hash(them, *move.captured, move.to);
+        occupancy_ &= ~to_mask;
+        undo.captured = std::make_pair(them, *move.captured);
+        undo.captured_square = move.to;
         is_capture = true;
     }
 
-    PieceType placed_piece = move.promotion.has_value() ? *move.promotion : move.piece;
-    result.pieces_ref(us, placed_piece) |= to_mask;
-    result.add_to_piece_list(us, placed_piece, move.to);
-    add_piece_hash(us, placed_piece, move.to);
+    pieces_ref(us, undo.placed_piece) |= to_mask;
+    add_to_piece_list(us, undo.placed_piece, move.to);
+    add_piece_hash(us, undo.placed_piece, move.to);
+    occupancy_ |= to_mask;
 
     if (move.is_castling) {
         int rook_from;
         int rook_to;
-        if (move.to > move.from) {  // Kingside
+        if (move.to > move.from) {
             rook_from = us == Color::White ? 7 : 63;
             rook_to = us == Color::White ? 5 : 61;
-        } else {  // Queenside
+        } else {
             rook_from = us == Color::White ? 0 : 56;
             rook_to = us == Color::White ? 3 : 59;
         }
         Bitboard rook_from_mask = one_bit(rook_from);
         Bitboard rook_to_mask = one_bit(rook_to);
-        Bitboard &rook_bb = result.pieces_ref(us, PieceType::Rook);
+        Bitboard &rook_bb = pieces_ref(us, PieceType::Rook);
         if ((rook_bb & rook_from_mask) == 0) {
             throw std::invalid_argument("Castling rook missing");
         }
         rook_bb &= ~rook_from_mask;
         rook_bb |= rook_to_mask;
-        result.remove_from_piece_list(us, PieceType::Rook, rook_from);
-        result.add_to_piece_list(us, PieceType::Rook, rook_to);
+        remove_from_piece_list(us, PieceType::Rook, rook_from);
+        add_to_piece_list(us, PieceType::Rook, rook_to);
         remove_piece_hash(us, PieceType::Rook, rook_from);
         add_piece_hash(us, PieceType::Rook, rook_to);
+        occupancy_ &= ~rook_from_mask;
+        occupancy_ |= rook_to_mask;
+        undo.rook_from = rook_from;
+        undo.rook_to = rook_to;
     }
 
     if (move.piece == PieceType::Pawn) {
-        result.state_.halfmove_clock = 0;
+        state_.halfmove_clock = 0;
         if (std::abs(move.to - move.from) == 16) {
-            result.state_.en_passant_square = us == Color::White ? move.from + 8 : move.from - 8;
-            if (en_passant_capture_possible(result, result.state_.en_passant_square, them)) {
-                result.state_.zobrist_hash ^=
-                    en_passant_hash(file_of(result.state_.en_passant_square));
+            state_.en_passant_square = us == Color::White ? move.from + 8 : move.from - 8;
+            if (en_passant_capture_possible(*this, state_.en_passant_square, them)) {
+                state_.zobrist_hash ^=
+                    en_passant_hash(file_of(state_.en_passant_square));
             }
         }
     } else if (is_capture) {
-        result.state_.halfmove_clock = 0;
+        state_.halfmove_clock = 0;
     } else {
-        ++result.state_.halfmove_clock;
+        ++state_.halfmove_clock;
     }
 
-    result.state_.side_to_move = them;
-    result.state_.zobrist_hash ^= side_to_move_hash();
+    state_.side_to_move = them;
+    state_.zobrist_hash ^= side_to_move_hash();
     if (us == Color::Black) {
-        ++result.state_.fullmove_number;
+        ++state_.fullmove_number;
     }
 
-    result.occupancy_ = 0;
+    history_.push(state_);
+}
+
+void Board::undo_move(const Move &move, const UndoState &undo) {
+    history_.pop();
+
+    const Color us = undo.previous_state.side_to_move;
+    const Color them = opposite(us);
+    const Bitboard from_mask = one_bit(move.from);
+    const Bitboard to_mask = one_bit(move.to);
+
+    if (undo.was_castling && undo.rook_from >= 0 && undo.rook_to >= 0) {
+        Bitboard rook_from_mask = one_bit(undo.rook_from);
+        Bitboard rook_to_mask = one_bit(undo.rook_to);
+        Bitboard &rook_bb = pieces_ref(us, PieceType::Rook);
+        rook_bb &= ~rook_to_mask;
+        rook_bb |= rook_from_mask;
+        remove_from_piece_list(us, PieceType::Rook, undo.rook_to);
+        add_to_piece_list(us, PieceType::Rook, undo.rook_from);
+    }
+
+    Bitboard &placed_bb = pieces_ref(us, undo.placed_piece);
+    placed_bb &= ~to_mask;
+    remove_from_piece_list(us, undo.placed_piece, move.to);
+
+    Bitboard &moving_bb = pieces_ref(us, move.piece);
+    moving_bb |= from_mask;
+    add_to_piece_list(us, move.piece, move.from);
+
+    if (undo.was_en_passant && undo.captured_square >= 0) {
+        Bitboard capture_mask = one_bit(undo.captured_square);
+        Bitboard &capture_bb = pieces_ref(them, PieceType::Pawn);
+        capture_bb |= capture_mask;
+        add_to_piece_list(them, PieceType::Pawn, undo.captured_square);
+    } else if (undo.captured.has_value() && undo.captured_square >= 0) {
+        Bitboard capture_mask = one_bit(undo.captured_square);
+        Bitboard &capture_bb = pieces_ref(undo.captured->first, undo.captured->second);
+        capture_bb |= capture_mask;
+        add_to_piece_list(undo.captured->first, undo.captured->second, undo.captured_square);
+    }
+
+    occupancy_ = 0;
     for (std::size_t index = 0; index < piece_count; ++index) {
-        result.occupancy_ |= result.white_[index];
-        result.occupancy_ |= result.black_[index];
+        occupancy_ |= white_[index];
+        occupancy_ |= black_[index];
     }
 
-    result.history_.push(result.state_);
+    state_ = undo.previous_state;
+}
 
-    notify_move_applied(*this, std::optional<Move>{move}, result);
-    return result;
+void Board::make_null_move(NullUndoState &undo) {
+    const Color us = state_.side_to_move;
+    const Color them = opposite(us);
+
+    undo.previous_state = state_;
+    undo.removed_en_passant_hash = false;
+
+    if (state_.en_passant_square >= 0 && en_passant_capture_possible(*this, state_.en_passant_square, us)) {
+        state_.zobrist_hash ^= en_passant_hash(file_of(state_.en_passant_square));
+        undo.removed_en_passant_hash = true;
+    }
+
+    state_.en_passant_square = -1;
+    state_.side_to_move = them;
+    state_.zobrist_hash ^= side_to_move_hash();
+    ++state_.halfmove_clock;
+    if (us == Color::Black) {
+        ++state_.fullmove_number;
+    }
+
+    history_.push(state_);
+}
+
+void Board::undo_null_move(const NullUndoState &undo) {
+    history_.pop();
+    state_ = undo.previous_state;
 }
 
 }  // namespace sirio
