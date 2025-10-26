@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 #include <optional>
 
 #include "sirio/board.hpp"
@@ -32,6 +33,19 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits);
 
 void set_search_threads(int threads);
 int get_search_threads();
+
+void set_transposition_table_size(std::size_t size_mb);
+std::size_t get_transposition_table_size();
+void clear_transposition_tables();
+
+void set_move_overhead(int milliseconds);
+void set_minimum_thinking_time(int milliseconds);
+void set_slow_mover(int value);
+void set_nodestime(int value);
+int get_move_overhead();
+int get_minimum_thinking_time();
+int get_slow_mover();
+int get_nodestime();
 
 }  // namespace sirio
 

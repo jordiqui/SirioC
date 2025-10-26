@@ -26,12 +26,20 @@ namespace {
 constexpr int mate_score = 100000;
 constexpr int max_search_depth = 64;
 constexpr int mate_threshold = mate_score - max_search_depth;
-constexpr std::size_t default_tt_size_mb = 64;
+constexpr std::size_t default_tt_size_mb = 16;
 
 constexpr std::array<int, static_cast<std::size_t>(PieceType::Count)> mvv_values = {
     100, 320, 330, 500, 900, 20000};
 
 enum class TTNodeType { Exact, LowerBound, UpperBound };
+
+std::atomic<int> search_thread_count{1};
+std::atomic<std::size_t> transposition_table_size_mb{default_tt_size_mb};
+std::atomic<std::uint64_t> transposition_table_epoch{1};
+std::atomic<int> time_move_overhead{10};
+std::atomic<int> time_minimum_thinking{100};
+std::atomic<int> time_slow_mover{100};
+std::atomic<int> time_nodes_per_ms{0};
 
 class EvaluationStateGuard {
 public:
@@ -84,22 +92,21 @@ struct PackedTTEntry {
 
 class TranspositionTable {
 public:
-    TranspositionTable() { resize(default_tt_size_mb); }
+    TranspositionTable() { apply_global_settings(); }
 
-    void resize(std::size_t size_mb) {
-        if (size_mb == 0) {
-            entries_.clear();
-            generation_ = 1;
-            return;
+    void apply_global_settings() {
+        const std::size_t desired =
+            transposition_table_size_mb.load(std::memory_order_relaxed);
+        const std::uint64_t epoch =
+            transposition_table_epoch.load(std::memory_order_relaxed);
+        if (configured_size_mb_ != desired || epoch_marker_ != epoch) {
+            rebuild(desired);
+            epoch_marker_ = epoch;
         }
-        std::size_t bytes = size_mb * 1024ULL * 1024ULL;
-        std::size_t count = std::max<std::size_t>(1, bytes / sizeof(PackedTTEntry));
-        std::size_t pow2 = std::bit_ceil(count);
-        entries_.assign(pow2, PackedTTEntry{});
-        generation_ = 1;
     }
 
     void new_search() {
+        apply_global_settings();
         ++generation_;
         if (generation_ == 0) {
             generation_ = 1;
@@ -143,8 +150,24 @@ public:
     }
 
 private:
+    void rebuild(std::size_t size_mb) {
+        configured_size_mb_ = size_mb;
+        if (size_mb == 0) {
+            entries_.clear();
+            generation_ = 1;
+            return;
+        }
+        std::size_t bytes = size_mb * 1024ULL * 1024ULL;
+        std::size_t count = std::max<std::size_t>(1, bytes / sizeof(PackedTTEntry));
+        std::size_t pow2 = std::bit_ceil(count);
+        entries_.assign(pow2, PackedTTEntry{});
+        generation_ = 1;
+    }
+
     std::vector<PackedTTEntry> entries_;
     std::uint8_t generation_ = 1;
+    std::size_t configured_size_mb_ = 0;
+    std::uint64_t epoch_marker_ = 0;
 };
 
 struct SearchSharedState {
@@ -169,8 +192,6 @@ struct SearchContext {
 
 constexpr std::uint64_t time_check_interval = 2048;
 
-std::atomic<int> search_thread_count{1};
-
 }  // namespace
 
 void set_search_threads(int threads) {
@@ -179,6 +200,46 @@ void set_search_threads(int threads) {
 }
 
 int get_search_threads() { return search_thread_count.load(std::memory_order_relaxed); }
+
+void set_transposition_table_size(std::size_t size_mb) {
+    size_mb = std::clamp<std::size_t>(size_mb, 1, 33'554'432);
+    transposition_table_size_mb.store(size_mb, std::memory_order_relaxed);
+    transposition_table_epoch.fetch_add(1, std::memory_order_relaxed);
+}
+
+std::size_t get_transposition_table_size() {
+    return transposition_table_size_mb.load(std::memory_order_relaxed);
+}
+
+void clear_transposition_tables() {
+    transposition_table_epoch.fetch_add(1, std::memory_order_relaxed);
+}
+
+void set_move_overhead(int milliseconds) {
+    time_move_overhead.store(std::clamp(milliseconds, 0, 5000), std::memory_order_relaxed);
+}
+
+void set_minimum_thinking_time(int milliseconds) {
+    time_minimum_thinking.store(std::clamp(milliseconds, 0, 5000), std::memory_order_relaxed);
+}
+
+void set_slow_mover(int value) {
+    time_slow_mover.store(std::clamp(value, 10, 1000), std::memory_order_relaxed);
+}
+
+void set_nodestime(int value) {
+    time_nodes_per_ms.store(std::clamp(value, 0, 10000), std::memory_order_relaxed);
+}
+
+int get_move_overhead() { return time_move_overhead.load(std::memory_order_relaxed); }
+
+int get_minimum_thinking_time() {
+    return time_minimum_thinking.load(std::memory_order_relaxed);
+}
+
+int get_slow_mover() { return time_slow_mover.load(std::memory_order_relaxed); }
+
+int get_nodestime() { return time_nodes_per_ms.load(std::memory_order_relaxed); }
 
 namespace {
 
@@ -380,7 +441,9 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
         }
     }
 
-    if (syzygy::available() && syzygy::max_pieces() >= total_piece_count(board)) {
+    int piece_count = total_piece_count(board);
+    if (syzygy::available() && piece_count <= syzygy::probe_piece_limit() &&
+        syzygy::max_pieces() >= piece_count && depth_left <= syzygy::probe_depth_limit()) {
         if (auto tb = syzygy::probe_wdl(board); tb.has_value()) {
             int tb_score = syzygy_wdl_to_score(tb->wdl, ply);
             if (std::abs(tb_score) >= mate_threshold || tb->wdl == 0) {
@@ -617,6 +680,46 @@ struct TimeAllocation {
     std::chrono::milliseconds hard;
 };
 
+void adjust_time_allocation(std::chrono::milliseconds &soft, std::chrono::milliseconds &hard) {
+    const int overhead = std::clamp(time_move_overhead.load(std::memory_order_relaxed), 0, 5000);
+    const int min_thinking =
+        std::clamp(time_minimum_thinking.load(std::memory_order_relaxed), 0, 5000);
+    const int slow = std::clamp(time_slow_mover.load(std::memory_order_relaxed), 10, 1000);
+    const auto overhead_ms = std::chrono::milliseconds{overhead};
+    const auto minimum_ms = std::chrono::milliseconds{min_thinking};
+
+    auto adjust_single = [&](std::chrono::milliseconds value) {
+        if (value <= overhead_ms) {
+            value = std::chrono::milliseconds{0};
+        } else {
+            value -= overhead_ms;
+        }
+        long long scaled = value.count() * slow / 100;
+        if (scaled < minimum_ms.count()) {
+            scaled = minimum_ms.count();
+        }
+        if (scaled <= 0) {
+            scaled = minimum_ms.count() > 0 ? minimum_ms.count() : 1;
+        }
+        return std::chrono::milliseconds{scaled};
+    };
+
+    hard = adjust_single(hard);
+    soft = adjust_single(soft);
+    if (soft > hard) {
+        soft = hard;
+    }
+}
+
+std::uint64_t nodes_budget_for_time(std::chrono::milliseconds hard) {
+    const int nodes_per_ms = time_nodes_per_ms.load(std::memory_order_relaxed);
+    if (nodes_per_ms <= 0 || hard.count() <= 0) {
+        return 0;
+    }
+    return static_cast<std::uint64_t>(nodes_per_ms) *
+           static_cast<std::uint64_t>(hard.count());
+}
+
 std::optional<TimeAllocation> compute_time_allocation(const Board &board,
                                                       const SearchLimits &limits) {
     if (limits.move_time > 0) {
@@ -625,6 +728,7 @@ std::optional<TimeAllocation> compute_time_allocation(const Board &board,
         if (soft > hard) {
             soft = hard;
         }
+        adjust_time_allocation(soft, hard);
         return TimeAllocation{soft, hard};
     }
 
@@ -651,13 +755,16 @@ std::optional<TimeAllocation> compute_time_allocation(const Board &board,
         if (soft > hard) {
             soft = hard;
         }
+        adjust_time_allocation(soft, hard);
         return TimeAllocation{soft, hard};
     }
 
     if (increment > 0) {
         int allocation = std::max(increment / 2, 1);
         auto hard = std::chrono::milliseconds{allocation};
-        return TimeAllocation{hard, hard};
+        auto soft = hard;
+        adjust_time_allocation(soft, hard);
+        return TimeAllocation{soft, hard};
     }
 
     return std::nullopt;
@@ -686,6 +793,7 @@ SearchResult run_search_thread(const Board &board, int max_depth_limit, SearchSh
                                int thread_index, bool is_primary) {
     SearchContext context;
     context.shared = &shared;
+    context.tt.apply_global_settings();
     SearchResult local = seed;
     Move best_move = seed.has_move ? seed.best_move : Move{};
     bool best_found = seed.has_move;
@@ -792,7 +900,9 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     SearchSharedState shared;
     shared.start_time = std::chrono::steady_clock::now();
 
-    if (auto allocation = compute_time_allocation(board, limits); allocation.has_value()) {
+    std::optional<TimeAllocation> allocation = compute_time_allocation(board, limits);
+    std::uint64_t nodes_budget_from_time = 0;
+    if (allocation.has_value()) {
         shared.has_time_limit = true;
         shared.soft_time_limit = allocation->soft;
         shared.hard_time_limit = allocation->hard;
@@ -803,14 +913,23 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
             shared.hard_time_limit = shared.soft_time_limit;
         }
         shared.start_time = std::chrono::steady_clock::now();
+        nodes_budget_from_time = nodes_budget_for_time(shared.hard_time_limit);
     }
 
     if (limits.max_nodes > 0) {
         shared.has_node_limit = true;
         shared.node_limit = limits.max_nodes;
+        if (nodes_budget_from_time > 0) {
+            shared.node_limit = std::min(shared.node_limit, nodes_budget_from_time);
+        }
+    } else if (nodes_budget_from_time > 0) {
+        shared.has_node_limit = true;
+        shared.node_limit = nodes_budget_from_time;
     }
 
-    if (syzygy::available() && syzygy::max_pieces() >= total_piece_count(board)) {
+    int root_piece_count = total_piece_count(board);
+    if (syzygy::available() && root_piece_count <= syzygy::probe_piece_limit() &&
+        syzygy::max_pieces() >= root_piece_count) {
         if (auto root_probe = syzygy::probe_root(board); root_probe.has_value()) {
             result.score = syzygy_wdl_to_score(root_probe->wdl, 0);
             if (root_probe->best_move.has_value()) {
