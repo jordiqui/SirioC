@@ -23,6 +23,7 @@ struct Move {
 
 std::string move_to_uci(const Move &move);
 Move move_from_uci(const Board &board, const std::string &uci);
+bool validate_move(const Board &board, const Move &move, Board *next_board = nullptr);
 
 }  // namespace sirio
 

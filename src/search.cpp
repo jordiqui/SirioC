@@ -39,11 +39,13 @@ struct SearchContext {
     std::unordered_map<std::uint64_t, TTEntry> tt_entries{};
     bool stop = false;
     bool has_time_limit = false;
+    bool has_node_limit = false;
     bool soft_limit_reached = false;
     std::chrono::steady_clock::time_point start_time{};
     std::chrono::milliseconds soft_time_limit{0};
     std::chrono::milliseconds hard_time_limit{0};
     std::uint64_t node_counter = 0;
+    std::uint64_t node_limit = 0;
 };
 
 constexpr std::uint64_t time_check_interval = 2048;
@@ -97,10 +99,14 @@ bool should_stop(SearchContext &context) {
     if (context.stop) {
         return true;
     }
+    ++context.node_counter;
+    if (context.has_node_limit && context.node_counter >= context.node_limit) {
+        context.stop = true;
+        return true;
+    }
     if (!context.has_time_limit) {
         return false;
     }
-    ++context.node_counter;
     if ((context.node_counter & (time_check_interval - 1)) != 0) {
         return false;
     }
@@ -460,6 +466,11 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
         if (context.hard_time_limit.count() <= 0) {
             context.hard_time_limit = context.soft_time_limit;
         }
+    }
+
+    if (limits.max_nodes > 0) {
+        context.has_node_limit = true;
+        context.node_limit = limits.max_nodes;
     }
 
     Move best_move{};
