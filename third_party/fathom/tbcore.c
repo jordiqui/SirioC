@@ -48,7 +48,7 @@ extern unsigned TB_LARGEST;
 #define TB_WPAWN TB_PAWN
 #define TB_BPAWN (TB_PAWN | 8)
 
-#ifndef TB_NO_THREADS
+#ifdef TB_HAVE_THREADS
 static LOCK_T TB_MUTEX;
 #endif
 
