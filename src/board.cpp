@@ -566,9 +566,13 @@ Board Board::apply_move(const Move &move) const {
         result.state_.zobrist_hash ^= piece_hash(color, type, square);
     };
 
+    const bool had_en_passant_hash =
+        state_.en_passant_square >= 0 &&
+        en_passant_capture_possible(*this, state_.en_passant_square, us);
+
     auto clear_en_passant_hash = [&]() {
         if (result.state_.en_passant_square >= 0) {
-            if (en_passant_capture_possible(result, result.state_.en_passant_square, us)) {
+            if (had_en_passant_hash) {
                 result.state_.zobrist_hash ^=
                     en_passant_hash(file_of(result.state_.en_passant_square));
             }
