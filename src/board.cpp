@@ -531,8 +531,12 @@ Board Board::apply_null_move() const {
     const Color us = state_.side_to_move;
     const Color them = opposite(us);
 
+    const bool null_move_had_en_passant_hash =
+        state_.en_passant_square >= 0 &&
+        en_passant_capture_possible(*this, state_.en_passant_square, us);
+
     if (result.state_.en_passant_square >= 0) {
-        if (en_passant_capture_possible(result, result.state_.en_passant_square, us)) {
+        if (null_move_had_en_passant_hash) {
             result.state_.zobrist_hash ^=
                 en_passant_hash(file_of(result.state_.en_passant_square));
         }
