@@ -79,5 +79,14 @@ If you support WDL in `info`, simply respect the boolean from:
 if (bool(Options["UCI_ShowWDL"])) { /* emit wdl W D L */ }
 ```
 
+## NNUE options in SirioC
+
+La implementación por defecto de SirioC expone las opciones `EvalFile` y `EvalFileSmall` para cargar
+redes NNUE desde disco. La primera ruta es la preferida; la segunda se usa como respaldo durante
+`isready` cuando la principal falla (por ejemplo, en máquinas con poca memoria). Ambas aceptan
+`<empty>` para volver a la evaluación clásica. La red recomendada actualmente es
+`nn-13406b1dcbe0.nnue` (Stockfish 17.1), distribuida bajo GPLv3: recuerda cumplir con su licencia si
+la redistribuyes junto a SirioC.
+
 ## License
 Placed under the same license as SirioC repository (inherit).

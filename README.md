@@ -87,6 +87,37 @@ El directorio debe contener los archivos Syzygy de 3 a 7 piezas (`*.rtbw`, `*.rt
 
 La integración utiliza la biblioteca Fathom (licencia MIT) incluida en `third_party/fathom`. Consulte `third_party/fathom/LICENSE` para los términos completos.
 
+## Evaluación NNUE
+
+SirioC incluye un backend NNUE opcional. Por defecto se usa la evaluación clásica, pero es
+posible cargar una red neuronal mediante las opciones estándar `EvalFile` y `EvalFileSmall`.
+
+- `EvalFile` apunta a la red principal que se utilizará siempre que esté disponible.
+- `EvalFileSmall` permite registrar una red alternativa (por ejemplo, versiones "small" para
+  hardware con menos memoria). Si `EvalFile` no se puede cargar, la GUI intentará esta ruta al
+  enviar `isready`.
+
+Se recomienda utilizar la red oficial de Stockfish 17.1 (`nn-13406b1dcbe0.nnue`, ~42 MiB) como
+punto de partida:
+
+```
+setoption name EvalFile value /ruta/a/nn-13406b1dcbe0.nnue
+```
+
+Tras una carga correcta el motor informará con `info string NNUE evaluation using ...` que incluye
+la ruta y el tamaño aproximado del archivo. Para desactivar el backend NNUE basta con limpiar la
+opción:
+
+```
+setoption name EvalFile value <empty>
+```
+
+La red `nn-13406b1dcbe0.nnue` es distribuida por el proyecto Stockfish bajo la licencia GNU GPLv3.
+SirioC no incluye una copia del archivo ni deriva de Stockfish 17.1, pero al usar dicha red debes
+respetar sus términos (conservar avisos de copyright, ofrecer el código fuente del generador de la
+red si redistribuyes binarios, etc.). Para quienes necesiten una alternativa completamente propia,
+se puede seguir utilizando la evaluación clásica integrada.
+
 ## Próximos pasos sugeridos
 
 - Persistir la tabla de transposición para sesiones largas y añadir libro de aperturas.

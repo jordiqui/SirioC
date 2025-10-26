@@ -10,63 +10,66 @@
 #include "sirio/move.hpp"
 #include "sirio/movegen.hpp"
 #include "sirio/evaluation.hpp"
+#include "sirio/nnue/api.hpp"
 #include "sirio/search.hpp"
 #include "sirio/syzygy.hpp"
 
 namespace {
 
-struct EngineOptions {
-    bool use_nnue = false;
-    std::string nnue_file;
-};
+std::string pending_eval_file;
+std::string pending_eval_file_small;
 
-struct BackendState {
-    bool nnue_active = false;
-    std::string nnue_path;
-};
+std::string normalize_eval_path(std::string value) {
+    if (value == "<empty>") {
+        return std::string{};
+    }
+    return value;
+}
 
-EngineOptions engine_options;
-BackendState backend_state;
-
-void apply_evaluation_options(const EngineOptions &options, const sirio::Board &board) {
-    if (!options.use_nnue) {
-        if (backend_state.nnue_active) {
-            sirio::use_classical_evaluation();
-            backend_state.nnue_active = false;
-            backend_state.nnue_path.clear();
-        } else {
-            sirio::use_classical_evaluation();
+void print_loaded_nnue_info(const sirio::nnue::NetworkInfo &info) {
+    std::cout << "info string NNUE evaluation using " << info.path;
+    if (info.bytes != 0) {
+        std::cout << " (" << (info.bytes / 1024 / 1024) << "MiB";
+        if (!info.dims.empty()) {
+            std::cout << ", " << info.dims;
         }
-        sirio::initialize_evaluation(board);
-        return;
+        std::cout << ")";
+    } else if (!info.dims.empty()) {
+        std::cout << " (" << info.dims << ")";
     }
+    std::cout << std::endl;
+}
 
-    if (options.nnue_file.empty()) {
-        std::cout << "info string NNUE is enabled but NNUEFile is empty" << std::endl;
-        sirio::use_classical_evaluation();
-        backend_state.nnue_active = false;
-        backend_state.nnue_path.clear();
-        sirio::initialize_evaluation(board);
-        return;
-    }
-
-    if (backend_state.nnue_active && backend_state.nnue_path == options.nnue_file) {
-        sirio::initialize_evaluation(board);
-        return;
+bool nnue_try_load(const std::string &path, sirio::Board &board) {
+    if (path.empty()) {
+        return false;
     }
 
     std::string error;
-    if (auto backend = sirio::make_nnue_evaluation(options.nnue_file, &error)) {
-        sirio::set_evaluation_backend(std::move(backend));
-        backend_state.nnue_active = true;
-        backend_state.nnue_path = options.nnue_file;
-        sirio::initialize_evaluation(board);
-    } else {
+    if (!sirio::nnue::init(path, &error)) {
         std::cout << "info string Failed to load NNUE: " << error << std::endl;
-        sirio::use_classical_evaluation();
-        backend_state.nnue_active = false;
-        backend_state.nnue_path.clear();
-        sirio::initialize_evaluation(board);
+        return false;
+    }
+
+    sirio::initialize_evaluation(board);
+    if (auto meta = sirio::nnue::info()) {
+        print_loaded_nnue_info(*meta);
+    } else {
+        std::cout << "info string NNUE loaded from " << path << std::endl;
+    }
+    return true;
+}
+
+void nnue_load_if_pending(sirio::Board &board) {
+    if (sirio::nnue::is_loaded()) {
+        return;
+    }
+    if (!pending_eval_file.empty()) {
+        nnue_try_load(pending_eval_file, board);
+        return;
+    }
+    if (!pending_eval_file_small.empty()) {
+        nnue_try_load(pending_eval_file_small, board);
     }
 }
 
@@ -75,12 +78,15 @@ void send_uci_id() {
     std::cout << "id author OpenAI" << std::endl;
     std::cout << "option name Threads type spin default 1 min 1 max 1024" << std::endl;
     std::cout << "option name SyzygyPath type string default" << std::endl;
-    std::cout << "option name UseNNUE type check default false" << std::endl;
-    std::cout << "option name NNUEFile type string default" << std::endl;
+    std::cout << "option name EvalFile type string default <empty>" << std::endl;
+    std::cout << "option name EvalFileSmall type string default <empty>" << std::endl;
     std::cout << "uciok" << std::endl;
 }
 
-void send_ready() { std::cout << "readyok" << std::endl; }
+void send_ready(sirio::Board &board) {
+    nnue_load_if_pending(board);
+    std::cout << "readyok" << std::endl;
+}
 
 std::string trim_leading(std::string_view view) {
     std::size_t pos = 0;
@@ -170,20 +176,18 @@ void handle_setoption(const std::string &args, sirio::Board &board) {
 
     if (name == "SyzygyPath") {
         sirio::syzygy::set_tablebase_path(value);
-    } else if (name == "UseNNUE") {
-        std::string lowered = value;
-        std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char ch) {
-            return static_cast<char>(std::tolower(ch));
-        });
-        if (lowered == "true" || lowered == "1" || lowered == "on" || lowered == "yes") {
-            engine_options.use_nnue = true;
-        } else if (lowered == "false" || lowered == "0" || lowered == "off" || lowered == "no") {
-            engine_options.use_nnue = false;
+    } else if (name == "EvalFile") {
+        pending_eval_file = normalize_eval_path(value);
+        if (pending_eval_file.empty()) {
+            sirio::nnue::unload();
+            sirio::initialize_evaluation(board);
+            std::cout << "info string NNUE evaluation disabled" << std::endl;
+        } else {
+            nnue_try_load(pending_eval_file, board);
         }
-        apply_evaluation_options(engine_options, board);
-    } else if (name == "NNUEFile") {
-        engine_options.nnue_file = value;
-        apply_evaluation_options(engine_options, board);
+    } else if (name == "EvalFileSmall") {
+        pending_eval_file_small = normalize_eval_path(value);
+        nnue_try_load(pending_eval_file_small, board);
     } else if (name == "Threads") {
         try {
             int parsed = std::stoi(value);
@@ -192,6 +196,30 @@ void handle_setoption(const std::string &args, sirio::Board &board) {
             }
         } catch (const std::exception &) {
             // Ignore invalid values to keep engine responsive.
+        }
+    } else if (name == "UseNNUE" || name == "NNUEFile") {
+        // Backward compatibility with legacy GUIs: map to EvalFile semantics.
+        if (name == "UseNNUE") {
+            std::string lowered = value;
+            std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char ch) {
+                return static_cast<char>(std::tolower(ch));
+            });
+            if (lowered == "false" || lowered == "0" || lowered == "off" || lowered == "no") {
+                pending_eval_file.clear();
+                pending_eval_file_small.clear();
+                sirio::nnue::unload();
+                sirio::initialize_evaluation(board);
+                std::cout << "info string NNUE evaluation disabled" << std::endl;
+            }
+        } else {
+            pending_eval_file = normalize_eval_path(value);
+            if (pending_eval_file.empty()) {
+                sirio::nnue::unload();
+                sirio::initialize_evaluation(board);
+                std::cout << "info string NNUE evaluation disabled" << std::endl;
+            } else {
+                nnue_try_load(pending_eval_file, board);
+            }
         }
     }
 }
@@ -257,7 +285,7 @@ void handle_go(const std::string &command_args, const sirio::Board &board) {
         limits.max_depth = 64;
     }
 
-    apply_evaluation_options(engine_options, board);
+    sirio::initialize_evaluation(board);
     sirio::SearchResult result = sirio::search_best_move(board, limits);
     if (result.has_move) {
         int reported_depth = result.depth_reached > 0 ? result.depth_reached : limits.max_depth;
@@ -279,6 +307,7 @@ void handle_go(const std::string &command_args, const sirio::Board &board) {
 
 int main() {
     sirio::Board board;
+    sirio::initialize_evaluation(board);
     std::string line;
 
     while (std::getline(std::cin, line)) {
@@ -295,10 +324,10 @@ int main() {
             if (command == "uci") {
                 send_uci_id();
             } else if (command == "isready") {
-                send_ready();
+                send_ready(board);
             } else if (command == "ucinewgame") {
                 board = sirio::Board{};
-                apply_evaluation_options(engine_options, board);
+                sirio::initialize_evaluation(board);
             } else if (command == "position") {
                 std::string rest;
                 std::getline(stream, rest);
