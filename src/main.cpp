@@ -448,12 +448,15 @@ void handle_setoption(const std::string &args, sirio::Board &board) {
     }
 }
 
+constexpr int kDefaultGoDepth = 12;
+
 void handle_go(const std::string &command_args, const sirio::Board &board) {
     std::istringstream stream{command_args};
     std::string token;
     sirio::SearchLimits limits;
     bool depth_overridden = false;
     bool has_time_information = false;
+    bool infinite_search = false;
     while (stream >> token) {
         if (token == "depth") {
             if (stream >> token) {
@@ -502,11 +505,16 @@ void handle_go(const std::string &command_args, const sirio::Board &board) {
             }
         } else if (token == "infinite") {
             limits.max_depth = 64;
+            infinite_search = true;
         }
     }
 
     if (has_time_information && !depth_overridden && limits.move_time == 0) {
         limits.max_depth = 64;
+    }
+
+    if (!depth_overridden && !has_time_information && limits.max_nodes == 0 && !infinite_search) {
+        limits.max_depth = kDefaultGoDepth;
     }
 
     sirio::initialize_evaluation(board);
