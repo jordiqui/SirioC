@@ -123,6 +123,15 @@ void handle_go(const std::string &command_args, const sirio::Board &board) {
                 limits.max_depth = std::stoi(token);
                 depth_overridden = true;
             }
+        } else if (token == "nodes") {
+            if (stream >> token) {
+                long long parsed = std::stoll(token);
+                if (parsed > 0) {
+                    limits.max_nodes = static_cast<std::uint64_t>(parsed);
+                } else {
+                    limits.max_nodes = 0;
+                }
+            }
         } else if (token == "movetime") {
             if (stream >> token) {
                 limits.move_time = std::stoi(token);
@@ -170,7 +179,13 @@ void handle_go(const std::string &command_args, const sirio::Board &board) {
                   << sirio::move_to_uci(result.best_move) << std::endl;
         std::cout << "bestmove " << sirio::move_to_uci(result.best_move) << std::endl;
     } else {
-        std::cout << "bestmove 0000" << std::endl;
+        auto legal_moves = sirio::generate_legal_moves(board);
+        if (!legal_moves.empty()) {
+            const auto fallback = legal_moves.front();
+            std::cout << "bestmove " << sirio::move_to_uci(fallback) << std::endl;
+        } else {
+            std::cout << "bestmove 0000" << std::endl;
+        }
     }
 }
 

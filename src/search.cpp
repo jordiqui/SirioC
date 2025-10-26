@@ -118,12 +118,17 @@ struct SearchContext {
     TranspositionTable tt{};
     bool stop = false;
     bool has_time_limit = false;
+    bool has_node_limit = false;
     bool soft_limit_reached = false;
     std::chrono::steady_clock::time_point start_time{};
     std::chrono::milliseconds soft_time_limit{0};
     std::chrono::milliseconds hard_time_limit{0};
     std::uint64_t node_counter = 0;
+ codex/implement-iterative-search-with-adaptive-time
     std::chrono::milliseconds last_iteration_time{0};
+=======
+    std::uint64_t node_limit = 0;
+ main
 };
 
 constexpr std::uint64_t time_check_interval = 2048;
@@ -208,6 +213,11 @@ int score_move(const Move &move, const SearchContext &context, int ply,
 bool should_stop(SearchContext &context) {
     ++context.node_counter;
     if (context.stop) {
+        return true;
+    }
+    ++context.node_counter;
+    if (context.has_node_limit && context.node_counter >= context.node_limit) {
+        context.stop = true;
         return true;
     }
     if (!context.has_time_limit) {
@@ -617,7 +627,7 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
             context.hard_time_limit = context.soft_time_limit;
         }
     }
-
+ codex/implement-iterative-search-with-adaptive-time
     if (syzygy::available() && syzygy::max_pieces() >= total_piece_count(board)) {
         if (auto root_probe = syzygy::probe_root(board); root_probe.has_value()) {
             result.score = syzygy_wdl_to_score(root_probe->wdl, 0);
@@ -630,6 +640,11 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
                 }
             }
         }
+=======
+    if (limits.max_nodes > 0) {
+        context.has_node_limit = true;
+        context.node_limit = limits.max_nodes;
+ main
     }
 
     Move best_move{};

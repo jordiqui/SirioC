@@ -102,5 +102,78 @@ Move move_from_uci(const Board &board, const std::string &uci) {
     throw std::invalid_argument("UCI move is not legal in the current position");
 }
 
+bool validate_move(const Board &board, const Move &move, Board *next_board) {
+    const Color us = board.side_to_move();
+    const Color them = opposite(us);
+
+    Board next;
+    try {
+        next = board.apply_move(move);
+    } catch (const std::exception &) {
+        return false;
+    }
+
+    const int king_sq = next.king_square(us);
+    if (king_sq >= 0 && next.is_square_attacked(king_sq, them)) {
+        return false;
+    }
+
+    const CastlingRights before = board.castling_rights();
+    const CastlingRights after = next.castling_rights();
+
+    auto rook_start_square = [](Color color, bool kingside) {
+        if (color == Color::White) {
+            return kingside ? 7 : 0;
+        }
+        return kingside ? 63 : 56;
+    };
+
+    auto castling_change_valid = [&](Color color, bool kingside, bool before_right, bool after_right) {
+        if (after_right && !before_right) {
+            return false;
+        }
+        if (before_right && !after_right) {
+            if (color == us) {
+                if (move.piece == PieceType::King) {
+                    return true;
+                }
+                if (move.piece == PieceType::Rook && move.from == rook_start_square(color, kingside)) {
+                    return true;
+                }
+            } else {
+                if (move.captured.has_value() && *move.captured == PieceType::Rook &&
+                    move.to == rook_start_square(color, kingside)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return true;
+    };
+
+    if (!castling_change_valid(Color::White, true, before.white_kingside, after.white_kingside) ||
+        !castling_change_valid(Color::White, false, before.white_queenside, after.white_queenside) ||
+        !castling_change_valid(Color::Black, true, before.black_kingside, after.black_kingside) ||
+        !castling_change_valid(Color::Black, false, before.black_queenside, after.black_queenside)) {
+        return false;
+    }
+
+    auto after_ep = next.en_passant_square();
+    if (move.piece == PieceType::Pawn && std::abs(move.to - move.from) == 16) {
+        int expected = move.to > move.from ? move.from + 8 : move.from - 8;
+        if (!after_ep.has_value() || *after_ep != expected) {
+            return false;
+        }
+    } else if (after_ep.has_value()) {
+        return false;
+    }
+
+    if (next_board != nullptr) {
+        *next_board = std::move(next);
+    }
+
+    return true;
+}
+
 }  // namespace sirio
 

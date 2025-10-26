@@ -288,18 +288,9 @@ std::vector<Move> generate_pseudo_legal_moves(const Board &board) {
 std::vector<Move> generate_legal_moves(const Board &board) {
     std::vector<Move> legal_moves;
     auto pseudo = generate_pseudo_legal_moves(board);
-    const Color us = board.side_to_move();
-    const Color them = opposite(us);
-
     for (const Move &move : pseudo) {
-        try {
-            Board next = board.apply_move(move);
-            int king_sq = next.king_square(us);
-            if (king_sq >= 0 && !next.is_square_attacked(king_sq, them)) {
-                legal_moves.push_back(move);
-            }
-        } catch (const std::exception &) {
-            continue;
+        if (validate_move(board, move)) {
+            legal_moves.push_back(move);
         }
     }
 
