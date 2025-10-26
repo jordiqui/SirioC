@@ -78,15 +78,7 @@ Para integrarlo con GUIs como Fritz o Cute Chess se recomienda el siguiente inte
    búsqueda no produjo PV válido, se recurre a la primera jugada generada en el estado actual, por lo
    que la GUI nunca recibe `0000` salvo que no existan movimientos legales.【F:src/main.cpp†L131-L144】
 
- codex/integrate-stockfish-17.1-nnue-support
 Limitaciones actuales: el motor mantiene un único hilo principal de comunicación y la gestión del
 tiempo sigue siendo aproximada. Aun así respeta los márgenes duros/soft de tiempo y los topes de
 nodos establecidos por la GUI, y ahora ofrece opciones UCI básicas (`Threads`, `SyzygyPath` y las
 dos rutas NNUE) para integrarse mejor con entornos modernos.【F:src/main.cpp†L17-L207】【F:src/search.cpp†L31-L230】【F:src/search.cpp†L400-L470】
-=======
-Limitaciones actuales: el motor es monohilo y solo calcula una estimación simple del tiempo
-disponible por jugada. No obstante, respeta los márgenes duros/soft de tiempo y los topes de nodos
-establecidos por la GUI. Las opciones UCI incluyen selectores para NNUE (`UseNNUE`, `NNUEFile`,
-`NNUESecondaryFile`, `NNUEPhaseThreshold`) que permiten activar redes híbridas durante la
-búsqueda.【F:src/main.cpp†L19-L134】【F:src/main.cpp†L136-L172】【F:src/search.cpp†L31-L230】【F:src/search.cpp†L400-L470】
- main

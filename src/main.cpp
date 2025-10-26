@@ -1,5 +1,5 @@
-#include <cctype>
 #include <algorithm>
+#include <cctype>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -10,18 +10,12 @@
 #include "sirio/evaluation.hpp"
 #include "sirio/move.hpp"
 #include "sirio/movegen.hpp"
-codex/integrate-stockfish-17.1-nnue-support
-#include "sirio/evaluation.hpp"
 #include "sirio/nnue/api.hpp"
-=======
-#include "sirio/nnue/backend.hpp"
- main
 #include "sirio/search.hpp"
 #include "sirio/syzygy.hpp"
 
 namespace {
 
- codex/integrate-stockfish-17.1-nnue-support
 std::string pending_eval_file;
 std::string pending_eval_file_small;
 
@@ -38,38 +32,6 @@ void print_loaded_nnue_info(const sirio::nnue::NetworkInfo &info) {
         std::cout << " (" << (info.bytes / 1024 / 1024) << "MiB";
         if (!info.dims.empty()) {
             std::cout << ", " << info.dims;
-=======
-struct EngineOptions {
-    bool use_nnue = false;
-    std::string nnue_file;
-    std::string nnue_secondary_file;
-    sirio::nnue::NetworkSelectionPolicy nnue_phase_policy =
-        sirio::nnue::NetworkSelectionPolicy::Material;
-    int nnue_phase_threshold = 0;
-};
-
-struct BackendState {
-    bool nnue_active = false;
-    std::string primary_path;
-    std::string secondary_path;
-    sirio::nnue::NetworkSelectionPolicy policy = sirio::nnue::NetworkSelectionPolicy::Material;
-    int phase_threshold = 0;
-};
-
-EngineOptions engine_options;
-BackendState backend_state;
-
-void apply_evaluation_options(const EngineOptions &options, const sirio::Board &board) {
-    if (!options.use_nnue) {
-        if (backend_state.nnue_active) {
-            sirio::use_classical_evaluation();
-            backend_state.nnue_active = false;
-            backend_state.primary_path.clear();
-            backend_state.secondary_path.clear();
-            backend_state.phase_threshold = 0;
-        } else {
-            sirio::use_classical_evaluation();
-main
         }
         std::cout << ")";
     } else if (!info.dims.empty()) {
@@ -78,7 +40,6 @@ main
     std::cout << std::endl;
 }
 
- codex/integrate-stockfish-17.1-nnue-support
 bool nnue_try_load(const std::string &path, sirio::Board &board) {
     if (path.empty()) {
         return false;
@@ -104,72 +65,22 @@ void nnue_load_if_pending(sirio::Board &board) {
         return;
     }
     if (!pending_eval_file.empty()) {
-        nnue_try_load(pending_eval_file, board);
-        return;
+        if (nnue_try_load(pending_eval_file, board)) {
+            return;
+        }
     }
     if (!pending_eval_file_small.empty()) {
         nnue_try_load(pending_eval_file_small, board);
-=======
-    if (options.nnue_file.empty()) {
-        std::cout << "info string NNUE is enabled but NNUEFile is empty" << std::endl;
-        sirio::use_classical_evaluation();
-        backend_state.nnue_active = false;
-        backend_state.primary_path.clear();
-        backend_state.secondary_path.clear();
-        backend_state.phase_threshold = 0;
-        sirio::initialize_evaluation(board);
-        return;
-    }
-
-    if (backend_state.nnue_active && backend_state.primary_path == options.nnue_file &&
-        backend_state.secondary_path == options.nnue_secondary_file &&
-        backend_state.policy == options.nnue_phase_policy &&
-        backend_state.phase_threshold == options.nnue_phase_threshold) {
-        sirio::initialize_evaluation(board);
-        return;
-    }
-
-    std::string error;
-    sirio::nnue::MultiNetworkConfig config;
-    config.primary_path = options.nnue_file;
-    config.secondary_path = options.nnue_secondary_file;
-    config.policy = options.nnue_phase_policy;
-    config.phase_threshold = options.nnue_phase_threshold;
-
-    if (auto backend = sirio::make_nnue_evaluation(config, &error)) {
-        sirio::set_evaluation_backend(std::move(backend));
-        backend_state.nnue_active = true;
-        backend_state.primary_path = options.nnue_file;
-        backend_state.secondary_path = options.nnue_secondary_file;
-        backend_state.policy = options.nnue_phase_policy;
-        backend_state.phase_threshold = options.nnue_phase_threshold;
-        sirio::initialize_evaluation(board);
-    } else {
-        std::cout << "info string Failed to load NNUE: " << error << std::endl;
-        sirio::use_classical_evaluation();
-        backend_state.nnue_active = false;
-        backend_state.primary_path.clear();
-        backend_state.secondary_path.clear();
-        backend_state.phase_threshold = 0;
-        sirio::initialize_evaluation(board);
- main
     }
 }
 
 void send_uci_id() {
     std::cout << "id name SirioC" << std::endl;
-    std::cout << "id author OpenAI" << std::endl;
+    std::cout << "id author Jorge Ruiz Centelles" << std::endl;
     std::cout << "option name Threads type spin default 1 min 1 max 1024" << std::endl;
     std::cout << "option name SyzygyPath type string default" << std::endl;
- codex/integrate-stockfish-17.1-nnue-support
     std::cout << "option name EvalFile type string default <empty>" << std::endl;
     std::cout << "option name EvalFileSmall type string default <empty>" << std::endl;
-=======
-    std::cout << "option name UseNNUE type check default false" << std::endl;
-    std::cout << "option name NNUEFile type string default" << std::endl;
-    std::cout << "option name NNUESecondaryFile type string default" << std::endl;
-    std::cout << "option name NNUEPhaseThreshold type string default" << std::endl;
- main
     std::cout << "uciok" << std::endl;
 }
 
@@ -198,62 +109,6 @@ std::string trim(std::string_view view) {
     return std::string{view.substr(start, end - start)};
 }
 
-bool parse_phase_threshold(const std::string &input, sirio::nnue::NetworkSelectionPolicy &policy,
-                           int &threshold) {
-    std::string trimmed = trim(input);
-    if (trimmed.empty()) {
-        policy = sirio::nnue::NetworkSelectionPolicy::Material;
-        threshold = 0;
-        return true;
-    }
-
-    std::string normalized;
-    normalized.reserve(trimmed.size());
-    for (char ch : trimmed) {
-        if (!std::isspace(static_cast<unsigned char>(ch))) {
-            normalized.push_back(ch);
-        }
-    }
-
-    std::string prefix;
-    std::string value_part;
-    auto colon = normalized.find(':');
-    if (colon != std::string::npos) {
-        prefix = normalized.substr(0, colon);
-        value_part = normalized.substr(colon + 1);
-    } else {
-        value_part = normalized;
-    }
-
-    std::transform(prefix.begin(), prefix.end(), prefix.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
-
-    if (prefix.empty() || prefix == "material") {
-        policy = sirio::nnue::NetworkSelectionPolicy::Material;
-    } else if (prefix == "depth") {
-        policy = sirio::nnue::NetworkSelectionPolicy::Depth;
-    } else {
-        return false;
-    }
-
-    if (value_part.empty()) {
-        threshold = 0;
-        return true;
-    }
-
-    try {
-        threshold = std::stoi(value_part);
-    } catch (const std::exception &) {
-        return false;
-    }
-
-    if (threshold < 0) {
-        return false;
-    }
-    return true;
-}
-
 void set_position(sirio::Board &board, const std::string &command_args) {
     std::istringstream stream{command_args};
     std::string token;
@@ -264,6 +119,7 @@ void set_position(sirio::Board &board, const std::string &command_args) {
     if (token == "startpos") {
         board = sirio::Board{};
         if (!(stream >> token)) {
+            sirio::initialize_evaluation(board);
             return;
         }
     } else if (token == "fen") {
@@ -276,6 +132,7 @@ void set_position(sirio::Board &board, const std::string &command_args) {
         board = sirio::Board{fen_parts[0] + " " + fen_parts[1] + " " + fen_parts[2] + " " +
                              fen_parts[3] + " " + fen_parts[4] + " " + fen_parts[5]};
         if (!(stream >> token)) {
+            sirio::initialize_evaluation(board);
             return;
         }
     } else {
@@ -283,7 +140,6 @@ void set_position(sirio::Board &board, const std::string &command_args) {
     }
 
     if (token != "moves") {
-        // Skip until we find moves keyword or end
         while (stream >> token) {
             if (token == "moves") {
                 break;
@@ -292,6 +148,7 @@ void set_position(sirio::Board &board, const std::string &command_args) {
     }
 
     if (token != "moves") {
+        sirio::initialize_evaluation(board);
         return;
     }
 
@@ -300,7 +157,6 @@ void set_position(sirio::Board &board, const std::string &command_args) {
             sirio::Move move = sirio::move_from_uci(board, token);
             board = board.apply_move(move);
         } catch (const std::exception &) {
-            // Ignore illegal moves in history to maintain robustness
             break;
         }
     }
@@ -343,29 +199,9 @@ void handle_setoption(const std::string &args, sirio::Board &board) {
         } else {
             nnue_try_load(pending_eval_file, board);
         }
- codex/integrate-stockfish-17.1-nnue-support
     } else if (name == "EvalFileSmall") {
         pending_eval_file_small = normalize_eval_path(value);
         nnue_try_load(pending_eval_file_small, board);
-=======
-        apply_evaluation_options(engine_options, board);
-    } else if (name == "NNUEFile") {
-        engine_options.nnue_file = value;
-        apply_evaluation_options(engine_options, board);
-    } else if (name == "NNUESecondaryFile") {
-        engine_options.nnue_secondary_file = value;
-        apply_evaluation_options(engine_options, board);
-    } else if (name == "NNUEPhaseThreshold") {
-        sirio::nnue::NetworkSelectionPolicy policy = engine_options.nnue_phase_policy;
-        int threshold = engine_options.nnue_phase_threshold;
-        if (parse_phase_threshold(value, policy, threshold)) {
-            engine_options.nnue_phase_policy = policy;
-            engine_options.nnue_phase_threshold = threshold;
-            apply_evaluation_options(engine_options, board);
-        } else {
-            std::cout << "info string Invalid NNUEPhaseThreshold value: " << value << std::endl;
-        }
- main
     } else if (name == "Threads") {
         try {
             int parsed = std::stoi(value);
