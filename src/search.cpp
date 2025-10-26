@@ -30,6 +30,37 @@ constexpr std::array<int, static_cast<std::size_t>(PieceType::Count)> mvv_values
 
 enum class TTNodeType { Exact, LowerBound, UpperBound };
 
+class EvaluationStateGuard {
+public:
+    EvaluationStateGuard() = default;
+    explicit EvaluationStateGuard(bool active) : active_(active) {}
+    EvaluationStateGuard(const EvaluationStateGuard &) = delete;
+    EvaluationStateGuard &operator=(const EvaluationStateGuard &) = delete;
+    EvaluationStateGuard(EvaluationStateGuard &&other) noexcept
+        : active_(other.active_) {
+        other.active_ = false;
+    }
+    EvaluationStateGuard &operator=(EvaluationStateGuard &&other) noexcept {
+        if (this != &other) {
+            if (active_) {
+                pop_evaluation_state();
+            }
+            active_ = other.active_;
+            other.active_ = false;
+        }
+        return *this;
+    }
+    ~EvaluationStateGuard() {
+        if (active_) {
+            pop_evaluation_state();
+        }
+    }
+    void release() { active_ = false; }
+
+private:
+    bool active_ = false;
+};
+
 struct TTEntry {
     Move best_move{};
     int depth = 0;
@@ -386,6 +417,7 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
     if (allow_null_move && !in_check && depth_left >= 3 && static_eval >= beta &&
         has_non_pawn_material(board, board.side_to_move())) {
         Board null_board = board.apply_null_move();
+        EvaluationStateGuard null_guard{true};
         int reduction = 2 + depth_left / 4;
         int null_depth = depth_left - 1 - reduction;
         if (null_depth >= 0) {
@@ -419,6 +451,7 @@ int negamax(const Board &board, int depth, int alpha, int beta, int ply, Move *b
     for (const Move &move : moves) {
         ++move_index;
         Board next = board.apply_move(move);
+        EvaluationStateGuard eval_guard{true};
         bool gives_check = next.in_check(next.side_to_move());
 
         int child_depth = depth_left - 1;
@@ -537,6 +570,7 @@ int quiescence(const Board &board, int alpha, int beta, int ply, SearchContext &
 
     for (const Move &move : tactical_moves) {
         Board next = board.apply_move(move);
+        EvaluationStateGuard eval_guard{true};
         int score = -quiescence(next, -beta, -alpha, ply + 1, context);
         if (context.stop) {
             return alpha;
@@ -611,6 +645,7 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     max_depth_limit = std::min(max_depth_limit, max_search_depth);
 
     SearchContext context;
+    initialize_evaluation(board);
     if (auto allocation = compute_time_allocation(board, limits); allocation.has_value()) {
         context.has_time_limit = true;
         context.soft_time_limit = allocation->soft;

@@ -2,15 +2,27 @@
 
 #include <algorithm>
 #include <array>
+#include <memory>
 #include <cstdlib>
 #include <optional>
+#include <string>
 
 #include "sirio/bitboard.hpp"
 #include "sirio/endgame.hpp"
+#include "sirio/nnue/backend.hpp"
 
 namespace sirio {
 
 namespace {
+
+class ClassicalEvaluation : public EvaluationBackend {
+public:
+    void initialize(const Board &board) override { (void)board; }
+    void reset(const Board &board) override { initialize(board); }
+    void push(const Board &, const std::optional<Move> &, const Board &) override {}
+    void pop() override {}
+    int evaluate(const Board &board) override;
+};
 
 constexpr std::array<int, 6> piece_values = {100, 320, 330, 500, 900, 0};
 constexpr int bishop_pair_bonus = 40;
@@ -355,7 +367,7 @@ constexpr auto king_corner_distance_table = generate_corner_distance_table();
 
 }  // namespace
 
-int evaluate(const Board &board) {
+int ClassicalEvaluation::evaluate(const Board &board) {
     if (auto endgame_eval = evaluate_specialized_endgame(board); endgame_eval.has_value()) {
         return *endgame_eval;
     }
@@ -454,6 +466,130 @@ int evaluate(const Board &board) {
     }
 
     return score;
+}
+
+std::unique_ptr<EvaluationBackend> make_classical_evaluation() {
+    return std::make_unique<ClassicalEvaluation>();
+}
+
+std::unique_ptr<EvaluationBackend> make_nnue_evaluation(const std::string &path,
+                                                        std::string *error_message) {
+    auto backend = std::make_unique<nnue::SingleNetworkBackend>();
+    if (path.empty()) {
+        if (error_message) {
+            *error_message = "NNUE file path is empty";
+        }
+        return nullptr;
+    }
+    std::string local_error;
+    if (!backend->load(path, &local_error)) {
+        if (error_message) {
+            *error_message = local_error;
+        }
+        return nullptr;
+    }
+    return backend;
+}
+
+namespace {
+std::unique_ptr<EvaluationBackend> &backend_instance() {
+    static std::unique_ptr<EvaluationBackend> instance;
+    return instance;
+}
+
+bool &backend_initialized_flag() {
+    static bool initialized = false;
+    return initialized;
+}
+
+int &backend_stack_depth() {
+    static int depth = 0;
+    return depth;
+}
+
+bool &notifications_enabled() {
+    static bool enabled = false;
+    return enabled;
+}
+
+void ensure_initialized(const Board &board) {
+    if (!backend_initialized_flag()) {
+        initialize_evaluation(board);
+    }
+}
+
+}  // namespace
+
+void set_evaluation_backend(std::unique_ptr<EvaluationBackend> backend) {
+    backend_instance() = std::move(backend);
+    backend_initialized_flag() = false;
+    backend_stack_depth() = 0;
+    notifications_enabled() = false;
+}
+
+void use_classical_evaluation() {
+    set_evaluation_backend(make_classical_evaluation());
+}
+
+EvaluationBackend &active_evaluation_backend() {
+    auto &instance = backend_instance();
+    if (!instance) {
+        instance = make_classical_evaluation();
+    }
+    return *instance;
+}
+
+void initialize_evaluation(const Board &board) {
+    EvaluationBackend &backend = active_evaluation_backend();
+    if (!backend_initialized_flag()) {
+        backend.initialize(board);
+        backend_initialized_flag() = true;
+    } else {
+        backend.reset(board);
+    }
+    backend_stack_depth() = 1;
+    notifications_enabled() = true;
+}
+
+void push_evaluation_state(const Board &previous, const std::optional<Move> &move,
+                           const Board &current) {
+    if (!notifications_enabled()) {
+        return;
+    }
+    ensure_initialized(previous);
+    active_evaluation_backend().push(previous, move, current);
+    ++backend_stack_depth();
+}
+
+void pop_evaluation_state() {
+    if (!notifications_enabled()) {
+        return;
+    }
+    if (backend_stack_depth() <= 1) {
+        return;
+    }
+    active_evaluation_backend().pop();
+    --backend_stack_depth();
+}
+
+void notify_position_initialization(const Board &board) {
+    if (!notifications_enabled()) {
+        return;
+    }
+    initialize_evaluation(board);
+}
+
+void notify_move_applied(const Board &previous, const std::optional<Move> &move,
+                         const Board &current) {
+    if (!notifications_enabled()) {
+        return;
+    }
+    push_evaluation_state(previous, move, current);
+}
+
+int evaluate(const Board &board) {
+    ensure_initialized(board);
+    return active_evaluation_backend().evaluate(board);
 }
 
 }  // namespace sirio

@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <bit>
 #include <cassert>
 #include <iostream>
@@ -230,6 +232,63 @@ void test_draw_by_insufficient_material_rule() {
     sirio::Board bishops_opposite_color{"7k/8/8/8/8/8/5b2/4K2B w - - 0 1"};
     assert(!sirio::draw_by_insufficient_material_rule(bishops_opposite_color));
 }
+void test_evaluation_backend_consistency() {
+    sirio::Board board;
+    sirio::use_classical_evaluation();
+    sirio::initialize_evaluation(board);
+
+    int initial_eval = sirio::evaluate(board);
+
+    sirio::Move move = sirio::move_from_uci(board, "e2e4");
+    sirio::Board after = board.apply_move(move);
+    int stacked_eval = sirio::evaluate(after);
+
+    sirio::pop_evaluation_state();
+    sirio::initialize_evaluation(after);
+    int fresh_eval = sirio::evaluate(after);
+    assert(stacked_eval == fresh_eval);
+
+    sirio::initialize_evaluation(board);
+    int restored_eval = sirio::evaluate(board);
+    assert(initial_eval == restored_eval);
+}
+
+void test_nnue_backend_material_weights() {
+    namespace fs = std::filesystem;
+    const fs::path temp_path = fs::temp_directory_path() / "sirio_test.nnue";
+    {
+        std::ofstream output(temp_path);
+        output << "SirioNNUE1\n";
+        output << "0 100\n";
+        const double weights[] = {1.0, 3.0, 3.0, 5.0, 9.0, 0.0, -1.0, -3.0, -3.0, -5.0, -9.0, 0.0};
+        for (double weight : weights) {
+            output << weight << ' ';
+        }
+        output << '\n';
+    }
+
+    std::string error;
+    auto backend = sirio::make_nnue_evaluation(temp_path.string(), &error);
+    assert(backend);
+    assert(error.empty());
+    sirio::set_evaluation_backend(std::move(backend));
+
+    sirio::Board equal;
+    sirio::initialize_evaluation(equal);
+    int equal_eval = sirio::evaluate(equal);
+    assert(equal_eval == 0);
+
+    sirio::Board advantage{"rnbqkbnr/1ppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"};
+    sirio::initialize_evaluation(advantage);
+    int advantage_eval = sirio::evaluate(advantage);
+    assert(advantage_eval > 0);
+
+    sirio::use_classical_evaluation();
+    sirio::initialize_evaluation(equal);
+    std::error_code ec;
+    fs::remove(temp_path, ec);
+}
+
 }
 
 int main() {
@@ -249,6 +308,8 @@ int main() {
     test_null_move();
     test_evaluation_passed_pawn();
     test_syzygy_option_configuration();
+    test_evaluation_backend_consistency();
+    test_nnue_backend_material_weights();
     run_perft_tests();
     std::cout << "All tests passed.\n";
     return 0;
