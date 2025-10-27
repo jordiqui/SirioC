@@ -21,7 +21,9 @@ El comportamiento sigue la guía de Rustic Chess, priorizando claridad sobre ren
 ## 7.3. How it works
 
 - `uci`: envía la identificación del motor, publica las opciones (incluidas `EvalFile` y
-  `EvalFileSmall`) y confirma con `uciok` mediante `send_uci_id`.
+  `EvalFileSmall`) y confirma con `uciok` mediante `send_uci_id`. También anuncia el modo de
+  análisis persistente con sus controles UCI (`PersistentAnalysis`, `PersistentAnalysisFile`,
+  `PersistentAnalysisLoad`, `PersistentAnalysisSave`, `PersistentAnalysisClear`).
 - `isready`: garantiza que cualquier ruta `EvalFile` pendiente se haya intentado cargar antes de
   contestar `readyok` desde `send_ready`.
 - `ucinewgame`: restablece el `Board` a la posición inicial.

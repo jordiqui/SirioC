@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <chrono>
 #include <fstream>
+#include <filesystem>
 #include <iostream>
 #include <mutex>
 #include <optional>
@@ -12,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <thread>
 #include <vector>
 
@@ -70,9 +72,69 @@ struct EngineOptions {
     std::string hash_persist_file;
     bool use_book = false;
     std::string book_file;
+    bool persistent_analysis = false;
+    std::string persistent_analysis_file;
 };
 
 EngineOptions options;
+
+bool persistent_analysis_loaded = false;
+
+bool load_transposition_table_with_feedback(const std::string &path, std::string_view success_name,
+                                            std::string_view failure_name, bool verbose_success) {
+    std::string error;
+    if (sirio::load_transposition_table(path, &error)) {
+        if (verbose_success) {
+            std::cout << "info string " << success_name << " loaded from " << path << std::endl;
+        }
+        return true;
+    }
+    std::cout << "info string Failed to load " << failure_name << ": " << error << std::endl;
+    return false;
+}
+
+bool save_transposition_table_with_feedback(const std::string &path, std::string_view success_name,
+                                            std::string_view failure_name, bool verbose_success) {
+    std::string error;
+    if (sirio::save_transposition_table(path, &error)) {
+        if (verbose_success) {
+            std::cout << "info string " << success_name << " saved to " << path << std::endl;
+        }
+        return true;
+    }
+    std::cout << "info string Failed to save " << failure_name << ": " << error << std::endl;
+    return false;
+}
+
+void mark_persistent_analysis_unloaded() { persistent_analysis_loaded = false; }
+
+void try_autoload_persistent_analysis(bool verbose_success) {
+    if (!options.persistent_analysis) {
+        return;
+    }
+    if (options.persistent_analysis_file.empty()) {
+        return;
+    }
+    if (persistent_analysis_loaded) {
+        return;
+    }
+    if (load_transposition_table_with_feedback(options.persistent_analysis_file,
+                                               "Persistent analysis table", "persistent analysis table",
+                                               verbose_success)) {
+        persistent_analysis_loaded = true;
+    }
+}
+
+void save_persistent_analysis_if_enabled(bool verbose_success) {
+    if (!options.persistent_analysis || options.persistent_analysis_file.empty()) {
+        return;
+    }
+    if (save_transposition_table_with_feedback(options.persistent_analysis_file,
+                                               "Persistent analysis table", "persistent analysis table",
+                                               verbose_success)) {
+        persistent_analysis_loaded = true;
+    }
+}
 
 void apply_time_management_options() {
     sirio::set_move_overhead(options.move_overhead);
@@ -87,6 +149,7 @@ void initialize_engine_options() {
     }
     sirio::set_search_threads(options.threads);
     sirio::set_transposition_table_size(options.hash_size_mb);
+    mark_persistent_analysis_unloaded();
     apply_time_management_options();
     sirio::syzygy::set_probe_depth_limit(options.syzygy_probe_depth);
     sirio::syzygy::set_probe_piece_limit(options.syzygy_probe_limit);
@@ -152,11 +215,10 @@ void output_search_result(const sirio::Board &board, const sirio::SearchLimits &
     }
 
     if (options.hash_persist && !options.hash_persist_file.empty()) {
-        std::string error;
-        if (!sirio::save_transposition_table(options.hash_persist_file, &error)) {
-            std::cout << "info string Failed to save transposition table: " << error << std::endl;
-        }
+        save_transposition_table_with_feedback(options.hash_persist_file, "Transposition table",
+                                               "transposition table", false);
     }
+    save_persistent_analysis_if_enabled(false);
 }
 
 void start_search_async(const sirio::Board &board, const sirio::SearchLimits &limits) {
@@ -285,6 +347,11 @@ void send_uci_id() {
     std::cout << "option name Hash type spin default 16 min 1 max 33554432" << std::endl;
     std::cout << "option name HashFile type string default <empty>" << std::endl;
     std::cout << "option name HashPersist type check default false" << std::endl;
+    std::cout << "option name PersistentAnalysis type check default false" << std::endl;
+    std::cout << "option name PersistentAnalysisFile type string default <empty>" << std::endl;
+    std::cout << "option name PersistentAnalysisLoad type button" << std::endl;
+    std::cout << "option name PersistentAnalysisSave type button" << std::endl;
+    std::cout << "option name PersistentAnalysisClear type button" << std::endl;
     std::cout << "option name Clear Hash type button" << std::endl;
     std::cout << "option name Ponder type check default false" << std::endl;
     std::cout << "option name MultiPV type spin default 1 min 1 max 256" << std::endl;
@@ -464,6 +531,7 @@ void handle_setoption(const std::string &args, sirio::Board &board) {
             std::size_t clamped = std::clamp<std::size_t>(*parsed, 1, 33'554'432);
             options.hash_size_mb = clamped;
             sirio::set_transposition_table_size(options.hash_size_mb);
+            mark_persistent_analysis_unloaded();
         }
     } else if (name == "HashFile") {
         std::string path = normalize_string_option(normalized_value);
@@ -471,26 +539,81 @@ void handle_setoption(const std::string &args, sirio::Board &board) {
         if (path.empty()) {
             std::cout << "info string Hash persistence file cleared" << std::endl;
         } else {
-            std::string error;
-            if (sirio::load_transposition_table(path, &error)) {
-                std::cout << "info string Transposition table loaded from " << path << std::endl;
-            } else {
-                std::cout << "info string Failed to load transposition table: " << error << std::endl;
-            }
+            load_transposition_table_with_feedback(path, "Transposition table", "transposition table", true);
         }
     } else if (name == "HashPersist") {
         options.hash_persist = parse_boolean_option(normalized_value);
         if (options.hash_persist && !options.hash_persist_file.empty()) {
-            std::string error;
-            if (sirio::load_transposition_table(options.hash_persist_file, &error)) {
+            if (load_transposition_table_with_feedback(options.hash_persist_file,
+                                                       "Transposition table", "transposition table", true)) {
                 std::cout << "info string Transposition table ready from " << options.hash_persist_file
                           << std::endl;
+            }
+        }
+    } else if (name == "PersistentAnalysis") {
+        bool enabled = parse_boolean_option(normalized_value);
+        if (enabled != options.persistent_analysis) {
+            options.persistent_analysis = enabled;
+            mark_persistent_analysis_unloaded();
+            if (enabled) {
+                std::cout << "info string Persistent analysis mode enabled" << std::endl;
+                try_autoload_persistent_analysis(true);
             } else {
-                std::cout << "info string Failed to load transposition table: " << error << std::endl;
+                std::cout << "info string Persistent analysis mode disabled" << std::endl;
+            }
+        } else if (enabled) {
+            try_autoload_persistent_analysis(false);
+        }
+    } else if (name == "PersistentAnalysisFile") {
+        std::string path = normalize_string_option(normalized_value);
+        if (path == options.persistent_analysis_file) {
+            if (options.persistent_analysis) {
+                try_autoload_persistent_analysis(false);
+            }
+        } else {
+            options.persistent_analysis_file = path;
+            mark_persistent_analysis_unloaded();
+            if (path.empty()) {
+                std::cout << "info string Persistent analysis file cleared" << std::endl;
+            } else {
+                std::cout << "info string Persistent analysis file set to " << path << std::endl;
+                if (options.persistent_analysis) {
+                    try_autoload_persistent_analysis(true);
+                }
+            }
+        }
+    } else if (name == "PersistentAnalysisLoad") {
+        if (options.persistent_analysis_file.empty()) {
+            std::cout << "info string Persistent analysis file not set" << std::endl;
+        } else if (load_transposition_table_with_feedback(options.persistent_analysis_file,
+                                                          "Persistent analysis table",
+                                                          "persistent analysis table", true)) {
+            persistent_analysis_loaded = true;
+        }
+    } else if (name == "PersistentAnalysisSave") {
+        if (options.persistent_analysis_file.empty()) {
+            std::cout << "info string Persistent analysis file not set" << std::endl;
+        } else if (save_transposition_table_with_feedback(options.persistent_analysis_file,
+                                                          "Persistent analysis table",
+                                                          "persistent analysis table", true)) {
+            persistent_analysis_loaded = true;
+        }
+    } else if (name == "PersistentAnalysisClear") {
+        sirio::clear_transposition_tables();
+        mark_persistent_analysis_unloaded();
+        std::cout << "info string Persistent analysis table cleared" << std::endl;
+        if (!options.persistent_analysis_file.empty()) {
+            std::error_code ec;
+            if (std::filesystem::remove(options.persistent_analysis_file, ec)) {
+                std::cout << "info string Persistent analysis file removed" << std::endl;
+            } else if (ec) {
+                std::cout << "info string Failed to remove persistent analysis file: " << ec.message()
+                          << std::endl;
             }
         }
     } else if (name == "Clear Hash") {
         sirio::clear_transposition_tables();
+        mark_persistent_analysis_unloaded();
         std::cout << "info string Transposition table cleared" << std::endl;
     } else if (name == "Ponder") {
         options.ponder = parse_boolean_option(normalized_value);
