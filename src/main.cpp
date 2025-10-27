@@ -449,10 +449,7 @@ void set_position(sirio::Board &board, const std::string &command_args) {
     }
 
     while (stream >> token) {
-        try {
-            sirio::Move move = sirio::move_from_uci(board, token);
-            board = board.apply_move(move);
-        } catch (const std::exception &) {
+        if (!sirio::apply_uci_move(board, token)) {
             break;
         }
     }

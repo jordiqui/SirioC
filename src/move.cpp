@@ -102,6 +102,21 @@ Move move_from_uci(const Board &board, const std::string &uci) {
     throw std::invalid_argument("UCI move is not legal in the current position");
 }
 
+bool apply_uci_move(Board &board, const std::string &uci_token) {
+    if (uci_token == "0000") {
+        board = board.apply_null_move();
+        return true;
+    }
+
+    try {
+        Move move = move_from_uci(board, uci_token);
+        board = board.apply_move(move);
+        return true;
+    } catch (const std::exception &) {
+        return false;
+    }
+}
+
 bool validate_move(const Board &board, const Move &move, Board *next_board) {
     const Color us = board.side_to_move();
     const Color them = opposite(us);
