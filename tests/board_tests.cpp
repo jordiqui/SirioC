@@ -163,6 +163,25 @@ void test_game_history_tracking() {
     assert(board.history().size() == 1);
 }
 
+void test_apply_uci_move_handles_null_and_invalid_tokens() {
+    sirio::Board board;
+
+    // Null moves should be accepted and toggle the side to move.
+    assert(sirio::apply_uci_move(board, "0000"));
+    assert(board.side_to_move() == sirio::Color::Black);
+
+    assert(sirio::apply_uci_move(board, "0000"));
+    assert(board.side_to_move() == sirio::Color::White);
+
+    // Legal moves should still be applied normally.
+    assert(sirio::apply_uci_move(board, "e2e4"));
+    assert(board.side_to_move() == sirio::Color::Black);
+
+    const std::string before_invalid = board.to_fen();
+    assert(!sirio::apply_uci_move(board, "zzzz"));
+    assert(board.to_fen() == before_invalid);
+}
+
 void test_null_move() {
     sirio::Board initial{"8/8/8/8/8/8/4P3/4K2k w - - 4 15"};
     sirio::Board after_null = initial.apply_null_move();
@@ -317,6 +336,7 @@ int main() {
     test_bishop_pair_detection();
     test_zobrist_hashing();
     test_game_history_tracking();
+    test_apply_uci_move_handles_null_and_invalid_tokens();
     test_sufficient_material_to_force_checkmate();
     test_draw_by_fifty_move_rule();
     test_draw_by_repetition_rule();
