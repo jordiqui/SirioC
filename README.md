@@ -1,5 +1,9 @@
 # SirioC
 
+<p align="center">
+  <img src="docs/logo.svg" alt="Logo minimalista de SirioC" width="180" />
+</p>
+
 SirioC es un proyecto de motor de ajedrez en C++ inspirado en la guía de Rustic Chess. El objetivo es construir una base clara y modular que cubra la representación del tablero, la carga de posiciones en notación FEN y utilidades básicas para futuros módulos como la generación de movimientos y la evaluación.
 
 ## Características actuales
@@ -163,6 +167,7 @@ configura ninguna ruta el motor seguirá funcionando con su evaluación clásica
 
 ## Próximos pasos sugeridos
 
-- Persistir la tabla de transposición para sesiones largas y añadir libro de aperturas.
-- Integrar suites tácticas más extensas (LCT-II, WAC) y benchmarks automáticos en CI.
+- Implementar un modo de análisis persistente que conserve la tabla de transposición entre sesiones y exponga controles UCI específicos.
+- Construir un libro de aperturas en formato Polyglot a partir de colecciones PGN y añadir utilidades CLI para mantenerlo.
+- Automatizar matches de regresión (incluidos tests `perft`) dentro del CI para vigilar la fuerza táctica del motor.
 
