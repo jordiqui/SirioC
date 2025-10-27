@@ -19,6 +19,7 @@ SirioC es un proyecto de motor de ajedrez en C++ inspirado en la guía de Rustic
 - Suite de pruebas unitarias que cubre inicialización del tablero, compatibilidad FEN, reglas de tablas, heurísticas de evaluación y nuevas utilidades como el movimiento nulo.
 - Benchmarks reproducibles para medir nodos por segundo, precisión táctica y verificación opcional de tablebases.
 - Evaluación NNUE configurable con uno o dos ficheros, permitiendo redes especializadas para medio juego y finales.
+- Modo de análisis persistente que guarda automáticamente la tabla de transposición entre sesiones y ofrece controles UCI para activar, guardar, cargar o limpiar el fichero asociado.
 
 ## Documentación
 
