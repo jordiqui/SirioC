@@ -65,6 +65,36 @@ Usa `--only` para limitar la ejecución a un subconjunto de benchmarks:
 python bench/ccrl_suite.py --only ccrl_blitz ccrl_rapid
 ```
 
+## Comparar redes internas con referencias públicas
+
+El script permite lanzar auto-matches donde cada instancia de SirioC carga
+redes NNUE distintas. Esto facilita confrontar una red en desarrollo con la
+referencia pública sin editar manualmente los comandos de `cutechess-cli`.
+
+- `--internal-evalfile` / `--internal-evalfile-small`: rutas a las redes
+  principal y alternativa que quieres probar.
+- `--reference-evalfile` / `--reference-evalfile-small`: rutas a las redes
+  oficiales (por ejemplo, `nn-1c0000000000.nnue` y `nn-37f18f62d772.nnue`).
+- `--internal-label` y `--reference-label`: nombres descriptivos para los
+  perfiles de cutechess-cli.
+- `--threads`: número de hilos UCI asignados a cada motor durante el match.
+
+Ejemplo de comparación directa entre una red interna y la referencia pública:
+
+```bash
+python bench/ccrl_suite.py \
+    --internal-evalfile training/nnue/weights/sirio_experimental.nnue \
+    --reference-evalfile /ruta/a/nn-1c0000000000.nnue \
+    --reference-evalfile-small /ruta/a/nn-37f18f62d772.nnue \
+    --internal-label sirio-dev \
+    --reference-label sirio-ref \
+    --threads 2
+```
+
+Al iniciar cada benchmark, la herramienta imprime un resumen de los perfiles
+cargados (`EvalFile` y `EvalFileSmall`) para que confirmes que las rutas son
+correctas.
+
 ## Métricas de CPU y memoria
 
 Si `psutil` está instalado, cada match generará un fichero CSV y un resumen
