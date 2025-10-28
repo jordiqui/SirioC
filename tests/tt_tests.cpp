@@ -127,20 +127,13 @@ void test_collision_exact_replacement() {
     sirio::clear_transposition_tables();
 }
 
- codex/add-collision-tests-in-tt_tests.cpp
 void test_collision_replaces_shallow_entries() {
     const std::size_t previous_size = sirio::get_transposition_table_size();
     sirio::set_transposition_table_size(1);
-=======
-void test_disabling_transposition_table() {
-    const std::size_t previous_size = sirio::get_transposition_table_size();
-    sirio::set_transposition_table_size(0);
- main
     sirio::clear_transposition_tables();
 
     sirio::GlobalTranspositionTable table;
     std::uint8_t generation = table.prepare_for_search();
- codex/add-collision-tests-in-tt_tests.cpp
     const std::size_t bucket_count = table.bucket_count_for_tests();
     assert(bucket_count > 0);
 
@@ -239,10 +232,27 @@ void test_collision_prefers_older_generations_for_eviction() {
         assert(young_entry->depth == static_cast<int>(100 + i));
         assert(young_entry->generation == new_generation);
     }
-=======
+
+    sirio::set_transposition_table_size(previous_size);
+    sirio::clear_transposition_tables();
+}
+
+void test_disabling_transposition_table() {
+    const std::size_t previous_size = sirio::get_transposition_table_size();
+    sirio::set_transposition_table_size(0);
+    sirio::clear_transposition_tables();
+
+    sirio::GlobalTranspositionTable table;
+    std::uint8_t generation = table.prepare_for_search();
     (void)generation;
     assert(table.bucket_count_for_tests() == 0);
- main
+
+    sirio::TTEntry entry;
+    entry.depth = 4;
+    entry.score = 42;
+    entry.type = sirio::TTNodeType::Exact;
+    table.store(1234ULL, entry, generation);
+    assert(!table.probe(1234ULL).has_value());
 
     sirio::set_transposition_table_size(previous_size);
     sirio::clear_transposition_tables();
@@ -253,11 +263,8 @@ void test_collision_prefers_older_generations_for_eviction() {
 void run_tt_tests() {
     test_collision_eviction();
     test_collision_exact_replacement();
-codex/add-collision-tests-in-tt_tests.cpp
     test_collision_replaces_shallow_entries();
     test_collision_prefers_older_generations_for_eviction();
-=======
     test_disabling_transposition_table();
- main
 }
 
