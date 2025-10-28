@@ -86,7 +86,14 @@ El ejecutable imprime tres métricas:
 
 ## Tablebases Syzygy
 
-El motor permite configurar la ruta a las tablebases mediante UCI:
+El motor configura automáticamente la ruta a las tablebases buscando un
+directorio `tablebases/` junto al ejecutable (o en su directorio padre) y
+respeta la variable de entorno `SIRIO_SYZYGY_PATH` si está definida. Este
+comportamiento proporciona una configuración lista para usar: basta con copiar
+los archivos Syzygy dentro de `tablebases/` para que estén disponibles desde el
+primer arranque.
+
+También es posible ajustar la ruta manualmente mediante UCI:
 
 ```
 setoption name SyzygyPath value /ruta/a/tablebases
