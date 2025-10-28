@@ -92,12 +92,44 @@ constexpr std::uint64_t time_check_interval = 2048;
 
 }  // namespace
 
+namespace {
+
+constexpr int kMaxSearchThreads = 1024;
+
+int clamp_thread_count(int threads) {
+    return std::clamp(threads, 1, kMaxSearchThreads);
+}
+
+int env_thread_override() {
+    if (const char *env = std::getenv("SIRIOC_THREADS")) {
+        char *end = nullptr;
+        long value = std::strtol(env, &end, 10);
+        if (end != env && *end == '\0' && value > 0) {
+            return clamp_thread_count(static_cast<int>(value));
+        }
+    }
+    return 0;
+}
+
+}  // namespace
+
 void set_search_threads(int threads) {
-    int clamped = std::clamp(threads, 1, 1024);
+    int clamped = clamp_thread_count(threads);
     search_thread_count.store(clamped, std::memory_order_relaxed);
 }
 
 int get_search_threads() { return search_thread_count.load(std::memory_order_relaxed); }
+
+int recommended_search_threads() {
+    if (int override = env_thread_override(); override > 0) {
+        return override;
+    }
+    unsigned int hw = std::thread::hardware_concurrency();
+    if (hw == 0) {
+        hw = 1;
+    }
+    return clamp_thread_count(static_cast<int>(hw));
+}
 
 namespace {
 
