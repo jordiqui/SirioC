@@ -67,11 +67,12 @@ void test_attack_detection() {
 }
 
 void test_en_passant() {
-    const std::string fen = "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1";
+    const std::string fen = "8/8/8/3Pp3/8/8/8/4K3 w - e6 0 1";
     sirio::Board board{fen};
     auto ep = board.en_passant_square();
     assert(ep.has_value());
-    assert(*ep == square_index('d', 3));
+    assert(*ep == square_index('e', 6));
+    assert(board.to_fen() == fen);
 }
 
 void test_en_passant_zobrist_hash_without_capture() {
@@ -80,6 +81,8 @@ void test_en_passant_zobrist_hash_without_capture() {
     sirio::Board board_with{with_ep};
     sirio::Board board_without{without_ep};
     assert(board_with.zobrist_hash() == board_without.zobrist_hash());
+    assert(!board_with.en_passant_square().has_value());
+    assert(board_with.to_fen() == without_ep);
 }
 
 void test_en_passant_zobrist_hash_with_capture() {
@@ -94,6 +97,15 @@ void test_start_position_moves() {
     sirio::Board board;
     auto moves = sirio::generate_legal_moves(board);
     assert(moves.size() == 20);
+}
+
+void test_en_passant_requires_available_capture() {
+    sirio::Board initial;
+    sirio::Move double_push = sirio::move_from_uci(initial, "a2a4");
+    sirio::Board after_double_push = initial.apply_move(double_push);
+    assert(!after_double_push.en_passant_square().has_value());
+    assert(after_double_push.to_fen() ==
+           "rnbqkbnr/pppppppp/8/8/P7/8/1PPPPPPP/RNBQKBNR b KQkq - 0 1");
 }
 
 void test_piece_list_updates_after_moves() {
@@ -332,6 +344,7 @@ int main() {
     test_en_passant_zobrist_hash_without_capture();
     test_en_passant_zobrist_hash_with_capture();
     test_start_position_moves();
+    test_en_passant_requires_available_capture();
     test_piece_list_updates_after_moves();
     test_bishop_pair_detection();
     test_zobrist_hashing();
