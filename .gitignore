@@ -13,3 +13,8 @@ CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 compile_commands.json
+training/nnue/datasets/processed/
+training/nnue/weights/
+training/nnue/metrics/*.jsonl
+training/nnue/__pycache__/
+training/nnue/scripts/__pycache__/
