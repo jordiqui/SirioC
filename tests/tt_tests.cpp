@@ -127,10 +127,122 @@ void test_collision_exact_replacement() {
     sirio::clear_transposition_tables();
 }
 
+void test_collision_replaces_shallow_entries() {
+    const std::size_t previous_size = sirio::get_transposition_table_size();
+    sirio::set_transposition_table_size(1);
+    sirio::clear_transposition_tables();
+
+    sirio::GlobalTranspositionTable table;
+    std::uint8_t generation = table.prepare_for_search();
+    const std::size_t bucket_count = table.bucket_count_for_tests();
+    assert(bucket_count > 0);
+
+    const std::size_t key_count = sirio::GlobalTranspositionTable::cluster_capacity() + 1;
+    const auto keys = colliding_keys(bucket_count, key_count);
+    assert(keys.size() == key_count);
+
+    for (std::size_t i = 0; i < sirio::GlobalTranspositionTable::cluster_capacity(); ++i) {
+        sirio::TTEntry entry;
+        entry.best_move.from = static_cast<int>(i % 64);
+        entry.best_move.to = static_cast<int>((i + 3) % 64);
+        entry.best_move.piece = sirio::PieceType::Rook;
+        entry.depth = static_cast<int>(20 + i);
+        entry.score = static_cast<int>(600 + i);
+        entry.type = sirio::TTNodeType::UpperBound;
+        entry.static_eval = static_cast<int>(700 + i);
+        table.store(keys[i], entry, generation);
+    }
+
+    sirio::TTEntry shallow;
+    shallow.best_move.from = 7;
+    shallow.best_move.to = 15;
+    shallow.best_move.piece = sirio::PieceType::Queen;
+    shallow.depth = 5;
+    shallow.score = 800;
+    shallow.type = sirio::TTNodeType::Exact;
+    shallow.static_eval = 900;
+    table.store(keys[sirio::GlobalTranspositionTable::cluster_capacity()], shallow, generation);
+
+    const auto stored_shallow = table.probe(keys[sirio::GlobalTranspositionTable::cluster_capacity()]);
+    assert(stored_shallow.has_value());
+    assert(stored_shallow->depth == 5);
+
+    const auto replaced = table.probe(keys[0]);
+    assert(!replaced.has_value());
+
+    for (std::size_t i = 1; i < sirio::GlobalTranspositionTable::cluster_capacity(); ++i) {
+        const auto remaining = table.probe(keys[i]);
+        assert(remaining.has_value());
+        assert(remaining->depth == static_cast<int>(20 + i));
+    }
+
+    sirio::set_transposition_table_size(previous_size);
+    sirio::clear_transposition_tables();
+}
+
+void test_collision_prefers_older_generations_for_eviction() {
+    const std::size_t previous_size = sirio::get_transposition_table_size();
+    sirio::set_transposition_table_size(1);
+    sirio::clear_transposition_tables();
+
+    sirio::GlobalTranspositionTable table;
+    std::uint8_t initial_generation = table.prepare_for_search();
+    const std::size_t bucket_count = table.bucket_count_for_tests();
+    assert(bucket_count > 0);
+
+    const std::size_t key_count = sirio::GlobalTranspositionTable::cluster_capacity() * 2;
+    const auto keys = colliding_keys(bucket_count, key_count);
+    assert(keys.size() == key_count);
+
+    for (std::size_t i = 0; i < sirio::GlobalTranspositionTable::cluster_capacity(); ++i) {
+        sirio::TTEntry entry;
+        entry.best_move.from = static_cast<int>((i + 5) % 64);
+        entry.best_move.to = static_cast<int>((i + 6) % 64);
+        entry.best_move.piece = sirio::PieceType::Bishop;
+        entry.depth = static_cast<int>(10 + i);
+        entry.score = static_cast<int>(400 + i);
+        entry.type = sirio::TTNodeType::LowerBound;
+        entry.static_eval = static_cast<int>(500 + i);
+        table.store(keys[i], entry, initial_generation);
+    }
+
+    std::uint8_t new_generation = table.prepare_for_search();
+
+    for (std::size_t i = 0; i < sirio::GlobalTranspositionTable::cluster_capacity(); ++i) {
+        sirio::TTEntry entry;
+        entry.best_move.from = static_cast<int>((i + 11) % 64);
+        entry.best_move.to = static_cast<int>((i + 12) % 64);
+        entry.best_move.piece = sirio::PieceType::Knight;
+        entry.depth = static_cast<int>(100 + i);
+        entry.score = static_cast<int>(900 + i);
+        entry.type = sirio::TTNodeType::Exact;
+        entry.static_eval = static_cast<int>(1000 + i);
+        table.store(keys[sirio::GlobalTranspositionTable::cluster_capacity() + i], entry, new_generation);
+    }
+
+    for (std::size_t i = 0; i < sirio::GlobalTranspositionTable::cluster_capacity(); ++i) {
+        const auto old_entry = table.probe(keys[i]);
+        assert(!old_entry.has_value());
+    }
+
+    for (std::size_t i = 0; i < sirio::GlobalTranspositionTable::cluster_capacity(); ++i) {
+        const auto young_entry =
+            table.probe(keys[sirio::GlobalTranspositionTable::cluster_capacity() + i]);
+        assert(young_entry.has_value());
+        assert(young_entry->depth == static_cast<int>(100 + i));
+        assert(young_entry->generation == new_generation);
+    }
+
+    sirio::set_transposition_table_size(previous_size);
+    sirio::clear_transposition_tables();
+}
+
 }  // namespace
 
 void run_tt_tests() {
     test_collision_eviction();
     test_collision_exact_replacement();
+    test_collision_replaces_shallow_entries();
+    test_collision_prefers_older_generations_for_eviction();
 }
 
