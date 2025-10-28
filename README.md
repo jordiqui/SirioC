@@ -168,9 +168,30 @@ El resto de GUIs (Cute Chess, Arena, etc.) también mostrarán `EvalFile` y `Eva
 las opciones UCI; basta con indicar la ruta absoluta o relativa a las redes descargadas. Si no se
 configura ninguna ruta el motor seguirá funcionando con su evaluación clásica.
 
+### Uso de redes NNUE entrenadas internamente
+
+Si cuentas con una suite propia para entrenar redes NNUE, puedes integrarlas en SirioC siguiendo
+los mismos mecanismos que emplea el proyecto para redes oficiales:
+
+1. **Exporta la red al formato `.nnue`.** Herramientas como `nnue-pytorch` o `nnue-training` de
+   Stockfish generan archivos compatibles con la implementación incluida en `src/nnue`.
+2. **Ubica los modelos en tu suite de pruebas.** Mantenerlos junto al binario (`build/bin/sirio`)
+   o en un directorio versionado facilita automatizar entrenamientos y validaciones.
+3. **Configura las rutas desde UCI.** Lanza el motor y registra la red principal con
+   `setoption name EvalFile value /ruta/a/tu_red.nnue`. Si tu flujo separa redes de medio juego y
+   finales, aprovecha `EvalFileSmall` para proporcionar el modelo alternativo.
+4. **Verifica la carga.** Ejecuta `make bench` o `./build/bin/sirio_bench` para confirmar que el
+   motor informa `info string NNUE evaluation using ...` con tu archivo y que el rendimiento se
+   alinea con los datos de la suite.
+5. **Integra la red en tus matches.** Una vez validada, reutiliza los mismos archivos en tus
+   enfrentamientos automáticos (`cutechess-cli`, `banksia`, etc.) o en las GUIs que utilices.
+
+Este flujo mantiene separada la fase de entrenamiento de la de integración, permitiendo iterar
+rápidamente sobre arquitecturas o datasets propios antes de promover una red al motor principal.
+
 ## Próximos pasos sugeridos
 
-- Implementar un modo de análisis persistente que conserve la tabla de transposición entre sesiones y exponga controles UCI específicos.
-- Construir un libro de aperturas en formato Polyglot a partir de colecciones PGN y añadir utilidades CLI para mantenerlo.
-- Automatizar matches de regresión (incluidos tests `perft`) dentro del CI para vigilar la fuerza táctica del motor.
+- Consolidar una **pipeline de entrenamiento NNUE propia**, definiendo datasets, scripts de entrenamiento y métricas de validación reproducibles.
+- Ampliar la suite de benchmarks para **comparar redes internas frente a referencias públicas**, integrando la carga automatizada de modelos `EvalFile` y `EvalFileSmall`.
+- Incorporar un orquestador de matches (`cutechess-cli`, `fastchess`) que ejecute regresiones periódicas con las redes validadas y actualice automáticamente su despliegue en el motor.
 
