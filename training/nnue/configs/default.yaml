@@ -1,0 +1,24 @@
+seed: 20240511
+
+dataset:
+  path: training/nnue/datasets/processed/sirio_example.npz
+  metadata: training/nnue/datasets/processed/sirio_example.metadata.json
+  validation_split: 0.1
+  shuffle: true
+  shuffle_seed: 20240511
+
+training:
+  epochs: 50
+  batch_size: 512
+  learning_rate: 0.01
+  weight_decay: 0.0
+  device: cpu
+  gradient_clip: null
+
+logging:
+  output_dir: training/nnue/metrics
+  run_name: sirio_example
+
+checkpoint:
+  output_path: training/nnue/weights/sirio_example.pt
+  save_every: 5

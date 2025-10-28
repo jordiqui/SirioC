@@ -1,0 +1,18 @@
+{
+  "name": "sirio_example",
+  "dataset": "training/nnue/datasets/processed/sirio_example.npz",
+  "config": "training/nnue/configs/default.yaml",
+  "seed": 20240511,
+  "created_at": "2024-05-11T00:00:00Z",
+  "metrics": {
+    "train": {
+      "mse": null,
+      "mae": null
+    },
+    "validation": {
+      "mse": null,
+      "mae": null
+    }
+  },
+  "notes": "Populate with real numbers once the dataset is generated and the training script is executed."
+}
