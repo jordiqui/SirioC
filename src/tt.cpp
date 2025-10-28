@@ -16,6 +16,27 @@ constexpr std::size_t kDefaultTranspositionTableSizeMb = 16;
 std::atomic<std::size_t> transposition_table_size_mb{kDefaultTranspositionTableSizeMb};
 std::atomic<std::uint64_t> transposition_table_epoch{1};
 
+std::uint64_t high_product(std::uint64_t lhs, std::uint64_t rhs) {
+    const std::uint64_t lhs_hi = lhs >> 32U;
+    const std::uint64_t lhs_lo = lhs & 0xFFFFFFFFULL;
+    const std::uint64_t rhs_hi = rhs >> 32U;
+    const std::uint64_t rhs_lo = rhs & 0xFFFFFFFFULL;
+
+    const std::uint64_t hi_hi = lhs_hi * rhs_hi;
+    const std::uint64_t hi_lo = lhs_hi * rhs_lo;
+    const std::uint64_t lo_hi = lhs_lo * rhs_hi;
+    const std::uint64_t lo_lo = lhs_lo * rhs_lo;
+
+    const std::uint64_t mid = hi_lo + lo_hi;
+    const std::uint64_t mid_low = mid << 32U;
+    const std::uint64_t mid_high = mid >> 32U;
+
+    const std::uint64_t low = lo_lo + mid_low;
+    const std::uint64_t carry = low < lo_lo ? 1ULL : 0ULL;
+
+    return hi_hi + mid_high + carry;
+}
+
 }  // namespace
 
 std::uint8_t GlobalTranspositionTable::pack_generation(std::uint8_t generation) {
@@ -281,8 +302,7 @@ std::size_t GlobalTranspositionTable::cluster_index(std::uint64_t key) const {
     if (bucket_count == 0) {
         return 0;
     }
-    unsigned __int128 product = static_cast<unsigned __int128>(key) * bucket_count;
-    return static_cast<std::size_t>(product >> 64);
+    return static_cast<std::size_t>(high_product(key, static_cast<std::uint64_t>(bucket_count)));
 }
 
 GlobalTranspositionTable::PackedTTEntry *GlobalTranspositionTable::select_entry(Cluster &cluster,
