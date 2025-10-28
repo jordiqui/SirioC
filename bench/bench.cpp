@@ -74,15 +74,40 @@ int main() {
     }
 
     const std::string &tb_path = sirio::syzygy::tablebase_path();
-    if (!tb_path.empty() && sirio::syzygy::available()) {
-        sirio::Board tb_board{"8/8/8/8/8/6k1/6P1/6K1 w - - 0 1"};
-        if (auto probe = sirio::syzygy::probe_root(tb_board); probe.has_value() && probe->best_move) {
-            std::cout << "Syzygy probe move: " << sirio::move_to_uci(*probe->best_move)
-                      << " (wdl=" << probe->wdl << ", dtz=" << probe->dtz << ")\n";
-        }
+    sirio::Board tb_board{"8/8/8/8/8/6k1/6P1/6K1 w - - 0 1"};
+
+    auto probe = sirio::syzygy::probe_root(tb_board);
+    if (probe.has_value() && probe->best_move) {
+        std::cout << "Syzygy probe move: " << sirio::move_to_uci(*probe->best_move)
+                  << " (wdl=" << probe->wdl << ", dtz=" << probe->dtz << ")\n";
     } else {
-        std::cout << "Syzygy tablebases no configuradas. Establezca la opción UCI SyzygyPath para habilitar"
-                     " las pruebas de tablebases.\n";
+        std::string reason;
+        if (tb_path.empty()) {
+            reason = "no se ha detectado ninguna ruta";
+        } else if (!sirio::syzygy::available()) {
+            reason = "la ruta '" + tb_path + "' no contiene tablebases válidas";
+        } else {
+            reason = "no hay datos disponibles para la posición de prueba";
+        }
+
+        std::cout << "Syzygy tablebases no disponibles (" << reason
+                  << "). Ejecuto una búsqueda auxiliar...\n";
+
+        sirio::SearchLimits fallback_limits;
+        fallback_limits.max_depth = 18;
+        fallback_limits.move_time = 1000;
+
+        auto fallback = sirio::search_best_move(tb_board, fallback_limits);
+        if (fallback.has_move) {
+            std::cout << "  Fallback best move: " << sirio::move_to_uci(fallback.best_move)
+                      << " (score=" << sirio::format_uci_score(fallback.score)
+                      << ", depth=" << fallback.depth_reached << ", nodes=" << fallback.nodes << ")\n";
+        } else {
+            std::cout << "  No se pudo determinar una jugada con la búsqueda auxiliar." << std::endl;
+        }
+
+        std::cout << "  Copie los archivos Syzygy (.rtbw/.rtbz) en 'tablebases/' o configure"
+                     " la opción UCI SyzygyPath para habilitar la prueba automática.\n";
     }
 
     return 0;
