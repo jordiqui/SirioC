@@ -17,7 +17,7 @@ add_library(sirio_core
     src/opening_book.cpp
     src/search.cpp
     src/time_manager.cpp
-    src/transposition_table.cpp
+    src/tt.cpp
     src/syzygy.cpp
     third_party/fathom/tbprobe.c
 )
@@ -40,6 +40,7 @@ target_link_libraries(sirio PRIVATE sirio_core)
 add_executable(sirio_tests
     tests/board_tests.cpp
     tests/perft_tests.cpp
+    tests/tt_tests.cpp
 )
 
 target_link_libraries(sirio_tests PRIVATE sirio_core)

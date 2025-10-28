@@ -15,6 +15,7 @@
 #include "sirio/syzygy.hpp"
 
 void run_perft_tests();
+void run_tt_tests();
 
 namespace {
 int square_index(char file, int rank) {
@@ -359,6 +360,7 @@ int main() {
     test_syzygy_option_configuration();
     test_evaluation_backend_consistency();
     test_nnue_backend_material_weights();
+    run_tt_tests();
     run_perft_tests();
     std::cout << "All tests passed.\n";
     return 0;
