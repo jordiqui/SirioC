@@ -422,8 +422,13 @@ void Board::set_from_fen(std::string_view fen) {
         if (state_.en_passant_square < 0) {
             throw std::invalid_argument("Invalid en passant square in FEN");
         }
-        if (en_passant_capture_possible(*this, state_.en_passant_square, state_.side_to_move)) {
+
+        const bool can_capture =
+            en_passant_capture_possible(*this, state_.en_passant_square, state_.side_to_move);
+        if (can_capture) {
             state_.zobrist_hash ^= en_passant_hash(file_of(state_.en_passant_square));
+        } else {
+            state_.en_passant_square = -1;
         }
     }
 
@@ -479,7 +484,14 @@ std::string Board::to_fen() const {
     }
     result += castling;
     result += ' ';
-    result += state_.en_passant_square >= 0 ? square_to_string(state_.en_passant_square) : "-";
+    const bool ep_available = state_.en_passant_square >= 0 &&
+                              en_passant_capture_possible(*this, state_.en_passant_square,
+                                                           state_.side_to_move);
+    if (ep_available) {
+        result += square_to_string(state_.en_passant_square);
+    } else {
+        result += "-";
+    }
     result += ' ' + std::to_string(state_.halfmove_clock);
     result += ' ' + std::to_string(state_.fullmove_number);
 
@@ -721,6 +733,8 @@ void Board::make_move(const Move &move, UndoState &undo) {
             if (en_passant_capture_possible(*this, state_.en_passant_square, them)) {
                 state_.zobrist_hash ^=
                     en_passant_hash(file_of(state_.en_passant_square));
+            } else {
+                state_.en_passant_square = -1;
             }
         }
     } else if (is_capture) {
