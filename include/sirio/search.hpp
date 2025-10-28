@@ -42,6 +42,7 @@ std::string principal_variation_to_uci(const Board &board, const std::vector<Mov
 
 void set_search_threads(int threads);
 int get_search_threads();
+int recommended_search_threads();
 
 void request_stop_search();
 

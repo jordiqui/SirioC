@@ -13,6 +13,11 @@ UCI. Los pasos asumen que ya compilaste el motor (por ejemplo, `build/bin/sirio`
 3. Ten a mano las rutas de las redes NNUE para rellenar las opciones `EvalFile` y `EvalFileSmall`
    cuando la GUI te lo solicite. El motor permite rutas absolutas o relativas, por lo que no es
    obligatorio que estén en el mismo directorio del ejecutable.
+4. SirioC detecta automáticamente el número de hilos disponibles mediante
+   `std::thread::hardware_concurrency()` y anuncia ese valor como predeterminado
+   al recibir `uci`. Si necesitas reservar recursos para otras aplicaciones,
+   define `SIRIOC_THREADS=<n>` antes de lanzar la GUI para forzar un recuento
+   distinto.
 
 SirioC anuncia sus opciones estándar en cuanto la GUI envía `uci`, incluyendo la lista completa de
 parámetros configurables (`Threads`, `Hash`, `EvalFile`, `EvalFileSmall`, etc.). Consulta
@@ -30,6 +35,8 @@ interfaz UCI.
    `C:\\ChessEngines\\SirioC\\nn-1c0000000000.nnue`). Para registrar la red alternativa pequeña,
    usa `EvalFileSmall` y apunta a `nn-37f18f62d772.nnue` en el mismo directorio.
 5. Ajusta `Threads` y `Hash` según tu hardware y confirma con **Aceptar**.
+   Fritz envía `setoption name UCI_AnalyseMode` cuando entras en análisis
+   infinito; SirioC reconoce la orden para evitar avisos de opción desconocida.
 
 A partir de ese momento el motor aparecerá en la lista de motores UCI y podrás usarlo en partidas,
 partidas relámpago o análisis infinitos como cualquier otro motor compatible.

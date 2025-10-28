@@ -46,7 +46,11 @@ values for common time controls:
 #### Threads
 Determines how many CPU threads the search will use. SirioC scales best with the
 number of physical cores available; hyper-threads provide diminishing returns.
-**Recommended values:** Bullet—use 75% of your physical cores to keep the GUI
+By default the engine auto-detects the host CPU and selects as many threads as
+`std::thread::hardware_concurrency()` reports. You can override this before
+launching the GUI by setting the environment variable `SIRIOC_THREADS` to a
+positive integer, which is useful on shared workstations. **Recommended
+values:** Bullet—use 75% of your physical cores to keep the GUI
 responsive, Blitz/Rapid/Classical—use all physical cores or all but one if the
 machine is shared.
 
@@ -86,6 +90,12 @@ Determines how many best moves the engine tracks internally. Increasing it has
 the same cost considerations as `Analysis Lines`.
 **Recommended values:** Bullet/Blitz—1, Rapid—2 when analysing, Classical—2 to 4
 for study sessions; return to 1 for competitive play.
+
+#### UCI_AnalyseMode
+Fritz y otras GUIs activan esta bandera cuando entran en modo de análisis
+permanente. SirioC acepta el ajuste para mantener la compatibilidad con estas
+interfaces (actualmente no modifica el algoritmo de búsqueda, pero evita
+advertencias y restablece el valor anunciado por la GUI).
 
 #### Skill Level
 Artificially limits engine strength by capping search depth and randomness.

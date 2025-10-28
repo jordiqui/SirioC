@@ -191,6 +191,7 @@ inline void register_essential_options(OptionsMap& o){
 
     // Strength limiting
     o["UCI_LimitStrength"] = Option(false);
+    o["UCI_AnalyseMode"] = Option(false);
     o["UCI_Elo"]           = Option(1320, 1320, 3190);
 
     // Paths / logs / NNUE / TBs

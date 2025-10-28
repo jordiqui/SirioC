@@ -30,8 +30,8 @@ sirio::uci::handle_setoption(Options, full_line_after_keyword_setoption);
 > changes on-the-fly (resize TT, change threads, reload NNUE, etc.).
 
 ## Provided options and defaults
-- Threads (spin 1..1024, default 1)
-- Hash (spin 1..33554432 MB, default 64)
+- Threads (spin 1..1024, default auto-detected)
+- Hash (spin 1..33554432 MB, default 16)
 - Clear Hash (button)
 - Ponder (check false)
 - MultiPV (spin 1..256, default 1)
@@ -41,6 +41,7 @@ sirio::uci::handle_setoption(Options, full_line_after_keyword_setoption);
 - Minimum Thinking Time (spin 0..2000, default 25)
 - Slow Mover (spin 10..500, default 98)
 - UCI_LimitStrength (check false)
+- UCI_AnalyseMode (check false)
 - UCI_Elo (spin 1320..3190, default 3190)
 - Debug Log File (string "")
 - EvalFile (string "nn-1c0000000000.nnue")
@@ -48,6 +49,11 @@ sirio::uci::handle_setoption(Options, full_line_after_keyword_setoption);
 - SyzygyProbeDepth (spin 0..128, default 1)
 - Syzygy50MoveRule (check true)
 - NumaPolicy (combo: auto, interleave, compact, numa0, numa1; default auto)
+
+`Threads` se inicializa con el valor devuelto por
+`std::thread::hardware_concurrency()` cada vez que se arranca el motor. Define
+la variable de entorno `SIRIOC_THREADS` antes de lanzar la GUI para forzar un
+recuento distinto sin recompilar.
 
 ## Reading values in your engine
 ```cpp

@@ -64,6 +64,7 @@ struct EngineOptions {
     int nodestime = 0;
     bool uci_chess960 = false;
     bool uci_limit_strength = false;
+    bool uci_analyse_mode = false;
     int uci_elo = 1320;
     bool uci_show_wdl = false;
     std::string syzygy_path;
@@ -160,6 +161,7 @@ void initialize_engine_options() {
     if (original_clog_buffer == nullptr) {
         original_clog_buffer = std::clog.rdbuf();
     }
+    options.threads = sirio::recommended_search_threads();
     sirio::set_search_threads(options.threads);
     sirio::set_transposition_table_size(options.hash_size_mb);
     mark_persistent_analysis_unloaded();
@@ -639,6 +641,13 @@ void on_uci_limit_strength(const Option& opt) {
     options.uci_limit_strength = static_cast<bool>(opt);
 }
 
+void on_uci_analyse_mode(const Option& opt) {
+    if (g_silent_option_update) {
+        return;
+    }
+    options.uci_analyse_mode = static_cast<bool>(opt);
+}
+
 void on_uci_elo(const Option& opt) {
     if (g_silent_option_update) {
         return;
@@ -808,6 +817,7 @@ void ensure_options_registered() {
     g_options["Minimum Thinking Time"].after_set(on_minimum_thinking_time);
     g_options["Slow Mover"].after_set(on_slow_mover);
     g_options["UCI_LimitStrength"].after_set(on_uci_limit_strength);
+    g_options["UCI_AnalyseMode"].after_set(on_uci_analyse_mode);
     g_options["UCI_Elo"].after_set(on_uci_elo);
     g_options["EvalFile"].after_set(on_eval_file);
     g_options["SyzygyPath"].after_set(on_syzygy_path);
@@ -907,6 +917,9 @@ void sync_options_from_state() {
     }
     if (auto* opt = find_option("UCI_LimitStrength")) {
         opt->set_bool(options.uci_limit_strength);
+    }
+    if (auto* opt = find_option("UCI_AnalyseMode")) {
+        opt->set_bool(options.uci_analyse_mode);
     }
     if (auto* opt = find_option("UCI_Elo")) {
         opt->set_int(options.uci_elo);
