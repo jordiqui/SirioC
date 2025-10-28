@@ -333,7 +333,7 @@ GlobalTranspositionTable &shared_transposition_table() {
 }
 
 void set_transposition_table_size(std::size_t size_mb) {
-    size_mb = std::clamp<std::size_t>(size_mb, 1, 33'554'432);
+    size_mb = std::clamp<std::size_t>(size_mb, std::size_t{0}, std::size_t{33'554'432});
     transposition_table_size_mb.store(size_mb, std::memory_order_relaxed);
     transposition_table_epoch.fetch_add(1, std::memory_order_relaxed);
 }
