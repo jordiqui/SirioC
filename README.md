@@ -192,6 +192,6 @@ rápidamente sobre arquitecturas o datasets propios antes de promover una red al
 ## Próximos pasos sugeridos
 
 - Consolidar una **pipeline de entrenamiento NNUE propia**, definiendo datasets, scripts de entrenamiento y métricas de validación reproducibles.
-- Ampliar la suite de benchmarks para **comparar redes internas frente a referencias públicas**, integrando la carga automatizada de modelos `EvalFile` y `EvalFileSmall`.
+- La suite de benchmarks incluye comparativas entre redes internas y referencias públicas gracias a la carga automatizada de `EvalFile` y `EvalFileSmall` en `bench/ccrl_suite.py`.
 - Incorporar un orquestador de matches (`cutechess-cli`, `fastchess`) que ejecute regresiones periódicas con las redes validadas y actualice automáticamente su despliegue en el motor.
 

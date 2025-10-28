@@ -23,7 +23,7 @@ import threading
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Sequence
 
 try:  # pragma: no cover - optional dependency
     import psutil  # type: ignore
@@ -42,55 +42,55 @@ class CCRLMatchConfig:
     openings: Optional[Path]
     pgn_output: Optional[Path]
 
-    def cutechess_args(self, engine: Path, opponent: Optional[Path]) -> List[str]:
-        opponent_args: List[str]
-        if opponent:
-            opponent_args = [
-                "-engine",
-                f"name={engine.name}",
-                f"cmd={engine}",
-                "-engine",
-                f"name={opponent.name}",
-                f"cmd={opponent}",
-            ]
-        else:
-            opponent_args = [
-                "-engine",
-                f"name={engine.name}",
-                f"cmd={engine}",
-                "-engine",
-                f"name={engine.name}-clone",
-                f"cmd={engine}",
-                "proto=uci",
-                "option.Threads=1",
-            ]
+    def cutechess_args(self, engines: Sequence["EngineProfile"], threads: int) -> List[str]:
+        args: List[str] = []
+        for profile in engines:
+            args.extend(profile.cutechess_args())
 
-        args = [
-            *opponent_args,
-            "-games",
-            str(self.rounds),
-            "-repeat",
-            "-concurrency",
-            "1",
-            "-resign",
-            "movecount=3",
-            "score=600",
-            "-draw",
-            "movenumber=60",
-            "movecount=6",
-            "score=20",
-            "-tournament",
-            "gauntlet",
-            "-each",
-            f"tc={self.tc}",
-            "proto=uci",
-            "option.Threads=1",
-        ]
+        args.extend(
+            [
+                "-games",
+                str(self.rounds),
+                "-repeat",
+                "-concurrency",
+                "1",
+                "-resign",
+                "movecount=3",
+                "score=600",
+                "-draw",
+                "movenumber=60",
+                "movecount=6",
+                "score=20",
+                "-tournament",
+                "gauntlet",
+                "-each",
+                f"tc={self.tc}",
+                f"option.Threads={threads}",
+            ]
+        )
 
         if self.openings:
             args.extend(["-openings", f"file={self.openings}", "format=pgn", "order=random"])
         if self.pgn_output:
             args.extend(["-pgnout", str(self.pgn_output)])
+        return args
+
+
+@dataclass
+class EngineProfile:
+    """Description of one cutechess engine instance."""
+
+    name: str
+    cmd: Path
+    eval_file: Optional[Path] = None
+    eval_file_small: Optional[Path] = None
+
+    def cutechess_args(self) -> List[str]:
+        args = ["-engine", f"name={self.name}", f"cmd={self.cmd}", "proto=uci"]
+        if self.eval_file:
+            args.append(f"option.EvalFile={self.eval_file}")
+        if self.eval_file_small:
+            args.append(f"option.EvalFileSmall={self.eval_file_small}")
         return args
 
 
@@ -129,6 +129,16 @@ def detect_engine(build_dir: Path) -> Path:
             f"No se encontró el binario en {candidate}. Compila el proyecto antes de ejecutar la suite."
         )
     return candidate
+
+
+def resolve_nnue_path(value: Optional[str]) -> Optional[Path]:
+    if value is None:
+        return None
+    raw_path = Path(value).expanduser()
+    path = raw_path.resolve()
+    if not path.exists():
+        raise SystemExit(f"No se encontró la red NNUE en {path}")
+    return path
 
 
 def log_resource_usage(proc: subprocess.Popen[bytes], log_path: Path, interval: float) -> None:
@@ -189,7 +199,69 @@ def run_match(cfg: CCRLMatchConfig, args: argparse.Namespace) -> None:
     engine_path = Path(args.engine)
     opponent_path = Path(args.opponent) if args.opponent else None
 
-    cmd = [str(cutechess), *match_cfg.cutechess_args(engine_path, opponent_path)]
+    internal_eval = resolve_nnue_path(args.internal_evalfile)
+    internal_eval_small = resolve_nnue_path(args.internal_evalfile_small)
+    reference_eval = resolve_nnue_path(args.reference_evalfile)
+    reference_eval_small = resolve_nnue_path(args.reference_evalfile_small)
+
+    autop_mode = opponent_path is None
+    reference_requested = any(
+        value is not None
+        for value in (
+            args.reference_evalfile,
+            args.reference_evalfile_small,
+            args.reference_label,
+        )
+    )
+
+    default_internal_name = engine_path.stem
+    if autop_mode and reference_requested and args.internal_label is None:
+        default_internal_name = f"{engine_path.stem}-internal"
+    internal_name = args.internal_label or default_internal_name
+
+    engines: List[EngineProfile] = [
+        EngineProfile(
+            name=internal_name,
+            cmd=engine_path,
+            eval_file=internal_eval,
+            eval_file_small=internal_eval_small,
+        )
+    ]
+
+    if opponent_path:
+        opponent_name = args.reference_label or opponent_path.stem
+        engines.append(
+            EngineProfile(
+                name=opponent_name,
+                cmd=opponent_path,
+                eval_file=reference_eval,
+                eval_file_small=reference_eval_small,
+            )
+        )
+    else:
+        if reference_eval is None and reference_eval_small is None:
+            reference_eval = internal_eval
+            reference_eval_small = internal_eval_small
+        default_reference_name = (
+            f"{engine_path.stem}-reference" if reference_requested else f"{engine_path.stem}-clone"
+        )
+        reference_name = args.reference_label or default_reference_name
+        engines.append(
+            EngineProfile(
+                name=reference_name,
+                cmd=engine_path,
+                eval_file=reference_eval,
+                eval_file_small=reference_eval_small,
+            )
+        )
+
+    print("Perfiles configurados:")
+    for profile in engines:
+        eval_file = str(profile.eval_file) if profile.eval_file else "(por defecto)"
+        eval_file_small = str(profile.eval_file_small) if profile.eval_file_small else "(por defecto)"
+        print(f"  - {profile.name}: EvalFile={eval_file} | EvalFileSmall={eval_file_small}")
+
+    cmd = [str(cutechess), *match_cfg.cutechess_args(engines, args.threads)]
     print(f"Ejecutando {cfg.name}:\n  {' '.join(shlex.quote(part) for part in cmd)}")
 
     with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as proc:
@@ -244,6 +316,20 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
                         help="Intervalo en segundos para muestrear CPU/memoria (0 = desactivar).")
     parser.add_argument("--save-pgns", action="store_true",
                         help="Guardar los PGN generados por cada match.")
+    parser.add_argument("--threads", type=int, default=1,
+                        help="Número de hilos UCI a asignar a cada instancia del motor.")
+    parser.add_argument("--internal-evalfile", type=str,
+                        help="Ruta a la red NNUE principal del perfil interno (EvalFile).")
+    parser.add_argument("--internal-evalfile-small", type=str,
+                        help="Ruta a la red alternativa del perfil interno (EvalFileSmall).")
+    parser.add_argument("--reference-evalfile", type=str,
+                        help="Ruta a la red NNUE principal de referencia (EvalFile).")
+    parser.add_argument("--reference-evalfile-small", type=str,
+                        help="Ruta a la red alternativa de referencia (EvalFileSmall).")
+    parser.add_argument("--internal-label", type=str,
+                        help="Nombre a mostrar para la instancia interna en cutechess-cli.")
+    parser.add_argument("--reference-label", type=str,
+                        help="Nombre a mostrar para la instancia de referencia/oponente.")
     parser.add_argument("--only", type=str, nargs="*",
                         help="Lista de benchmarks a ejecutar (por defecto todos).")
     return parser.parse_args(argv)
@@ -254,6 +340,9 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
 
     if args.engine is None:
         args.engine = str(detect_engine(Path("build")))
+
+    if args.threads < 1:
+        raise SystemExit("--threads debe ser un entero positivo")
 
     matches = {cfg.name: cfg for cfg in DEFAULT_MATCHES}
     selected: Iterable[CCRLMatchConfig] = list(matches.values())
