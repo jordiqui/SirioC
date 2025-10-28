@@ -30,8 +30,12 @@ El comportamiento sigue la guía de Rustic Chess, priorizando claridad sobre ren
 - `position`: interpreta `startpos` o un bloque `fen`, aplica los movimientos listados y actualiza el
   tablero con `set_position`.
 - `go`: acepta parámetros sencillos (`depth`) y delega en `handle_go` para lanzar la búsqueda y
-  devolver `bestmove`.
-- `stop`/`quit`: abandonan el bucle.
+  devolver `bestmove`. Si el modo de análisis persistente está activo, `handle_go` intenta cargar
+  automáticamente la tabla de transposición desde el fichero configurado antes de iniciar la
+  búsqueda.【F:src/main.cpp†L744-L770】
+- `stop`/`quit`: abandonan el bucle. Al recibir `quit` el motor detiene la búsqueda y guarda la
+  tabla persistente si la opción está habilitada, de modo que los datos queden disponibles para la
+  siguiente sesión.【F:src/main.cpp†L925-L959】
 - `d`: imprime el FEN actual para depuración.【F:src/main.cpp†L15-L110】【F:src/main.cpp†L118-L166】
 
 ## 7.4. Design

@@ -744,6 +744,9 @@ void handle_go(const std::string &command_args, const sirio::Board &board) {
     bool depth_overridden = false;
     bool has_time_information = false;
     bool infinite_search = false;
+
+    try_autoload_persistent_analysis(false);
+
     while (stream >> token) {
         if (token == "depth") {
             if (stream >> token) {
@@ -950,6 +953,7 @@ int main() {
                 stop_and_join_search();
             } else if (command == "quit") {
                 stop_and_join_search();
+                save_persistent_analysis_if_enabled(true);
                 break;
             } else if (command == "d") {
                 stop_and_join_search();
@@ -961,6 +965,7 @@ int main() {
     }
 
     stop_and_join_search();
+    save_persistent_analysis_if_enabled(false);
     return 0;
 }
 
