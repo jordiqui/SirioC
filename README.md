@@ -30,6 +30,164 @@ Este es un motor original creado por **Jorge Ruiz Centelles**. El núcleo del mo
 - [Comunicación UCI](docs/communication.md)
 - [Integración con GUIs UCI](docs/gui.md)
 
+## Settings
+
+The Arena/Fritz configuration dialog exposes the following UCI options. The
+descriptions below explain what each control does and highlight the recommended
+values for common time controls:
+
+- **Bullet** (≤ 2+1)
+- **Blitz** (3+2 to 5+3)
+- **Rapid** (10+0 to 25+10)
+- **Classical** (≥ 45+15)
+
+### Core performance
+
+#### Threads
+Determines how many CPU threads the search will use. SirioC scales best with the
+number of physical cores available; hyper-threads provide diminishing returns.
+**Recommended values:** Bullet—use 75% of your physical cores to keep the GUI
+responsive, Blitz/Rapid/Classical—use all physical cores or all but one if the
+machine is shared.
+
+#### Hash
+Sets the size of the transposition table in megabytes. Larger tables allow the
+engine to reuse more positions between searches but consume more RAM.
+**Recommended values:** Bullet—64 to 128 MB, Blitz—256 MB, Rapid—512 MB, and
+Classical—1024 MB or the largest size that keeps free memory for the GUI.
+
+#### Clear Hash (button)
+Immediately empties the transposition table. Use it before starting new test
+matches or when switching between very different positions. No time-control
+dependency: press as needed.
+
+#### HashFile / HashPersist
+`HashFile` points to a file used to persist the transposition table across
+sessions when `HashPersist` is enabled. Persistent hash only helps in long-term
+analysis; leave `HashPersist` disabled for all competitive time controls and
+enable it with a writable path only for offline studies.
+
+#### NumaPolicy
+Controls how SirioC pins memory on NUMA systems. `auto` lets the engine choose.
+Only adjust this on workstations with multiple CPU sockets. All time controls
+should keep the default unless profiling shows imbalance.
+
+### Search and analysis output
+
+#### Analysis Lines
+Specifies how many principal variations the engine reports. Extra lines slow the
+search because SirioC must keep multiple best lines.
+**Recommended values:** Bullet/Blitz—1 line to focus on the best move,
+Rapid—2 lines when analysing, Classical—2 to 3 lines if you need deeper
+explanations; keep 1 when playing a tournament game.
+
+#### MultiPV
+Determines how many best moves the engine tracks internally. Increasing it has
+the same cost considerations as `Analysis Lines`.
+**Recommended values:** Bullet/Blitz—1, Rapid—2 when analysing, Classical—2 to 4
+for study sessions; return to 1 for competitive play.
+
+#### Skill Level
+Artificially limits engine strength by capping search depth and randomness.
+Leave it at 20 (maximum strength) for all time controls unless you deliberately
+need a weaker sparring partner.
+
+#### nodestime
+Caps the number of nodes searched per millisecond. Leave it at 0 so SirioC uses
+its adaptive time management at every time control.
+
+#### Debug Log File
+If set, SirioC writes an execution log to the given path. Logging incurs slight
+overhead, so keep it empty for Bullet/Blitz. For Rapid/Classical analysis
+sessions you may provide a path when you need diagnostics.
+
+### Time management
+
+#### Ponder
+Allows the engine to think on the opponent's time. **Recommended values:**
+Bullet—off (it can interfere with fast move input), Blitz—off unless you run on
+a dedicated machine, Rapid/Classical—on for maximum strength when background
+thinking is acceptable.
+
+#### Move Overhead
+Reserves extra milliseconds per move to account for GUI latency. **Recommended
+values:** Bullet—250 to 300 ms, Blitz—150 ms, Rapid—100 ms, Classical—50 ms.
+
+#### Minimum Thinking Time
+Defines a floor on how little time the engine uses even when ahead on the clock.
+**Recommended values:** Bullet—20 ms, Blitz—50 ms, Rapid—100 ms,
+Classical—150 ms.
+
+#### Slow Mover
+Scales how aggressively the search spends time. Lower numbers make the engine
+play faster. **Recommended values:** Bullet—80, Blitz—90, Rapid—100,
+Classical—110.
+
+### Opening book and NNUE
+
+#### UseBook / BookFile
+`UseBook` enables the external opening book located at `BookFile`. Books provide
+instant moves and conserve time. **Recommended values:** enable the book for
+Bullet/Blitz/Rapid to avoid early clock usage, and enable it for Classical when
+you trust the book contents; disable if you prefer to test pure engine play.
+
+#### UseNNUE / EvalFile / EvalFileSmall / NNUEFile
+`UseNNUE` toggles the neural evaluation backend. `EvalFile` and `NNUEFile`
+should point to the main network (`nn-1c0000000000.nnue` by default) and
+`EvalFileSmall` to a fallback network for low-memory systems. NNUE evaluation
+produces stronger play across all time controls, so keep `UseNNUE` enabled with
+valid paths for Bullet through Classical. Only disable NNUE when benchmarking
+the handcrafted evaluation.
+
+### Syzygy tablebases
+
+#### SyzygyPath
+Directory containing Syzygy tablebase files. Configure it whenever you have the
+bases locally; they instantly solve many endings and save time. Applies equally
+to all time controls.
+
+#### SyzygyProbeDepth / SyzygyProbeLimit
+`SyzygyProbeDepth` determines how deep the search waits before probing the
+bases, while `SyzygyProbeLimit` limits the number of pieces probed. **Recommended
+values:** Bullet—depth 2 and limit 5 to avoid latency, Blitz—depth 4 limit 6,
+Rapid—depth 6 limit 7, Classical—depth 8 limit 7 for maximum precision.
+
+#### Syzygy50MoveRule
+When true, SirioC honours the 50-move rule while probing tablebases. Keep it
+enabled for all official games regardless of time control.
+
+### Persistent analysis tools
+
+#### PersistentAnalysis
+Stores and reuses the transposition table between searches while analysing a
+single position deeply. Disable it for competitive play at every time control;
+enable it only for long manual studies.
+
+#### PersistentAnalysisFile
+File path used by the persistent analysis feature. Provide a writable location
+when `PersistentAnalysis` is enabled; leave empty otherwise.
+
+#### PersistentAnalysisLoad / Save / Clear (buttons)
+`Load` restores a saved analysis table from `PersistentAnalysisFile`, `Save`
+writes the current table, and `Clear` deletes the stored data. Invoke these
+manually during deep analysis sessions; they are not part of routine timed play.
+
+### Strength limiting and variants
+
+#### UCI_LimitStrength / UCI_Elo
+These controls emulate a weaker playing strength by targeting a specific ELO
+rating. Keep `UCI_LimitStrength` off and `UCI_Elo` at its default (3190) for all
+serious games.
+
+#### UCI_Chess960
+Enables Chess960 castling rules. Activate it only when the event is in Chess960
+format; leave it off otherwise.
+
+#### UCI_ShowWDL
+Requests win/draw/loss statistics in analysis output. The extra formatting has
+minimal impact, so feel free to keep it on for Rapid/Classical analysis. Disable
+it for Bullet/Blitz if you want the leanest info stream.
+
 ## Requisitos
 
 - CMake 3.16 o superior.
