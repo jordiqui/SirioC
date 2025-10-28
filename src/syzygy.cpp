@@ -4,9 +4,13 @@
 #include <atomic>
 #include <bit>
 #include <cmath>
+#include <cstdlib>
+#include <filesystem>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <system_error>
+#include <vector>
 
 #define TB_NO_THREADS
 #define TB_NO_HELPER_API
@@ -106,6 +110,27 @@ unsigned encode_ep(const Board &board) {
     return static_cast<unsigned>(*ep);
 }
 
+std::optional<std::filesystem::path> verify_directory(const std::filesystem::path &path) {
+    if (path.empty()) {
+        return std::nullopt;
+    }
+    std::error_code ec;
+    if (!std::filesystem::exists(path, ec) || ec) {
+        return std::nullopt;
+    }
+    if (!std::filesystem::is_directory(path, ec) || ec) {
+        return std::nullopt;
+    }
+    auto normalized = std::filesystem::weakly_canonical(path, ec);
+    if (ec) {
+        normalized = std::filesystem::absolute(path, ec);
+        if (ec) {
+            normalized = path;
+        }
+    }
+    return normalized;
+}
+
 }  // namespace
 
 void set_tablebase_path(const std::string &path) {
@@ -118,6 +143,59 @@ void set_tablebase_path(const std::string &path) {
 }
 
 const std::string &tablebase_path() { return g_tb_path; }
+
+std::optional<std::filesystem::path> detect_default_tablebase_path() {
+    const char *env_path = std::getenv("SIRIO_SYZYGY_PATH");
+    if (env_path && *env_path != '\0') {
+        if (auto verified = verify_directory(env_path); verified.has_value()) {
+            return verified;
+        }
+    }
+
+    std::vector<std::filesystem::path> candidates;
+    candidates.reserve(6);
+    auto add_candidate = [&](const std::filesystem::path &candidate) {
+        if (candidate.empty()) {
+            return;
+        }
+        auto normalized = candidate.lexically_normal();
+        if (normalized.empty()) {
+            return;
+        }
+        for (const auto &existing : candidates) {
+            if (existing == normalized) {
+                return;
+            }
+        }
+        candidates.push_back(normalized);
+    };
+
+    std::error_code ec;
+    auto exe_path = std::filesystem::read_symlink("/proc/self/exe", ec);
+    if (!ec) {
+        auto exe_dir = exe_path.parent_path();
+        add_candidate(exe_dir / "tablebases");
+        if (exe_dir.has_parent_path()) {
+            add_candidate(exe_dir.parent_path() / "tablebases");
+        }
+    }
+
+    auto current_dir = std::filesystem::current_path(ec);
+    if (!ec) {
+        add_candidate(current_dir / "tablebases");
+        if (current_dir.has_parent_path()) {
+            add_candidate(current_dir.parent_path() / "tablebases");
+        }
+    }
+
+    for (const auto &candidate : candidates) {
+        if (auto verified = verify_directory(candidate); verified.has_value()) {
+            return verified;
+        }
+    }
+
+    return std::nullopt;
+}
 
 bool available() {
     std::lock_guard<std::mutex> lock(g_mutex);

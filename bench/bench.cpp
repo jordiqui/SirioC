@@ -16,6 +16,10 @@ struct TacticalPosition {
 }
 
 int main() {
+    if (auto detected = sirio::syzygy::detect_default_tablebase_path(); detected.has_value()) {
+        sirio::syzygy::set_tablebase_path(detected->string());
+    }
+
     std::vector<std::string> speed_positions = {
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
         "r1bq1rk1/ppp2ppp/2n2n2/3pp3/3P4/2P1PN2/PP1NBPPP/R2QKB1R w KQ - 0 7",

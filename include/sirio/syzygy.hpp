@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <optional>
 #include <string>
 
@@ -16,6 +17,7 @@ struct ProbeResult {
 
 void set_tablebase_path(const std::string &path);
 [[nodiscard]] const std::string &tablebase_path();
+[[nodiscard]] std::optional<std::filesystem::path> detect_default_tablebase_path();
 [[nodiscard]] bool available();
 [[nodiscard]] int max_pieces();
 [[nodiscard]] std::optional<ProbeResult> probe_wdl(const Board &board);

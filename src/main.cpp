@@ -151,6 +151,14 @@ void initialize_engine_options() {
     sirio::set_transposition_table_size(options.hash_size_mb);
     mark_persistent_analysis_unloaded();
     apply_time_management_options();
+    if (options.syzygy_path.empty()) {
+        if (auto detected = sirio::syzygy::detect_default_tablebase_path(); detected.has_value()) {
+            options.syzygy_path = detected->string();
+        }
+    }
+    if (!options.syzygy_path.empty()) {
+        sirio::syzygy::set_tablebase_path(options.syzygy_path);
+    }
     sirio::syzygy::set_probe_depth_limit(options.syzygy_probe_depth);
     sirio::syzygy::set_probe_piece_limit(options.syzygy_probe_limit);
     sirio::syzygy::set_use_fifty_move_rule(options.syzygy_50_move_rule);
@@ -367,7 +375,9 @@ void send_uci_id() {
     std::cout << "option name UCI_LimitStrength type check default false" << std::endl;
     std::cout << "option name UCI_Elo type spin default 1320 min 1320 max 3190" << std::endl;
     std::cout << "option name UCI_ShowWDL type check default false" << std::endl;
-    std::cout << "option name SyzygyPath type string default <empty>" << std::endl;
+    std::cout << "option name SyzygyPath type string default "
+              << (options.syzygy_path.empty() ? std::string{"<empty>"} : options.syzygy_path)
+              << std::endl;
     std::cout << "option name SyzygyProbeDepth type spin default 1 min 1 max 100"
               << std::endl;
     std::cout << "option name Syzygy50MoveRule type check default true" << std::endl;
