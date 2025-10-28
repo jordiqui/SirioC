@@ -46,6 +46,9 @@ std::mutex search_thread_mutex;
 std::thread search_thread;
 std::atomic<bool> search_in_progress{false};
 
+std::mutex pending_result_mutex;
+std::optional<sirio::SearchResult> pending_infinite_result;
+
 struct EngineOptions {
     std::string debug_log_file;
     std::string numa_policy = "auto";
@@ -192,6 +195,29 @@ void stop_and_join_search() {
     }
 
     search_in_progress.store(false, std::memory_order_release);
+
+    std::optional<sirio::SearchResult> pending;
+    {
+        std::lock_guard<std::mutex> lock(pending_result_mutex);
+        if (pending_infinite_result.has_value()) {
+            pending = pending_infinite_result;
+            pending_infinite_result.reset();
+        }
+    }
+
+    if (pending.has_value()) {
+        const sirio::SearchResult& result = *pending;
+        if (result.has_move) {
+            std::cout << "bestmove " << sirio::move_to_uci(result.best_move);
+            if (result.principal_variation.size() >= 2) {
+                std::cout << " ponder "
+                          << sirio::move_to_uci(result.principal_variation[1]);
+            }
+            std::cout << std::endl;
+        } else {
+            std::cout << "bestmove 0000" << std::endl;
+        }
+    }
 }
 
 void output_search_result(const sirio::Board& board, const sirio::SearchLimits& limits,
@@ -216,19 +242,35 @@ void output_search_result(const sirio::Board& board, const sirio::SearchLimits& 
                   << " multipv 1 score " << sirio::format_uci_score(result.score)
                   << " nodes " << nodes << " nps " << nps << " hashfull 0 tbhits 0 time "
                   << time_ms << " pv " << pv_string << std::endl;
-        std::cout << "bestmove " << sirio::move_to_uci(result.best_move);
-        if (result.principal_variation.size() >= 2) {
-            std::cout << " ponder "
-                      << sirio::move_to_uci(result.principal_variation[1]);
+        if (limits.infinite) {
+            std::lock_guard<std::mutex> lock(pending_result_mutex);
+            pending_infinite_result = result;
+        } else {
+            std::cout << "bestmove " << sirio::move_to_uci(result.best_move);
+            if (result.principal_variation.size() >= 2) {
+                std::cout << " ponder "
+                          << sirio::move_to_uci(result.principal_variation[1]);
+            }
+            std::cout << std::endl;
         }
-        std::cout << std::endl;
     } else {
         auto legal_moves = sirio::generate_legal_moves(board);
-        if (!legal_moves.empty()) {
-            const auto fallback = legal_moves.front();
-            std::cout << "bestmove " << sirio::move_to_uci(fallback) << std::endl;
+        if (limits.infinite) {
+            sirio::SearchResult pending;
+            pending.has_move = false;
+            if (!legal_moves.empty()) {
+                pending.best_move = legal_moves.front();
+                pending.has_move = true;
+            }
+            std::lock_guard<std::mutex> lock(pending_result_mutex);
+            pending_infinite_result = pending;
         } else {
-            std::cout << "bestmove 0000" << std::endl;
+            if (!legal_moves.empty()) {
+                const auto fallback = legal_moves.front();
+                std::cout << "bestmove " << sirio::move_to_uci(fallback) << std::endl;
+            } else {
+                std::cout << "bestmove 0000" << std::endl;
+            }
         }
     }
 
@@ -244,6 +286,11 @@ void start_search_async(const sirio::Board& board, const sirio::SearchLimits& li
 
     sirio::Board board_copy = board;
     sirio::SearchLimits limits_copy = limits;
+
+    {
+        std::lock_guard<std::mutex> lock(pending_result_mutex);
+        pending_infinite_result.reset();
+    }
 
     search_in_progress.store(true, std::memory_order_release);
 
