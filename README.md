@@ -6,6 +6,8 @@
 
 SirioC es un proyecto de motor de ajedrez en C++ inspirado en la guía de Rustic Chess. El objetivo es construir una base clara y modular que cubra la representación del tablero, la carga de posiciones en notación FEN y utilidades básicas para futuros módulos como la generación de movimientos y la evaluación.
 
+Este es un motor original creado por **Jorge Ruiz Centelles**. El núcleo del motor, su interfaz UCI y las herramientas de prueba están desarrolladas íntegramente en **C++20**, con archivos de configuración en CMake y Makefile para facilitar la compilación en distintas plataformas. El proyecto se distribuye bajo licencia MIT, por lo que cualquier redistribución debe conservar este aviso de autoría y los términos de la licencia.
+
 ## Características actuales
 
 - Representación del tablero basada en bitboards.
