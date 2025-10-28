@@ -745,7 +745,7 @@ void handle_setoption(const std::string &args, sirio::Board &board) {
     }
 }
 
-constexpr int kDefaultGoDepth = 12;
+constexpr int kDefaultGoDepth = 128;
 
 void handle_go(const std::string &command_args, const sirio::Board &board) {
     std::istringstream stream{command_args};
