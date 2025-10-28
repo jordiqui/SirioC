@@ -33,7 +33,7 @@ namespace {
 struct SearchSharedState;
 
 constexpr int mate_score = 100000;
-constexpr int max_search_depth = 64;
+constexpr int max_search_depth = 128;
 constexpr int mate_threshold = mate_score - max_search_depth;
 constexpr std::array<int, static_cast<std::size_t>(PieceType::Count)> mvv_values = {
     100, 320, 330, 500, 900, 20000};
@@ -765,7 +765,7 @@ bool publish_best_result(const SearchResult &candidate, SharedBestResult &shared
 SearchResult run_search_thread(Board board, int max_depth_limit, SearchSharedState &shared,
                                SharedBestResult &shared_result, const SearchResult &seed,
                                int thread_index, bool is_primary, GlobalTranspositionTable &tt,
-                               std::uint8_t tt_generation) {
+                               std::uint8_t tt_generation, bool infinite_search) {
     SearchContext context;
     context.shared = &shared;
     context.tt = &tt;
@@ -782,7 +782,8 @@ SearchResult run_search_thread(Board board, int max_depth_limit, SearchSharedSta
         std::this_thread::sleep_for(std::chrono::milliseconds{15 * thread_index});
     }
 
-    for (int depth = 1; depth <= max_depth_limit; ++depth) {
+    int capped_depth_limit = std::max(1, max_depth_limit);
+    for (int depth = 1; depth <= capped_depth_limit; ++depth) {
         if (shared.stop.load(std::memory_order_relaxed)) {
             break;
         }
@@ -837,7 +838,11 @@ SearchResult run_search_thread(Board board, int max_depth_limit, SearchSharedSta
             best_found = true;
             local.best_move = current_best;
             local.has_move = true;
-            local.depth_reached = depth;
+            int reported_depth = depth;
+            if (max_depth_limit > 0) {
+                reported_depth = std::min(depth, max_depth_limit);
+            }
+            local.depth_reached = reported_depth;
             publish_best_result(local, shared_result, board, tt, tt_generation, shared,
                                 is_primary);
         }
@@ -860,6 +865,12 @@ SearchResult run_search_thread(Board board, int max_depth_limit, SearchSharedSta
         }
     }
 
+    if (infinite_search) {
+        while (!shared.stop.load(std::memory_order_relaxed)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds{1});
+        }
+    }
+
     if (best_found) {
         local.best_move = best_move;
         local.has_move = true;
@@ -877,7 +888,12 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     SearchSharedState shared;
     shared.start_time = std::chrono::steady_clock::now();
 
-    std::optional<TimeAllocation> allocation = compute_time_allocation(board, limits);
+    const bool treat_as_infinite = limits.infinite;
+
+    std::optional<TimeAllocation> allocation;
+    if (!treat_as_infinite) {
+        allocation = compute_time_allocation(board, limits);
+    }
     std::uint64_t nodes_budget_from_time = 0;
     if (allocation.has_value()) {
         shared.has_time_limit = true;
@@ -893,15 +909,17 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
         nodes_budget_from_time = nodes_budget_for_time(shared.hard_time_limit);
     }
 
-    if (limits.max_nodes > 0) {
-        shared.has_node_limit = true;
-        shared.node_limit = limits.max_nodes;
-        if (nodes_budget_from_time > 0) {
-            shared.node_limit = std::min(shared.node_limit, nodes_budget_from_time);
+    if (!treat_as_infinite) {
+        if (limits.max_nodes > 0) {
+            shared.has_node_limit = true;
+            shared.node_limit = limits.max_nodes;
+            if (nodes_budget_from_time > 0) {
+                shared.node_limit = std::min(shared.node_limit, nodes_budget_from_time);
+            }
+        } else if (nodes_budget_from_time > 0) {
+            shared.has_node_limit = true;
+            shared.node_limit = nodes_budget_from_time;
         }
-    } else if (nodes_budget_from_time > 0) {
-        shared.has_node_limit = true;
-        shared.node_limit = nodes_budget_from_time;
     }
 
     int root_piece_count = total_piece_count(board);
@@ -935,9 +953,12 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     workers.reserve(static_cast<std::size_t>(std::max(0, thread_count - 1)));
     std::vector<SearchResult> thread_results(static_cast<std::size_t>(thread_count));
 
+    const bool infinite_search = treat_as_infinite && !shared.has_time_limit && !shared.has_node_limit;
+
     auto worker_fn = [&](int index, bool is_primary) {
         thread_results[static_cast<std::size_t>(index)] = run_search_thread(
-            board, max_depth_limit, shared, shared_result, seed, index, is_primary, tt, tt_generation);
+            board, max_depth_limit, shared, shared_result, seed, index, is_primary, tt, tt_generation,
+            infinite_search);
     };
 
     for (int index = 1; index < thread_count; ++index) {

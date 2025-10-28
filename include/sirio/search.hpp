@@ -20,6 +20,7 @@ struct SearchLimits {
     int increment_black = 0;
     int moves_to_go = 0;
     std::uint64_t max_nodes = 0;
+    bool infinite = false;
 };
 
 struct SearchResult {

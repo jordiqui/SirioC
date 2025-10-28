@@ -753,7 +753,8 @@ void handle_go(const std::string &command_args, const sirio::Board &board) {
     sirio::SearchLimits limits;
     bool depth_overridden = false;
     bool has_time_information = false;
-    bool infinite_search = false;
+    bool infinite_requested = false;
+    bool any_limit_specified = false;
 
     try_autoload_persistent_analysis(false);
 
@@ -762,12 +763,16 @@ void handle_go(const std::string &command_args, const sirio::Board &board) {
             if (stream >> token) {
                 limits.max_depth = std::stoi(token);
                 depth_overridden = true;
+                if (limits.max_depth > 0) {
+                    any_limit_specified = true;
+                }
             }
         } else if (token == "nodes") {
             if (stream >> token) {
                 long long parsed = std::stoll(token);
                 if (parsed > 0) {
                     limits.max_nodes = static_cast<std::uint64_t>(parsed);
+                    any_limit_specified = true;
                 } else {
                     limits.max_nodes = 0;
                 }
@@ -776,45 +781,78 @@ void handle_go(const std::string &command_args, const sirio::Board &board) {
             if (stream >> token) {
                 limits.move_time = std::stoi(token);
                 has_time_information = true;
-                limits.max_depth = 64;
+                limits.max_depth = 128;
+                if (limits.move_time > 0) {
+                    any_limit_specified = true;
+                }
             }
         } else if (token == "wtime") {
             if (stream >> token) {
                 limits.time_left_white = std::stoi(token);
                 has_time_information = true;
+                if (limits.time_left_white > 0) {
+                    any_limit_specified = true;
+                }
             }
         } else if (token == "btime") {
             if (stream >> token) {
                 limits.time_left_black = std::stoi(token);
                 has_time_information = true;
+                if (limits.time_left_black > 0) {
+                    any_limit_specified = true;
+                }
             }
         } else if (token == "winc") {
             if (stream >> token) {
                 limits.increment_white = std::stoi(token);
                 has_time_information = true;
+                if (limits.increment_white > 0) {
+                    any_limit_specified = true;
+                }
             }
         } else if (token == "binc") {
             if (stream >> token) {
                 limits.increment_black = std::stoi(token);
                 has_time_information = true;
+                if (limits.increment_black > 0) {
+                    any_limit_specified = true;
+                }
             }
         } else if (token == "movestogo") {
             if (stream >> token) {
                 limits.moves_to_go = std::stoi(token);
                 has_time_information = true;
+                if (limits.moves_to_go > 0) {
+                    any_limit_specified = true;
+                }
             }
         } else if (token == "infinite") {
-            limits.max_depth = 64;
-            infinite_search = true;
+            infinite_requested = true;
         }
     }
 
-    if (has_time_information && !depth_overridden && limits.move_time == 0) {
-        limits.max_depth = 64;
+    if (infinite_requested || (!any_limit_specified && !has_time_information && !depth_overridden &&
+                               limits.max_nodes == 0)) {
+        limits.infinite = true;
+        limits.max_depth = 0;
+        limits.max_nodes = 0;
+        limits.move_time = 0;
+        limits.time_left_white = 0;
+        limits.time_left_black = 0;
+        limits.increment_white = 0;
+        limits.increment_black = 0;
+        limits.moves_to_go = 0;
     }
 
-    if (!depth_overridden && !has_time_information && limits.max_nodes == 0 && !infinite_search) {
-        limits.max_depth = kDefaultGoDepth;
+    if (!limits.infinite) {
+        if (has_time_information && !depth_overridden && limits.move_time == 0) {
+            limits.max_depth = 128;
+        }
+
+        if (!depth_overridden && !has_time_information && limits.max_nodes == 0 &&
+            any_limit_specified) {
+            limits.max_depth = kDefaultGoDepth;
+        }
     }
 
     sirio::initialize_evaluation(board);
