@@ -77,3 +77,31 @@ numbers (modulo floating-point noise) on deterministic hardware.
 - Experiment with multi-network policies by extending the model definition in
   `scripts/train.py` and updating the export script accordingly.
 
+## Automated regression matches
+
+Validated NNUE checkpoints can be stress-tested against the production
+configuration with the orchestration script provided in
+`scripts/match_orchestrator.py`.  The tool wraps either `cutechess-cli` or
+`fastchess` and automates the full promotion cycle:
+
+```bash
+python -m training.nnue.scripts.match_orchestrator \
+    --tool cutechess \
+    --tool-path /usr/bin/cutechess-cli \
+    --engine build/bin/sirio \
+    --baseline-network training/nnue/weights/baseline.nnue \
+    --validated-dir training/nnue/weights/candidates \
+    --deploy-path runtime/nnue/current.nnue \
+    --rounds 200 \
+    --concurrency 4 \
+    --time-control "60/5+0.5"
+```
+
+Each candidate found in `--validated-dir` is matched against the baseline
+network and, if it exceeds the promotion threshold (default margin of
+0.5 points), it is automatically copied to the deployment location.  Match
+logs and results are persisted to `training/nnue/metrics/regressions/` so the
+process can resume after interruptions.  Passing `--interval <seconds>` keeps
+the orchestrator running indefinitely, polling the directory for new candidate
+files.
+
