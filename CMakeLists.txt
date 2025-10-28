@@ -33,6 +33,7 @@ target_compile_features(sirio_core PUBLIC cxx_std_20)
 
 add_executable(sirio
     src/main.cpp
+    src/uci.cpp
 )
 
 target_link_libraries(sirio PRIVATE sirio_core)
