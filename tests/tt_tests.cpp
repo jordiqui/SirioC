@@ -127,10 +127,25 @@ void test_collision_exact_replacement() {
     sirio::clear_transposition_tables();
 }
 
+void test_disabling_transposition_table() {
+    const std::size_t previous_size = sirio::get_transposition_table_size();
+    sirio::set_transposition_table_size(0);
+    sirio::clear_transposition_tables();
+
+    sirio::GlobalTranspositionTable table;
+    std::uint8_t generation = table.prepare_for_search();
+    (void)generation;
+    assert(table.bucket_count_for_tests() == 0);
+
+    sirio::set_transposition_table_size(previous_size);
+    sirio::clear_transposition_tables();
+}
+
 }  // namespace
 
 void run_tt_tests() {
     test_collision_eviction();
     test_collision_exact_replacement();
+    test_disabling_transposition_table();
 }
 
