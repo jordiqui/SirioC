@@ -175,7 +175,7 @@ using OptionsMap = std::map<std::string, Option, CaseLess>;
 inline void register_essential_options(OptionsMap& o){
     // Performance / parallelism
     o["Threads"]       = Option(1, 1, 1024);
-    o["Hash"]          = Option(64, 1, 33554432);  // MB
+    o["Hash"]          = Option(16, 1, 33554432);  // MB
     o["Clear Hash"]    = Option::Button(nullptr);  // attach later: TT.clear()
     o["Ponder"]        = Option(false);
 
@@ -185,19 +185,19 @@ inline void register_essential_options(OptionsMap& o){
     o["UCI_ShowWDL"]   = Option(false);
 
     // Time management
-    o["Move Overhead"]         = Option(250, 0, 5000);
-    o["Minimum Thinking Time"] = Option(25,  0, 2000);
-    o["Slow Mover"]            = Option(98, 10, 500);
+    o["Move Overhead"]         = Option(10, 0, 5000);
+    o["Minimum Thinking Time"] = Option(100, 0, 5000);
+    o["Slow Mover"]            = Option(100, 10, 1000);
 
     // Strength limiting
     o["UCI_LimitStrength"] = Option(false);
-    o["UCI_Elo"]           = Option(3190, 1320, 3190);
+    o["UCI_Elo"]           = Option(1320, 1320, 3190);
 
     // Paths / logs / NNUE / TBs
     o["Debug Log File"]  = Option(std::string(""));
     o["EvalFile"]        = Option(std::string("nn-1c0000000000.nnue"));
     o["SyzygyPath"]      = Option(std::string(""));
-    o["SyzygyProbeDepth"]= Option(1, 0, 128);
+    o["SyzygyProbeDepth"]= Option(1, 1, 100);
     o["Syzygy50MoveRule"]= Option(true);
 
     // NUMA (combo)
