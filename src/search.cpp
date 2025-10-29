@@ -359,6 +359,28 @@ bool same_move(const Move &lhs, const Move &rhs) {
            lhs.is_castling == rhs.is_castling;
 }
 
+std::optional<TTEntry> probe_transposition(GlobalTranspositionTable &tt, std::uint64_t hash,
+                                           std::uint8_t expected_generation) {
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        auto entry_opt = tt.probe(hash);
+        if (!entry_opt.has_value()) {
+            return std::nullopt;
+        }
+        if (entry_opt->generation == 0 || entry_opt->generation == expected_generation) {
+            return entry_opt;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<TTEntry> probe_transposition(GlobalTranspositionTable *tt, std::uint64_t hash,
+                                           std::uint8_t expected_generation) {
+    if (tt == nullptr) {
+        return std::nullopt;
+    }
+    return probe_transposition(*tt, hash, expected_generation);
+}
+
 std::vector<Move> extract_principal_variation(const Board &board, GlobalTranspositionTable &tt,
                                               std::uint8_t generation, int max_length) {
     std::vector<Move> pv;
@@ -370,14 +392,11 @@ std::vector<Move> extract_principal_variation(const Board &board, GlobalTranspos
     visited.insert(current.zobrist_hash());
     const int limit = std::min(max_length, max_search_depth);
     for (int depth = 0; depth < limit; ++depth) {
-        auto entry_opt = tt.probe(current.zobrist_hash());
+        auto entry_opt = probe_transposition(tt, current.zobrist_hash(), generation);
         if (!entry_opt.has_value()) {
             break;
         }
         const TTEntry &entry = *entry_opt;
-        if (entry.generation != 0 && entry.generation != generation) {
-            break;
-        }
         auto moves = generate_legal_moves(current);
         auto it = std::find_if(moves.begin(), moves.end(),
                                [&](const Move &candidate) {
@@ -594,10 +613,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         ++depth_left;
     }
 
-    std::optional<TTEntry> tt_entry;
-    if (context.tt != nullptr) {
-        tt_entry = context.tt->probe(hash);
-    }
+    std::optional<TTEntry> tt_entry = probe_transposition(context.tt, hash, context.tt_generation);
     std::optional<Move> tt_move;
     if (tt_entry.has_value()) {
         tt_move = tt_entry->best_move;

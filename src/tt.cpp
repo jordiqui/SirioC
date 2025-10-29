@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <fstream>
 #include <limits>
+#include <mutex>
 #include <string_view>
 
 namespace sirio {
@@ -133,18 +134,20 @@ void GlobalTranspositionTable::store(std::uint64_t key, const TTEntry &entry, st
     }
 
     const std::size_t index = cluster_index(key);
-    std::lock_guard shard_lock(shard_mutexes_[index % kMutexShardCount]);
     Cluster &cluster = clusters_[index];
-    PackedTTEntry *slot = select_entry(cluster, static_cast<std::uint16_t>(key));
+    const std::size_t slot_index = select_entry_index(cluster, static_cast<std::uint16_t>(key));
 
     const std::uint8_t generation_bits = pack_generation(generation);
-    slot->key16 = static_cast<std::uint16_t>(key);
-    slot->depth8 = pack_depth(entry.depth);
-    slot->gen_and_type = static_cast<std::uint8_t>((generation_bits & kGenerationMask) |
+    PackedTTEntry packed{};
+    packed.key16 = static_cast<std::uint16_t>(key);
+    packed.depth8 = pack_depth(entry.depth);
+    packed.gen_and_type = static_cast<std::uint8_t>((generation_bits & kGenerationMask) |
                                                    (static_cast<std::uint8_t>(entry.type) & kNodeTypeMask));
-    slot->packed_move = pack_move(entry.best_move);
-    slot->score = entry.score;
-    slot->static_eval = entry.static_eval;
+    packed.packed_move = pack_move(entry.best_move);
+    packed.score = entry.score;
+    packed.static_eval = entry.static_eval;
+
+    cluster.entries[slot_index].store(packed, std::memory_order_relaxed);
 }
 
 std::optional<TTEntry> GlobalTranspositionTable::probe(std::uint64_t key) const {
@@ -154,10 +157,9 @@ std::optional<TTEntry> GlobalTranspositionTable::probe(std::uint64_t key) const 
     }
 
     const std::size_t index = cluster_index(key);
-    std::lock_guard shard_lock(shard_mutexes_[index % kMutexShardCount]);
     const Cluster &cluster = clusters_[index];
-    const PackedTTEntry *slot = find_entry(cluster, static_cast<std::uint16_t>(key));
-    if (slot == nullptr) {
+    auto slot = find_entry(cluster, static_cast<std::uint16_t>(key));
+    if (!slot.has_value()) {
         return std::nullopt;
     }
 
@@ -192,7 +194,8 @@ bool GlobalTranspositionTable::save(const std::string &path, std::string *error)
     out.write(reinterpret_cast<const char *>(&generation_tag_), sizeof(generation_tag_));
 
     for (const auto &cluster : clusters_) {
-        for (const auto &entry : cluster.entries) {
+        for (const auto &entry_atomic : cluster.entries) {
+            PackedTTEntry entry = entry_atomic.load(std::memory_order_relaxed);
             out.write(reinterpret_cast<const char *>(&entry.key16), sizeof(entry.key16));
             out.write(reinterpret_cast<const char *>(&entry.depth8), sizeof(entry.depth8));
             out.write(reinterpret_cast<const char *>(&entry.gen_and_type), sizeof(entry.gen_and_type));
@@ -243,7 +246,8 @@ bool GlobalTranspositionTable::load(const std::string &path, std::string *error)
 
     std::vector<Cluster> new_clusters(static_cast<std::size_t>(bucket_count));
     for (auto &cluster : new_clusters) {
-        for (auto &entry : cluster.entries) {
+        for (auto &entry_atomic : cluster.entries) {
+            PackedTTEntry entry;
             in.read(reinterpret_cast<char *>(&entry.key16), sizeof(entry.key16));
             in.read(reinterpret_cast<char *>(&entry.depth8), sizeof(entry.depth8));
             in.read(reinterpret_cast<char *>(&entry.gen_and_type), sizeof(entry.gen_and_type));
@@ -256,6 +260,7 @@ bool GlobalTranspositionTable::load(const std::string &path, std::string *error)
                 }
                 return false;
             }
+            entry_atomic.store(entry, std::memory_order_relaxed);
         }
     }
 
@@ -305,41 +310,44 @@ std::size_t GlobalTranspositionTable::cluster_index(std::uint64_t key) const {
     return static_cast<std::size_t>(high_product(key, static_cast<std::uint64_t>(bucket_count)));
 }
 
-GlobalTranspositionTable::PackedTTEntry *GlobalTranspositionTable::select_entry(Cluster &cluster,
-                                                                               std::uint16_t key16) {
-    PackedTTEntry *empty_slot = nullptr;
-    for (auto &entry : cluster.entries) {
+std::size_t GlobalTranspositionTable::select_entry_index(const Cluster &cluster, std::uint16_t key16) {
+    std::size_t empty_slot = kClusterSize;
+    for (std::size_t i = 0; i < cluster.entries.size(); ++i) {
+        PackedTTEntry entry = cluster.entries[i].load(std::memory_order_acquire);
         if (entry.occupied() && entry.key16 == key16) {
-            return &entry;
+            return i;
         }
-        if (!entry.occupied() && empty_slot == nullptr) {
-            empty_slot = &entry;
+        if (!entry.occupied() && empty_slot == kClusterSize) {
+            empty_slot = i;
         }
     }
-    if (empty_slot != nullptr) {
+    if (empty_slot != kClusterSize) {
         return empty_slot;
     }
 
-    PackedTTEntry *replacement = &cluster.entries[0];
-    int best_score = replacement_score(*replacement, generation_tag_);
-    for (int i = 1; i < kClusterSize; ++i) {
-        int candidate_score = replacement_score(cluster.entries[static_cast<std::size_t>(i)], generation_tag_);
+    std::size_t replacement = 0;
+    PackedTTEntry best_entry = cluster.entries[0].load(std::memory_order_acquire);
+    int best_score = replacement_score(best_entry, generation_tag_);
+    for (std::size_t i = 1; i < cluster.entries.size(); ++i) {
+        PackedTTEntry candidate = cluster.entries[i].load(std::memory_order_acquire);
+        int candidate_score = replacement_score(candidate, generation_tag_);
         if (candidate_score < best_score) {
-            replacement = &cluster.entries[static_cast<std::size_t>(i)];
+            replacement = i;
             best_score = candidate_score;
         }
     }
     return replacement;
 }
 
-const GlobalTranspositionTable::PackedTTEntry *GlobalTranspositionTable::find_entry(
+std::optional<GlobalTranspositionTable::PackedTTEntry> GlobalTranspositionTable::find_entry(
     const Cluster &cluster, std::uint16_t key16) const {
-    for (const auto &entry : cluster.entries) {
+    for (const auto &entry_atomic : cluster.entries) {
+        PackedTTEntry entry = entry_atomic.load(std::memory_order_acquire);
         if (entry.occupied() && entry.key16 == key16) {
-            return &entry;
+            return entry;
         }
     }
-    return nullptr;
+    return std::nullopt;
 }
 
 std::size_t GlobalTranspositionTable::bucket_count_for_tests() const {
