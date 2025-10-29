@@ -598,11 +598,25 @@ struct EvaluationThreadState {
     int stack_depth = 0;
     bool notifications_enabled = false;
     std::uint64_t generation = 0;
+    nnue::ThreadAccumulator nnue_primary_accumulator;
+    nnue::ThreadAccumulator nnue_secondary_accumulator;
 };
 
 EvaluationThreadState &thread_state() {
     thread_local EvaluationThreadState state;
     return state;
+}
+
+void attach_thread_accumulators(EvaluationThreadState &state) {
+    if (!state.backend) {
+        return;
+    }
+    if (auto *multi = dynamic_cast<nnue::MultiNetworkBackend *>(state.backend.get())) {
+        multi->set_thread_accumulators(&state.nnue_primary_accumulator,
+                                       &state.nnue_secondary_accumulator);
+    } else if (auto *single = dynamic_cast<nnue::SingleNetworkBackend *>(state.backend.get())) {
+        single->set_thread_accumulator(&state.nnue_primary_accumulator);
+    }
 }
 
 void ensure_global_backend() {
@@ -634,6 +648,9 @@ void ensure_thread_backend() {
         state.stack_depth = 0;
         state.notifications_enabled = false;
         state.generation = current_generation;
+        state.nnue_primary_accumulator.reset();
+        state.nnue_secondary_accumulator.reset();
+        attach_thread_accumulators(state);
     }
 }
 
@@ -666,6 +683,8 @@ void set_evaluation_backend(std::unique_ptr<EvaluationBackend> backend) {
     state.stack_depth = 0;
     state.notifications_enabled = false;
     state.generation = 0;
+    state.nnue_primary_accumulator.reset();
+    state.nnue_secondary_accumulator.reset();
 }
 
 void use_classical_evaluation() {
