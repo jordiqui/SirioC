@@ -1,12 +1,13 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <mutex>
 #include <optional>
 #include <shared_mutex>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "sirio/move.hpp"
@@ -36,7 +37,6 @@ public:
     std::size_t bucket_count_for_tests() const;
 
 private:
-    static constexpr std::size_t kMutexShardCount = 64;
     static constexpr int kClusterSize = 3;
     static constexpr int kDepthOffset = 64;
     static constexpr std::uint8_t kNodeTypeMask = 0x3;
@@ -58,15 +58,61 @@ private:
         int packed_depth() const { return depth8; }
     };
 
-    struct Cluster {
-        std::array<PackedTTEntry, kClusterSize> entries{};
+    static_assert(std::is_trivially_copyable_v<PackedTTEntry>,
+                  "PackedTTEntry must be trivially copyable");
+    static_assert(sizeof(PackedTTEntry) <= 16, "PackedTTEntry must remain compact");
+
+    struct alignas(64) Cluster {
+        std::array<std::atomic<PackedTTEntry>, kClusterSize> entries;
+
+        Cluster() {
+            for (auto &entry : entries) {
+                entry.store(PackedTTEntry{}, std::memory_order_relaxed);
+            }
+        }
+
+        Cluster(const Cluster &other) {
+            for (std::size_t i = 0; i < entries.size(); ++i) {
+                entries[i].store(other.entries[i].load(std::memory_order_relaxed),
+                                 std::memory_order_relaxed);
+            }
+        }
+
+        Cluster &operator=(const Cluster &other) {
+            if (this != &other) {
+                for (std::size_t i = 0; i < entries.size(); ++i) {
+                    entries[i].store(other.entries[i].load(std::memory_order_relaxed),
+                                     std::memory_order_relaxed);
+                }
+            }
+            return *this;
+        }
+
+        Cluster(Cluster &&other) noexcept {
+            for (std::size_t i = 0; i < entries.size(); ++i) {
+                entries[i].store(other.entries[i].load(std::memory_order_relaxed),
+                                 std::memory_order_relaxed);
+            }
+        }
+
+        Cluster &operator=(Cluster &&other) noexcept {
+            if (this != &other) {
+                for (std::size_t i = 0; i < entries.size(); ++i) {
+                    entries[i].store(other.entries[i].load(std::memory_order_relaxed),
+                                     std::memory_order_relaxed);
+                }
+            }
+            return *this;
+        }
     };
+
+    static_assert(alignof(Cluster) >= 64, "Cluster must avoid false sharing");
 
     void ensure_settings_locked();
     void rebuild_locked(std::size_t size_mb);
     std::size_t cluster_index(std::uint64_t key) const;
-    PackedTTEntry *select_entry(Cluster &cluster, std::uint16_t key16);
-    const PackedTTEntry *find_entry(const Cluster &cluster, std::uint16_t key16) const;
+    std::size_t select_entry_index(const Cluster &cluster, std::uint16_t key16);
+    std::optional<PackedTTEntry> find_entry(const Cluster &cluster, std::uint16_t key16) const;
 
     static std::uint8_t pack_generation(std::uint8_t generation);
     static std::uint8_t unpack_generation(std::uint8_t gen_and_type);
@@ -77,7 +123,6 @@ private:
     static int replacement_score(const PackedTTEntry &entry, std::uint8_t current_generation);
 
     mutable std::shared_mutex global_mutex_;
-    mutable std::array<std::mutex, kMutexShardCount> shard_mutexes_{};
     std::vector<Cluster> clusters_;
     std::uint8_t generation_counter_ = 1;
     std::uint8_t generation_tag_ = kGenerationDelta;

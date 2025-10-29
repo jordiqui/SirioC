@@ -6,6 +6,7 @@ CXXFLAGS ?= -std=c++20 -Wall -Wextra -Wpedantic -O2
 CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -O2
 CPPFLAGS ?=
 LDFLAGS ?=
+LDFLAGS += -latomic
 INCLUDES := -Iinclude -Ithird_party/fathom
 
 SRCDIR := src
