@@ -16,6 +16,16 @@ struct FeatureState {
     std::array<int, kFeatureCount> piece_counts{};
 };
 
+struct ThreadAccumulator {
+    std::vector<FeatureState> stack;
+    FeatureState scratch{};
+
+    void reset() {
+        stack.clear();
+        scratch = FeatureState{};
+    }
+};
+
 struct NetworkParameters {
     double bias = 0.0;
     double scale = 1.0;
@@ -39,6 +49,8 @@ public:
 
     [[nodiscard]] std::unique_ptr<EvaluationBackend> clone() const override;
 
+    void set_thread_accumulator(ThreadAccumulator *accumulator);
+
     void initialize(const Board &board) override;
     void reset(const Board &board) override;
     void push(const Board &previous, const std::optional<Move> &move,
@@ -53,11 +65,16 @@ private:
     FeatureState compute_state(const Board &board) const;
     void apply_move_to_state(FeatureState &state, const Board &previous, const Move &move,
                              const Board &current);
+    std::vector<FeatureState> &stack();
+    [[nodiscard]] const std::vector<FeatureState> &stack() const;
+    FeatureState &scratch_buffer();
 
     bool loaded_ = false;
     std::string path_;
     NetworkParameters params_{};
     std::vector<FeatureState> stack_;
+    ThreadAccumulator *thread_accumulator_ = nullptr;
+    FeatureState scratch_{};
 };
 
 class MultiNetworkBackend : public EvaluationBackend {
@@ -67,6 +84,8 @@ public:
                         NetworkSelectionPolicy policy, int phase_threshold);
 
     [[nodiscard]] std::unique_ptr<EvaluationBackend> clone() const override;
+
+    void set_thread_accumulators(ThreadAccumulator *primary, ThreadAccumulator *secondary);
 
     void initialize(const Board &board) override;
     void reset(const Board &board) override;

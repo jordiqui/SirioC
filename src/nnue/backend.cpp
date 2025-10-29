@@ -7,6 +7,10 @@
 #include <sstream>
 #include <stdexcept>
 
+#if defined(SIRIO_USE_AVX2) || defined(SIRIO_USE_AVX512)
+#include <immintrin.h>
+#endif
+
 #include "sirio/move.hpp"
 
 namespace sirio::nnue {
@@ -96,6 +100,34 @@ std::unique_ptr<EvaluationBackend> SingleNetworkBackend::clone() const {
     return copy;
 }
 
+void SingleNetworkBackend::set_thread_accumulator(ThreadAccumulator *accumulator) {
+    thread_accumulator_ = accumulator;
+    if (thread_accumulator_) {
+        thread_accumulator_->reset();
+    }
+}
+
+std::vector<FeatureState> &SingleNetworkBackend::stack() {
+    if (thread_accumulator_) {
+        return thread_accumulator_->stack;
+    }
+    return stack_;
+}
+
+const std::vector<FeatureState> &SingleNetworkBackend::stack() const {
+    if (thread_accumulator_) {
+        return thread_accumulator_->stack;
+    }
+    return stack_;
+}
+
+FeatureState &SingleNetworkBackend::scratch_buffer() {
+    if (thread_accumulator_) {
+        return thread_accumulator_->scratch;
+    }
+    return scratch_;
+}
+
 FeatureState SingleNetworkBackend::compute_state(const Board &board) const {
     FeatureState state{};
     for (int color_idx = 0; color_idx < 2; ++color_idx) {
@@ -141,47 +173,101 @@ void SingleNetworkBackend::apply_move_to_state(FeatureState &state, const Board 
 }
 
 void SingleNetworkBackend::initialize(const Board &board) {
-    stack_.clear();
-    stack_.push_back(compute_state(board));
+    auto &storage = stack();
+    storage.clear();
+    storage.push_back(compute_state(board));
+    scratch_buffer() = FeatureState{};
 }
 
 void SingleNetworkBackend::reset(const Board &board) { initialize(board); }
 
 void SingleNetworkBackend::push(const Board &previous, const std::optional<Move> &move,
                                 const Board &current) {
-    if (stack_.empty()) {
-        stack_.push_back(compute_state(previous));
+    auto &storage = stack();
+    if (storage.empty()) {
+        storage.push_back(compute_state(previous));
     }
-    FeatureState next = stack_.back();
+    FeatureState &buffer = scratch_buffer();
+    buffer = storage.back();
     if (move.has_value()) {
-        apply_move_to_state(next, previous, *move, current);
+        apply_move_to_state(buffer, previous, *move, current);
     }
-    stack_.push_back(next);
+    storage.push_back(buffer);
 }
 
 void SingleNetworkBackend::pop() {
-    if (stack_.size() > 1) {
-        stack_.pop_back();
+    auto &storage = stack();
+    if (storage.size() > 1) {
+        storage.pop_back();
     }
 }
 
 int SingleNetworkBackend::evaluate(const Board &board) {
-    if (stack_.empty()) {
-        stack_.push_back(compute_state(board));
+    auto &storage = stack();
+    if (storage.empty()) {
+        storage.push_back(compute_state(board));
     }
     if (!loaded_) {
         return 0;
     }
     std::size_t expected = board.history().size();
-    if (stack_.size() != expected) {
-        stack_.clear();
-        stack_.push_back(compute_state(board));
+    if (storage.size() != expected) {
+        storage.clear();
+        storage.push_back(compute_state(board));
     }
-    const FeatureState &state = stack_.back();
+    const FeatureState &state = storage.back();
+#if defined(__GNUC__) || defined(__clang__)
+    __builtin_prefetch(state.piece_counts.data(), 0, 3);
+    __builtin_prefetch(params_.piece_weights.data(), 0, 3);
+#elif defined(_MSC_VER)
+    _mm_prefetch(reinterpret_cast<const char *>(state.piece_counts.data()), _MM_HINT_T0);
+    _mm_prefetch(reinterpret_cast<const char *>(params_.piece_weights.data()), _MM_HINT_T0);
+#endif
+
     double value = params_.bias;
+#if defined(SIRIO_USE_AVX512)
+    alignas(64) double accum_buffer[8];
+    alignas(32) double tail_buffer[4];
+
+    const double *weights = params_.piece_weights.data();
+    const int *counts = state.piece_counts.data();
+
+    __m256i count_lo = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(counts));
+    __m512d count_lo_pd = _mm512_cvtepi32_pd(count_lo);
+    __m512d weight_lo = _mm512_loadu_pd(weights);
+    __m512d prod_lo = _mm512_mul_pd(weight_lo, count_lo_pd);
+    _mm512_storeu_pd(accum_buffer, prod_lo);
+
+    __m128i count_hi = _mm_loadu_si128(reinterpret_cast<const __m128i *>(counts + 8));
+    __m256d count_hi_pd = _mm256_cvtepi32_pd(count_hi);
+    __m256d weight_hi = _mm256_loadu_pd(weights + 8);
+    __m256d prod_hi = _mm256_mul_pd(weight_hi, count_hi_pd);
+    _mm256_storeu_pd(tail_buffer, prod_hi);
+
+    for (double entry : accum_buffer) {
+        value += entry;
+    }
+    for (double entry : tail_buffer) {
+        value += entry;
+    }
+#elif defined(SIRIO_USE_AVX2)
+    const double *weights = params_.piece_weights.data();
+    const int *counts = state.piece_counts.data();
+    __m256d accum = _mm256_setzero_pd();
+    for (std::size_t index = 0; index < state.piece_counts.size(); index += 4) {
+        __m128i count_vec = _mm_loadu_si128(reinterpret_cast<const __m128i *>(counts + index));
+        __m256d count_pd = _mm256_cvtepi32_pd(count_vec);
+        __m256d weight_vec = _mm256_loadu_pd(weights + index);
+        accum = _mm256_fmadd_pd(weight_vec, count_pd, accum);
+    }
+    alignas(32) double buffer[4];
+    _mm256_storeu_pd(buffer, accum);
+    value += buffer[0] + buffer[1] + buffer[2] + buffer[3];
+#else
     for (std::size_t index = 0; index < state.piece_counts.size(); ++index) {
         value += params_.piece_weights[index] * static_cast<double>(state.piece_counts[index]);
     }
+#endif
     value *= params_.scale;
     return static_cast<int>(std::lround(value));
 }
@@ -202,6 +288,16 @@ std::unique_ptr<EvaluationBackend> MultiNetworkBackend::clone() const {
     }
     return std::make_unique<MultiNetworkBackend>(std::move(primary_copy), std::move(secondary_copy),
                                                  policy_, phase_threshold_);
+}
+
+void MultiNetworkBackend::set_thread_accumulators(ThreadAccumulator *primary,
+                                                  ThreadAccumulator *secondary) {
+    if (primary_) {
+        primary_->set_thread_accumulator(primary);
+    }
+    if (secondary_) {
+        secondary_->set_thread_accumulator(secondary);
+    }
 }
 
 void MultiNetworkBackend::initialize(const Board &board) {
