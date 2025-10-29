@@ -46,6 +46,10 @@ bool init(const std::string &path, std::string *error_message) {
         return false;
     }
 
+    if (error_message) {
+        error_message->clear();
+    }
+
     sirio::set_evaluation_backend(std::move(backend));
 
     ApiState &api_state = state();
