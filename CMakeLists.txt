@@ -5,6 +5,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(SIRIO_ENABLE_AVX2 "Enable AVX2 optimizations" ON)
+option(SIRIO_ENABLE_AVX512 "Enable AVX-512 optimizations" OFF)
+
 add_library(sirio_core
     src/board.cpp
     src/draws.cpp
@@ -30,6 +33,22 @@ target_include_directories(sirio_core
 )
 
 target_compile_features(sirio_core PUBLIC cxx_std_20)
+
+if (SIRIO_ENABLE_AVX512)
+    target_compile_definitions(sirio_core PUBLIC SIRIO_USE_AVX512)
+    if (MSVC)
+        target_compile_options(sirio_core PUBLIC /arch:AVX512)
+    else()
+        target_compile_options(sirio_core PUBLIC -mavx512f -mavx512dq -mavx512vl)
+    endif()
+elseif (SIRIO_ENABLE_AVX2)
+    target_compile_definitions(sirio_core PUBLIC SIRIO_USE_AVX2)
+    if (MSVC)
+        target_compile_options(sirio_core PUBLIC /arch:AVX2)
+    else()
+        target_compile_options(sirio_core PUBLIC -mavx2 -mfma)
+    endif()
+endif()
 
 add_executable(sirio
     src/main.cpp
