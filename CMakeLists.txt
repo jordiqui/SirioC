@@ -34,6 +34,10 @@ target_include_directories(sirio_core
 
 target_compile_features(sirio_core PUBLIC cxx_std_20)
 
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_link_libraries(sirio_core PUBLIC atomic)
+endif()
+
 if (SIRIO_ENABLE_AVX512)
     target_compile_definitions(sirio_core PUBLIC SIRIO_USE_AVX512)
     if (MSVC)
