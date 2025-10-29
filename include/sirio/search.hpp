@@ -32,6 +32,9 @@ struct SearchResult {
     bool timed_out = false;
     std::uint64_t nodes = 0;
     int time_ms = 0;
+    std::uint64_t nodes_per_second = 0;
+    std::uint64_t knps_before = 0;
+    std::uint64_t knps_after = 0;
     std::vector<Move> principal_variation;
 };
 
