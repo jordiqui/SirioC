@@ -602,24 +602,29 @@ int quiescence(Board &board, int alpha, int beta, int ply, SearchContext &contex
         alpha = stand_pat;
     }
 
-    auto moves = generate_legal_moves(board);
-    std::vector<Move> tactical_moves;
-    tactical_moves.reserve(moves.size());
-    for (const Move &move : moves) {
-        if (move.captured.has_value() || move.is_en_passant || move.promotion.has_value()) {
-            tactical_moves.push_back(move);
-        }
-    }
-
+    auto tactical_moves = generate_pseudo_legal_tactical_moves(board);
     if (tactical_moves.empty()) {
         return alpha;
     }
 
     order_moves(tactical_moves, context, ply, std::nullopt);
 
+    bool found_legal = false;
     for (const Move &move : tactical_moves) {
         Board::UndoState undo;
-        board.make_move(move, undo);
+        try {
+            board.make_move(move, undo);
+        } catch (const std::exception &) {
+            continue;
+        }
+
+        Color mover = opposite(board.side_to_move());
+        if (board.king_square(mover) >= 0 && board.in_check(mover)) {
+            board.undo_move(move, undo);
+            continue;
+        }
+
+        found_legal = true;
         int score = -quiescence(board, -beta, -alpha, ply + 1, context);
         board.undo_move(move, undo);
         if (context.shared->stop.load(std::memory_order_relaxed)) {
@@ -631,6 +636,10 @@ int quiescence(Board &board, int alpha, int beta, int ply, SearchContext &contex
         if (score > alpha) {
             alpha = score;
         }
+    }
+
+    if (!found_legal) {
+        return alpha;
     }
 
     return alpha;

@@ -188,6 +188,22 @@ void generate_leaper_moves(const Board &board, Color us, Color them, Bitboard oc
     }
 }
 
+void generate_leaper_captures(const Board &board, Color us, Color them, Bitboard occupancy_them,
+                              PieceType piece_type, Bitboard (*attack_function)(int),
+                              std::vector<Move> &moves) {
+    Bitboard pieces = board.pieces(us, piece_type);
+    while (pieces) {
+        int from = pop_lsb(pieces);
+        Bitboard captures = attack_function(from) & occupancy_them;
+        while (captures) {
+            int to = pop_lsb(captures);
+            Move move{from, to, piece_type};
+            move.captured = captured_piece_on(board, to, them);
+            append_move(moves, move);
+        }
+    }
+}
+
 void generate_slider_moves(const Board &board, Color us, Color them, Bitboard occupancy_us,
                            Bitboard occupancy_all, PieceType piece_type,
                            Bitboard (*attack_function)(int, Bitboard),
@@ -203,6 +219,23 @@ void generate_slider_moves(const Board &board, Color us, Color them, Bitboard oc
             append_move(moves, Move{from, to, piece_type});
         }
         Bitboard captures = attacks & occupancy_them;
+        while (captures) {
+            int to = pop_lsb(captures);
+            Move move{from, to, piece_type};
+            move.captured = captured_piece_on(board, to, them);
+            append_move(moves, move);
+        }
+    }
+}
+
+void generate_slider_captures(const Board &board, Color us, Color them, Bitboard occupancy_all,
+                              PieceType piece_type, Bitboard (*attack_function)(int, Bitboard),
+                              std::vector<Move> &moves) {
+    Bitboard pieces = board.pieces(us, piece_type);
+    Bitboard occupancy_them = board.occupancy(them);
+    while (pieces) {
+        int from = pop_lsb(pieces);
+        Bitboard captures = attack_function(from, occupancy_all) & occupancy_them;
         while (captures) {
             int to = pop_lsb(captures);
             Move move{from, to, piece_type};
@@ -260,6 +293,135 @@ void generate_castling_moves(const Board &board, Color us, Color them, std::vect
     }
 }
 
+void generate_pawn_tactical_moves(const Board &board, Color us, Color them,
+                                  Bitboard occupancy_all, std::vector<Move> &moves) {
+    Bitboard pawns = board.pieces(us, PieceType::Pawn);
+    auto en_passant = board.en_passant_square();
+    while (pawns) {
+        int from = pop_lsb(pawns);
+        int from_file = file_of(from);
+        int from_rank = rank_of(from);
+
+        if (us == Color::White) {
+            int forward = from + 8;
+            if (from_rank == 6 && forward < 64 && (occupancy_all & one_bit(forward)) == 0) {
+                for (PieceType promo : {PieceType::Queen, PieceType::Rook, PieceType::Bishop,
+                                        PieceType::Knight}) {
+                    Move move{from, forward, PieceType::Pawn};
+                    move.promotion = promo;
+                    append_move(moves, move);
+                }
+            }
+
+            if (from_file > 0) {
+                int target = from + 7;
+                if (target < 64) {
+                    Move move{from, target, PieceType::Pawn};
+                    if (auto capture = captured_piece_on(board, target, them)) {
+                        move.captured = capture;
+                        if (from_rank == 6) {
+                            for (PieceType promo : {PieceType::Queen, PieceType::Rook,
+                                                    PieceType::Bishop, PieceType::Knight}) {
+                                Move promo_move = move;
+                                promo_move.promotion = promo;
+                                append_move(moves, promo_move);
+                            }
+                        } else {
+                            append_move(moves, move);
+                        }
+                    } else if (en_passant && *en_passant == target) {
+                        move.is_en_passant = true;
+                        move.captured = PieceType::Pawn;
+                        append_move(moves, move);
+                    }
+                }
+            }
+
+            if (from_file < 7) {
+                int target = from + 9;
+                if (target < 64) {
+                    Move move{from, target, PieceType::Pawn};
+                    if (auto capture = captured_piece_on(board, target, them)) {
+                        move.captured = capture;
+                        if (from_rank == 6) {
+                            for (PieceType promo : {PieceType::Queen, PieceType::Rook,
+                                                    PieceType::Bishop, PieceType::Knight}) {
+                                Move promo_move = move;
+                                promo_move.promotion = promo;
+                                append_move(moves, promo_move);
+                            }
+                        } else {
+                            append_move(moves, move);
+                        }
+                    } else if (en_passant && *en_passant == target) {
+                        move.is_en_passant = true;
+                        move.captured = PieceType::Pawn;
+                        append_move(moves, move);
+                    }
+                }
+            }
+        } else {
+            int forward = from - 8;
+            if (from_rank == 1 && forward >= 0 && (occupancy_all & one_bit(forward)) == 0) {
+                for (PieceType promo : {PieceType::Queen, PieceType::Rook, PieceType::Bishop,
+                                        PieceType::Knight}) {
+                    Move move{from, forward, PieceType::Pawn};
+                    move.promotion = promo;
+                    append_move(moves, move);
+                }
+            }
+
+            if (from_file > 0) {
+                int target = from - 9;
+                if (target >= 0) {
+                    Move move{from, target, PieceType::Pawn};
+                    if (auto capture = captured_piece_on(board, target, them)) {
+                        move.captured = capture;
+                        if (from_rank == 1) {
+                            for (PieceType promo : {PieceType::Queen, PieceType::Rook,
+                                                    PieceType::Bishop, PieceType::Knight}) {
+                                Move promo_move = move;
+                                promo_move.promotion = promo;
+                                append_move(moves, promo_move);
+                            }
+                        } else {
+                            append_move(moves, move);
+                        }
+                    } else if (en_passant && *en_passant == target) {
+                        move.is_en_passant = true;
+                        move.captured = PieceType::Pawn;
+                        append_move(moves, move);
+                    }
+                }
+            }
+
+            if (from_file < 7) {
+                int target = from - 7;
+                if (target >= 0) {
+                    Move move{from, target, PieceType::Pawn};
+                    if (auto capture = captured_piece_on(board, target, them)) {
+                        move.captured = capture;
+                        if (from_rank == 1) {
+                            for (PieceType promo : {PieceType::Queen, PieceType::Rook,
+                                                    PieceType::Bishop, PieceType::Knight}) {
+                                Move promo_move = move;
+                                promo_move.promotion = promo;
+                                append_move(moves, promo_move);
+                            }
+                        } else {
+                            append_move(moves, move);
+                        }
+                    } else if (en_passant && *en_passant == target) {
+                        move.is_en_passant = true;
+                        move.captured = PieceType::Pawn;
+                        append_move(moves, move);
+                    }
+                }
+            }
+        }
+    }
+}
+
 }  // namespace
 
 std::vector<Move> generate_pseudo_legal_moves(const Board &board) {
@@ -282,6 +444,26 @@ std::vector<Move> generate_pseudo_legal_moves(const Board &board) {
     generate_leaper_moves(board, us, them, occupancy_us, occupancy_them, PieceType::King,
                           king_attacks, moves);
     generate_castling_moves(board, us, them, moves);
+
+    return moves;
+}
+
+std::vector<Move> generate_pseudo_legal_tactical_moves(const Board &board) {
+    std::vector<Move> moves;
+    const Color us = board.side_to_move();
+    const Color them = opposite(us);
+    const Bitboard occupancy_all = board.occupancy();
+    const Bitboard occupancy_them = board.occupancy(them);
+
+    generate_pawn_tactical_moves(board, us, them, occupancy_all, moves);
+    generate_leaper_captures(board, us, them, occupancy_them, PieceType::Knight, knight_attacks,
+                             moves);
+    generate_slider_captures(board, us, them, occupancy_all, PieceType::Bishop, bishop_attacks,
+                             moves);
+    generate_slider_captures(board, us, them, occupancy_all, PieceType::Rook, rook_attacks, moves);
+    generate_slider_captures(board, us, them, occupancy_all, PieceType::Queen, queen_attacks,
+                             moves);
+    generate_leaper_captures(board, us, them, occupancy_them, PieceType::King, king_attacks, moves);
 
     return moves;
 }
