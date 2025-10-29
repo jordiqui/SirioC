@@ -45,12 +45,9 @@ std::atomic<int> search_thread_count{1};
 
 std::mutex active_search_mutex;
 SearchSharedState *active_search_state = nullptr;
-codex/locate-searchsharedstate-and-threadcontext-in-src/search.cpp
 std::atomic_flag info_output_flag = ATOMIC_FLAG_INIT;
-=======
 std::atomic<bool> stop_requested_pending{false};
-std::mutex info_output_mutex;
- main
+
 
 
 struct SearchSharedState {
@@ -58,12 +55,9 @@ struct SearchSharedState {
     std::atomic<bool> soft_limit_reached{false};
     std::atomic<bool> timed_out{false};
     std::atomic<std::uint64_t> node_counter{0};
-codex/locate-searchsharedstate-and-threadcontext-in-src/search.cpp
     std::atomic<std::uint64_t> node_update_flushes{0};
     std::atomic<std::uint64_t> node_update_time_ns{0};
-=======
     std::atomic<int> background_tasks{0};
- main
     bool has_time_limit = false;
     bool has_node_limit = false;
     std::chrono::steady_clock::time_point start_time{};
@@ -109,7 +103,6 @@ struct SearchContext {
     std::uint64_t total_nodes = 0;
 };
 
-codex/locate-searchsharedstate-and-threadcontext-in-src/search.cpp
 constexpr std::uint64_t node_flush_interval = 512;
 constexpr std::chrono::microseconds info_output_lock_timeout{500};
 
@@ -224,36 +217,6 @@ void flush_thread_node_counter(SearchContext &context) {
     context.local_node_accumulator = 0;
 }
 
-=======
- codex/implement-searchthreadpool-with-job-queue
-=======
- main
-class ActiveSearchGuard {
-public:
-    explicit ActiveSearchGuard(SearchSharedState *state) : state_(state) {
-        std::lock_guard<std::mutex> lock(active_search_mutex);
-        active_search_state = state_;
-        if (stop_requested_pending.load(std::memory_order_relaxed)) {
-            state_->stop.store(true, std::memory_order_relaxed);
-            stop_requested_pending.store(false, std::memory_order_relaxed);
-        }
-    }
-
-    ~ActiveSearchGuard() {
-        std::lock_guard<std::mutex> lock(active_search_mutex);
-        if (active_search_state == state_) {
-            active_search_state = nullptr;
-        }
-    }
-
-    ActiveSearchGuard(const ActiveSearchGuard &) = delete;
-    ActiveSearchGuard &operator=(const ActiveSearchGuard &) = delete;
-
-private:
-    SearchSharedState *state_;
-};
-
- main
 constexpr std::uint64_t time_check_interval = 2048;
 
 }  // namespace
@@ -989,6 +952,10 @@ public:
         SearchThreadPool::instance().notify_search_start(*state_);
         std::lock_guard<std::mutex> lock(active_search_mutex);
         active_search_state = state_;
+        if (stop_requested_pending.load(std::memory_order_relaxed)) {
+            state_->stop.store(true, std::memory_order_relaxed);
+            stop_requested_pending.store(false, std::memory_order_relaxed);
+        }
     }
 
     ~ActiveSearchGuard() {
