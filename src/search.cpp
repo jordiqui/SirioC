@@ -45,6 +45,7 @@ std::atomic<int> search_thread_count{1};
 
 std::mutex active_search_mutex;
 SearchSharedState *active_search_state = nullptr;
+std::atomic<bool> stop_requested_pending{false};
 std::mutex info_output_mutex;
 
 
@@ -97,6 +98,34 @@ struct SearchContext {
     int selective_depth = 0;
 };
 
+ codex/implement-searchthreadpool-with-job-queue
+=======
+class ActiveSearchGuard {
+public:
+    explicit ActiveSearchGuard(SearchSharedState *state) : state_(state) {
+        std::lock_guard<std::mutex> lock(active_search_mutex);
+        active_search_state = state_;
+        if (stop_requested_pending.load(std::memory_order_relaxed)) {
+            state_->stop.store(true, std::memory_order_relaxed);
+            stop_requested_pending.store(false, std::memory_order_relaxed);
+        }
+    }
+
+    ~ActiveSearchGuard() {
+        std::lock_guard<std::mutex> lock(active_search_mutex);
+        if (active_search_state == state_) {
+            active_search_state = nullptr;
+        }
+    }
+
+    ActiveSearchGuard(const ActiveSearchGuard &) = delete;
+    ActiveSearchGuard &operator=(const ActiveSearchGuard &) = delete;
+
+private:
+    SearchSharedState *state_;
+};
+
+ main
 constexpr std::uint64_t time_check_interval = 2048;
 
 }  // namespace
@@ -1284,8 +1313,10 @@ std::string principal_variation_to_uci(const Board &board, const std::vector<Mov
 
 void request_stop_search() {
     std::lock_guard<std::mutex> lock(active_search_mutex);
+    stop_requested_pending.store(true, std::memory_order_relaxed);
     if (active_search_state != nullptr) {
         active_search_state->stop.store(true, std::memory_order_relaxed);
+        stop_requested_pending.store(false, std::memory_order_relaxed);
     }
 }
 
