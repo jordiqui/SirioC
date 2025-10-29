@@ -4,7 +4,10 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdlib>
+#include <deque>
+#include <functional>
 #include <iostream>
 #include <limits>
 #include <mutex>
@@ -50,12 +53,39 @@ struct SearchSharedState {
     std::atomic<bool> soft_limit_reached{false};
     std::atomic<bool> timed_out{false};
     std::atomic<std::uint64_t> node_counter{0};
+    std::atomic<int> background_tasks{0};
     bool has_time_limit = false;
     bool has_node_limit = false;
     std::chrono::steady_clock::time_point start_time{};
     std::chrono::milliseconds soft_time_limit{0};
     std::chrono::milliseconds hard_time_limit{0};
     std::uint64_t node_limit = 0;
+    std::mutex background_mutex;
+    std::condition_variable background_cv;
+
+    void start_background_tasks(int count) {
+        {
+            std::lock_guard<std::mutex> lock(background_mutex);
+            background_tasks.store(count, std::memory_order_relaxed);
+        }
+        if (count == 0) {
+            background_cv.notify_all();
+        }
+    }
+
+    void notify_background_task_complete() {
+        if (background_tasks.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+            std::lock_guard<std::mutex> lock(background_mutex);
+            background_cv.notify_all();
+        }
+    }
+
+    void wait_for_background_tasks() {
+        std::unique_lock<std::mutex> lock(background_mutex);
+        background_cv.wait(lock, [&]() {
+            return background_tasks.load(std::memory_order_acquire) == 0;
+        });
+    }
 };
 
 struct SearchContext {
@@ -65,27 +95,6 @@ struct SearchContext {
     SearchSharedState *shared = nullptr;
     std::chrono::milliseconds last_iteration_time{0};
     int selective_depth = 0;
-};
-
-class ActiveSearchGuard {
-public:
-    explicit ActiveSearchGuard(SearchSharedState *state) : state_(state) {
-        std::lock_guard<std::mutex> lock(active_search_mutex);
-        active_search_state = state_;
-    }
-
-    ~ActiveSearchGuard() {
-        std::lock_guard<std::mutex> lock(active_search_mutex);
-        if (active_search_state == state_) {
-            active_search_state = nullptr;
-        }
-    }
-
-    ActiveSearchGuard(const ActiveSearchGuard &) = delete;
-    ActiveSearchGuard &operator=(const ActiveSearchGuard &) = delete;
-
-private:
-    SearchSharedState *state_;
 };
 
 constexpr std::uint64_t time_check_interval = 2048;
@@ -112,13 +121,6 @@ int env_thread_override() {
 }
 
 }  // namespace
-
-void set_search_threads(int threads) {
-    int clamped = clamp_thread_count(threads);
-    search_thread_count.store(clamped, std::memory_order_relaxed);
-}
-
-int get_search_threads() { return search_thread_count.load(std::memory_order_relaxed); }
 
 int recommended_search_threads() {
     if (int override = env_thread_override(); override > 0) {
@@ -679,6 +681,135 @@ int quiescence(Board &board, int alpha, int beta, int ply, SearchContext &contex
 
 }  // namespace
 
+class SearchThreadPool {
+public:
+    static SearchThreadPool &instance() {
+        static SearchThreadPool instance;
+        return instance;
+    }
+
+    SearchThreadPool(const SearchThreadPool &) = delete;
+    SearchThreadPool &operator=(const SearchThreadPool &) = delete;
+
+    void ensure_size(int desired) {
+        if (desired <= 0) {
+            desired = 1;
+        }
+        std::unique_lock<std::mutex> lock(mutex_);
+        int current = static_cast<int>(workers_.size());
+        if (desired <= current) {
+            return;
+        }
+        int to_add = desired - current;
+        for (int i = 0; i < to_add; ++i) {
+            workers_.emplace_back([this]() { worker_loop(); });
+        }
+    }
+
+    void enqueue(SearchSharedState &shared, std::function<void()> task) {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            tasks_.push_back(Task{std::move(task), &shared});
+        }
+        cv_.notify_one();
+    }
+
+    void notify_search_start(SearchSharedState &) {
+        ensure_size(search_thread_count.load(std::memory_order_relaxed));
+    }
+
+    void notify_search_end(SearchSharedState &shared) {
+        shared.stop.store(true, std::memory_order_relaxed);
+        shared.wait_for_background_tasks();
+    }
+
+private:
+    struct Task {
+        std::function<void()> func;
+        SearchSharedState *shared;
+    };
+
+    SearchThreadPool() {
+        ensure_size(recommended_search_threads());
+    }
+
+    ~SearchThreadPool() {
+        shutdown();
+    }
+
+    void worker_loop() {
+        while (true) {
+            Task task;
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                cv_.wait(lock, [&]() { return shutdown_ || !tasks_.empty(); });
+                if (shutdown_ && tasks_.empty()) {
+                    return;
+                }
+                task = std::move(tasks_.front());
+                tasks_.pop_front();
+            }
+
+            if (task.func) {
+                task.func();
+            }
+            if (task.shared != nullptr) {
+                task.shared->notify_background_task_complete();
+            }
+        }
+    }
+
+    void shutdown() {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            shutdown_ = true;
+        }
+        cv_.notify_all();
+        for (auto &worker : workers_) {
+            if (worker.joinable()) {
+                worker.join();
+            }
+        }
+    }
+
+    std::vector<std::thread> workers_;
+    std::mutex mutex_;
+    std::condition_variable cv_;
+    std::deque<Task> tasks_;
+    bool shutdown_ = false;
+};
+
+void set_search_threads(int threads) {
+    int clamped = clamp_thread_count(threads);
+    search_thread_count.store(clamped, std::memory_order_relaxed);
+    SearchThreadPool::instance().ensure_size(clamped);
+}
+
+int get_search_threads() { return search_thread_count.load(std::memory_order_relaxed); }
+
+class ActiveSearchGuard {
+public:
+    explicit ActiveSearchGuard(SearchSharedState *state) : state_(state) {
+        SearchThreadPool::instance().notify_search_start(*state_);
+        std::lock_guard<std::mutex> lock(active_search_mutex);
+        active_search_state = state_;
+    }
+
+    ~ActiveSearchGuard() {
+        SearchThreadPool::instance().notify_search_end(*state_);
+        std::lock_guard<std::mutex> lock(active_search_mutex);
+        if (active_search_state == state_) {
+            active_search_state = nullptr;
+        }
+    }
+
+    ActiveSearchGuard(const ActiveSearchGuard &) = delete;
+    ActiveSearchGuard &operator=(const ActiveSearchGuard &) = delete;
+
+private:
+    SearchSharedState *state_;
+};
+
 struct TimeAllocation {
     std::chrono::milliseconds soft;
     std::chrono::milliseconds hard;
@@ -1038,8 +1169,6 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     ActiveSearchGuard active_guard{&shared};
 
     int thread_count = std::max(1, get_search_threads());
-    std::vector<std::thread> workers;
-    workers.reserve(static_cast<std::size_t>(std::max(0, thread_count - 1)));
     std::vector<SearchResult> thread_results(static_cast<std::size_t>(thread_count));
 
     const bool infinite_search = treat_as_infinite && !shared.has_time_limit && !shared.has_node_limit;
@@ -1050,17 +1179,20 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
             infinite_search);
     };
 
+    SearchThreadPool &pool = SearchThreadPool::instance();
+    int background_count = std::max(0, thread_count - 1);
+    shared.start_background_tasks(background_count);
+
     for (int index = 1; index < thread_count; ++index) {
-        workers.emplace_back(worker_fn, index, false);
+        pool.enqueue(shared, [&, index]() {
+            worker_fn(index, false);
+        });
     }
 
     worker_fn(0, true);
 
     shared.stop.store(true, std::memory_order_relaxed);
-
-    for (auto &thread : workers) {
-        thread.join();
-    }
+    shared.wait_for_background_tasks();
 
     SearchResult best = shared_result.result;
     for (const auto &candidate : thread_results) {
