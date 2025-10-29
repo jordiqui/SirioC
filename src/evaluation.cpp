@@ -103,6 +103,20 @@ const std::array<const std::array<int, 64> *, 6> piece_square_tables = {
 constexpr Bitboard light_square_mask = 0x55AA55AA55AA55AAULL;
 constexpr Bitboard dark_square_mask = 0xAA55AA55AA55AA55ULL;
 
+constexpr std::array<Bitboard, 8> generate_file_masks() {
+    std::array<Bitboard, 8> masks{};
+    for (int file = 0; file < 8; ++file) {
+        Bitboard mask = 0;
+        for (int rank = 0; rank < 8; ++rank) {
+            mask |= one_bit(rank * 8 + file);
+        }
+        masks[static_cast<std::size_t>(file)] = mask;
+    }
+    return masks;
+}
+
+constexpr auto file_masks = generate_file_masks();
+
 int mirror_square(int square) { return square ^ 56; }
 
 std::array<int, 8> pawn_file_counts(const Board &board, Color color) {
@@ -267,7 +281,53 @@ int evaluate_king_safety(const Board &board, Color color,
                                                  : pawn_attacks_black(enemy_pawns);
     attack_penalty += std::popcount(pawn_attacks & king_zone) * 7;
 
+    Bitboard enemy_sliders = board.pieces(enemy, PieceType::Rook) | board.pieces(enemy, PieceType::Queen);
+    int open_file_penalty = 0;
+    for (int offset = -1; offset <= 1; ++offset) {
+        int file = king_file + offset;
+        if (file < 0 || file > 7) {
+            continue;
+        }
+        if (friendly_counts[static_cast<std::size_t>(file)] != 0) {
+            continue;
+        }
+        Bitboard mask = file_masks[static_cast<std::size_t>(file)];
+        Bitboard tmp_sliders = enemy_sliders & mask;
+        while (tmp_sliders) {
+            int sq = pop_lsb(tmp_sliders);
+            Bitboard attacks = rook_attacks(sq, occupancy);
+            if (attacks & king_zone) {
+                open_file_penalty += 12;
+                if (file == 2) {
+                    open_file_penalty += 6;
+                }
+            }
+        }
+    }
+
+    bool king_on_dark = ((king_file + king_rank) & 1) != 0;
+    bool has_dark_bishop = (board.pieces(color, PieceType::Bishop) & dark_square_mask) != 0;
+    int dark_square_penalty = 0;
+    if (king_on_dark && !has_dark_bishop) {
+        Bitboard diagonal_attackers =
+            board.pieces(enemy, PieceType::Bishop) | board.pieces(enemy, PieceType::Queen);
+        Bitboard tmp_attackers = diagonal_attackers;
+        Bitboard dark_zone = king_zone & dark_square_mask;
+        while (tmp_attackers) {
+            int sq = pop_lsb(tmp_attackers);
+            Bitboard attacks = bishop_attacks(sq, occupancy);
+            if ((attacks & dark_zone) != 0) {
+                dark_square_penalty += 10;
+                if (attacks & one_bit(king_sq)) {
+                    dark_square_penalty += 8;
+                }
+            }
+        }
+    }
+
     score -= attack_penalty;
+    score -= open_file_penalty;
+    score -= dark_square_penalty;
     return color == Color::White ? score : -score;
 }
 
