@@ -235,15 +235,21 @@ void output_search_result(const sirio::Board& board, const sirio::SearchLimits& 
         if (time_ms < 0) {
             time_ms = 0;
         }
-        std::uint64_t nps = time_ms > 0 ? (nodes * 1000ULL) / static_cast<std::uint64_t>(time_ms) : 0ULL;
+        std::uint64_t nps = result.nodes_per_second > 0
+                                 ? result.nodes_per_second
+                                 : (time_ms > 0 ? (nodes * 1000ULL) / static_cast<std::uint64_t>(time_ms)
+                                                : 0ULL);
+        std::uint64_t knps_before = result.knps_before > 0 ? result.knps_before : nps / 1000ULL;
+        std::uint64_t knps_after = result.knps_after > 0 ? result.knps_after : nps / 1000ULL;
         std::string pv_string = sirio::principal_variation_to_uci(board, result.principal_variation);
         if (pv_string.empty()) {
             pv_string = sirio::move_to_uci(result.best_move);
         }
         std::cout << "info depth " << reported_depth << " seldepth " << seldepth
                   << " multipv 1 score " << sirio::format_uci_score(result.score)
-                  << " nodes " << nodes << " nps " << nps << " hashfull 0 tbhits 0 time "
-                  << time_ms << " pv " << pv_string << std::endl;
+                  << " nodes " << nodes << " nps " << nps << " knps_before " << knps_before
+                  << " knps_after " << knps_after << " hashfull 0 tbhits 0 time " << time_ms
+                  << " pv " << pv_string << std::endl;
         if (limits.infinite) {
             std::lock_guard<std::mutex> lock(pending_result_mutex);
             pending_infinite_result = result;
