@@ -149,6 +149,34 @@ bool has_non_pawn_material(const Board &board, Color color) {
             board.pieces(color, PieceType::Bishop) | board.pieces(color, PieceType::Knight)) != 0;
 }
 
+bool is_pawn_storm_move(const Move &move, Color mover) {
+    if (move.piece != PieceType::Pawn) {
+        return false;
+    }
+    const int from_rank = rank_of(move.from);
+    const int to_rank = rank_of(move.to);
+    if (mover == Color::White) {
+        if (to_rank < from_rank) {
+            return false;
+        }
+        return (to_rank >= 3) && (move.captured.has_value() || (to_rank - from_rank) >= 1);
+    }
+    if (to_rank > from_rank) {
+        return false;
+    }
+    return (to_rank <= 4) && (move.captured.has_value() || (from_rank - to_rank) >= 1);
+}
+
+bool is_major_decision(const Move &move, Color mover) {
+    if (move.piece == PieceType::Queen) {
+        return true;
+    }
+    if (move.piece == PieceType::Pawn) {
+        return is_pawn_storm_move(move, mover);
+    }
+    return false;
+}
+
 int syzygy_wdl_to_score(int wdl, int ply) {
     switch (wdl) {
         case 2:
@@ -495,12 +523,16 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
     int move_index = 0;
     for (const Move &move : moves) {
         ++move_index;
+        Color mover = board.side_to_move();
         Board::UndoState undo;
         board.make_move(move, undo);
         bool gives_check = board.in_check(board.side_to_move());
 
         int child_depth = depth_left - 1;
         if (gives_check && child_depth < max_search_depth - (ply + 1)) {
+            ++child_depth;
+        }
+        if (is_pawn_storm_move(move, mover) && child_depth < max_search_depth - (ply + 1)) {
             ++child_depth;
         }
         child_depth = std::min(child_depth, std::max(0, max_search_depth - (ply + 1)));
@@ -816,6 +848,7 @@ SearchResult run_search_thread(Board board, int max_depth_limit, SearchSharedSta
     bool best_found = seed.has_move;
     int previous_score = seed.score;
     bool have_previous = seed.has_move;
+    const Color root_color = board.side_to_move();
 
     initialize_evaluation(board);
 
@@ -898,10 +931,25 @@ SearchResult run_search_thread(Board board, int max_depth_limit, SearchSharedSta
                 break;
             }
             auto projected = context.last_iteration_time * 3 / 2;
+            if (projected.count() <= 0) {
+                projected = std::chrono::milliseconds{15};
+            }
+            bool enforce_depth_target = best_found && is_major_decision(best_move, root_color) && depth < 12;
             if (elapsed + projected >= shared.soft_time_limit ||
                 elapsed >= shared.soft_time_limit) {
-                shared.stop.store(true, std::memory_order_relaxed);
-                break;
+                if (enforce_depth_target) {
+                    auto extension = std::max(projected, std::chrono::milliseconds{15});
+                    auto new_soft = elapsed + extension;
+                    if (new_soft > shared.hard_time_limit) {
+                        new_soft = shared.hard_time_limit;
+                    }
+                    if (new_soft > shared.soft_time_limit) {
+                        shared.soft_time_limit = new_soft;
+                    }
+                } else {
+                    shared.stop.store(true, std::memory_order_relaxed);
+                    break;
+                }
             }
         }
     }
