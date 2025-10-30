@@ -143,10 +143,8 @@ FeatureState SingleNetworkBackend::compute_state(const Board &board) const {
     return state;
 }
 
-void SingleNetworkBackend::apply_move_to_state(FeatureState &state, const Board &previous,
-                                               const Move &move, const Board &current) {
-    (void)current;
-    const Color mover = previous.side_to_move();
+void SingleNetworkBackend::apply_move_to_state(FeatureState &state, Color mover,
+                                               const Move &move, const Board &) {
     const int mover_offset = feature_offset(mover, move.piece);
     // Captures remove material from the opponent.
     if (move.captured.has_value()) {
@@ -181,16 +179,16 @@ void SingleNetworkBackend::initialize(const Board &board) {
 
 void SingleNetworkBackend::reset(const Board &board) { initialize(board); }
 
-void SingleNetworkBackend::push(const Board &previous, const std::optional<Move> &move,
-                                const Board &current) {
+void SingleNetworkBackend::push(const Board &current, const std::optional<Move> &move,
+                                Color mover) {
     auto &storage = stack();
     if (storage.empty()) {
-        storage.push_back(compute_state(previous));
+        storage.push_back(compute_state(current));
     }
     FeatureState &buffer = scratch_buffer();
     buffer = storage.back();
     if (move.has_value()) {
-        apply_move_to_state(buffer, previous, *move, current);
+        apply_move_to_state(buffer, mover, *move, current);
     }
     storage.push_back(buffer);
 }
@@ -312,13 +310,13 @@ void MultiNetworkBackend::initialize(const Board &board) {
 
 void MultiNetworkBackend::reset(const Board &board) { initialize(board); }
 
-void MultiNetworkBackend::push(const Board &previous, const std::optional<Move> &move,
-                               const Board &current) {
+void MultiNetworkBackend::push(const Board &current, const std::optional<Move> &move,
+                               Color mover) {
     if (primary_) {
-        primary_->push(previous, move, current);
+        primary_->push(current, move, mover);
     }
     if (secondary_) {
-        secondary_->push(previous, move, current);
+        secondary_->push(current, move, mover);
     }
     ++ply_;
 }
