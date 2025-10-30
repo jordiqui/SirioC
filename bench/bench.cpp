@@ -5,6 +5,7 @@
 
 #include "sirio/board.hpp"
 #include "sirio/move.hpp"
+#include "sirio/evaluation.hpp"
 #include "sirio/search.hpp"
 #include "sirio/syzygy.hpp"
 
@@ -19,6 +20,8 @@ int main() {
     if (auto detected = sirio::syzygy::detect_default_tablebase_path(); detected.has_value()) {
         sirio::syzygy::set_tablebase_path(detected->string());
     }
+
+    sirio::use_classical_evaluation();
 
     std::vector<std::string> speed_positions = {
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
@@ -45,6 +48,24 @@ int main() {
     std::cout << "  Time: " << elapsed_ms.count() << " ms\n";
     std::cout << "  Nodes: " << total_nodes << "\n";
     std::cout << "  Nodes per second: " << static_cast<std::uint64_t>(nps) << "\n\n";
+
+    struct EvaluationSample {
+        std::string label;
+        std::string fen;
+    };
+
+    std::vector<EvaluationSample> evaluation_samples = {
+        {"Midgame passed pawn", "r3k2r/ppp2ppp/8/8/3P4/8/PPP2PPP/R3K2R w KQkq - 0 1"},
+        {"Endgame passed pawn", "6k1/8/4P3/8/3K4/8/8/8 w - - 0 1"}};
+
+    std::cout << "Evaluation sample (phase-aware):\n";
+    for (const auto &entry : evaluation_samples) {
+        sirio::Board board{entry.fen};
+        sirio::initialize_evaluation(board);
+        int score = sirio::evaluate(board);
+        std::cout << "  " << entry.label << ": " << score << " (" << entry.fen << ")\n";
+    }
+    std::cout << "\n";
 
     std::vector<TacticalPosition> tactical_suite = {
         {"6k1/5ppp/8/6Q1/8/8/8/6K1 w - - 0 1", "g5d8"},
