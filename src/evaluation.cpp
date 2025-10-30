@@ -189,17 +189,10 @@ const std::array<const std::array<int, 64> *, 6> piece_square_tables_eg = {
     &pawn_table, &knight_table, &bishop_table, &rook_table, &queen_table, &king_table_endgame};
 
 constexpr int weight_scale = 100;
- codex/incorporar-metricas-de-ataques-al-rey
 constexpr int pawn_structure_mg_weight = 80;
 constexpr int pawn_structure_eg_weight = 110;
 constexpr int king_safety_mg_weight = 125;
 constexpr int king_safety_eg_weight = 60;
-=======
-constexpr int pawn_structure_mg_weight = 72;
-constexpr int pawn_structure_eg_weight = 102;
-constexpr int king_safety_mg_weight = 110;
-constexpr int king_safety_eg_weight = 50;
- main
 constexpr int mobility_mg_weight = 90;
 constexpr int mobility_eg_weight = 100;
 constexpr int rook_open_file_bonus_mg = 18;
@@ -267,7 +260,6 @@ constexpr std::array<Bitboard, 8> generate_file_masks() {
 
 constexpr auto file_masks = generate_file_masks();
 
-codex/add-zobrist-key-and-update-cache
 std::uint64_t splitmix64(std::uint64_t &state) {
     state += 0x9E3779B97F4A7C15ULL;
     std::uint64_t z = state;
@@ -294,7 +286,8 @@ const PawnZobristTables &pawn_zobrist_tables() {
         return result;
     }();
     return tables;
-=======
+}
+
 struct MobilityScore {
     int middlegame = 0;
     int endgame = 0;
@@ -358,7 +351,6 @@ Bitboard compute_passed_pawns(const Board &board, Color color) {
         }
     }
     return passed;
- main
 }
 
 int mirror_square(int square) { return square ^ 56; }
