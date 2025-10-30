@@ -51,6 +51,8 @@ sirio::uci::handle_setoption(Options, full_line_after_keyword_setoption);
 - SyzygyProbeDepth (spin 0..128, default 1)
 - Syzygy50MoveRule (check true)
 - NumaPolicy (combo: auto, interleave, compact, numa0, numa1; default auto)
+- UseBook (check true)
+- BookFile (string "")
 
 `Threads` se inicializa con el valor devuelto por
 `std::thread::hardware_concurrency()` cada vez que se arranca el motor. Define
@@ -97,6 +99,25 @@ redes NNUE desde disco. La primera ruta es la preferida; la segunda se usa como 
 las versiones más recientes publicadas por el proyecto Stockfish. Recuerda cumplir con su licencia
 si las redistribuyes junto a SirioC.
 
+ codex/adjust-usebook-option-in-uci.cpp-p2lidj
+## Libro de aperturas
+
+`UseBook` está activada por defecto. Si la opción `BookFile` queda vacía, el motor emitirá un mensaje
+informativo al arrancar indicando que necesita la ruta del libro. Para aprovechar la apertura debes
+descargar un fichero en formato Polyglot (`.bin` o `.obk`) y apuntar `BookFile` a su ubicación.
+
+### UHO Big 8Mv5
+
+1. Descarga el libro oficial desde el repositorio de UHO Stockfish: <https://github.com/UHO-Stockfish/Book/releases>.
+   El archivo que necesitas se llama `UHO_Big_8Mv5.obk` (comprimido en ZIP en la publicación).
+2. Crea el directorio `resources/books` en el mismo árbol que el ejecutable de SirioC y descomprime ahí el archivo.
+   La ruta final debería quedar como `resources/books/UHO_Big_8Mv5.obk`.
+3. En tu GUI UCI ejecuta `setoption name BookFile value resources/books/UHO_Big_8Mv5.obk`.
+
+Si la ruta es correcta, el motor responderá con `info string Opening book loaded from ...`. Si el
+archivo no existe o el formato es incorrecto, verás un mensaje explicando el motivo para que puedas
+corregirlo.
+=======
 ## Opening book setup in SirioC
 
 SirioC activa la opción `UseBook` por defecto y espera un fichero en `BookFile`
@@ -112,6 +133,7 @@ es **UHO Big 8Mvs**, distribuido en formato BIN con nombre
 
 Si la ruta configurada no existe, SirioC informará del problema mediante
 `info string` y mantendrá el libro desactivado hasta recibir una ruta válida.
+ main
 
 ## License
 Placed under the same license as SirioC repository (inherit).

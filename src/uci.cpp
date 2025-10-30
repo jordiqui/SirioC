@@ -87,7 +87,11 @@ OptionsMap g_options;
 bool g_options_registered = false;
 bool g_silent_option_update = false;
 sirio::Board* g_option_board = nullptr;
+ codex/adjust-usebook-option-in-uci.cpp-p2lidj
+bool g_initialized = false;
+=======
 std::once_flag g_initialize_once;
+ main
 
 struct SilentUpdateGuard {
     SilentUpdateGuard() : previous(g_silent_option_update) { g_silent_option_update = true; }
@@ -794,10 +798,80 @@ void on_eval_file_small(const Option& opt) {
     }
 }
 
+std::optional<std::string> canonicalize_book_path(const std::string& raw_path, std::string* error_message) {
+    std::filesystem::path fs_path{raw_path};
+    std::error_code ec;
+    if (!std::filesystem::exists(fs_path, ec)) {
+        if (error_message != nullptr) {
+            *error_message = "Opening book file not found: " + raw_path;
+            if (ec) {
+                *error_message += " (" + ec.message() + ")";
+            }
+        }
+        return std::nullopt;
+    }
+    if (!std::filesystem::is_regular_file(fs_path, ec)) {
+        if (error_message != nullptr) {
+            *error_message = "Opening book path is not a regular file: " + raw_path;
+            if (ec) {
+                *error_message += " (" + ec.message() + ")";
+            }
+        }
+        return std::nullopt;
+    }
+
+    std::filesystem::path normalized;
+    std::filesystem::path absolute_path = std::filesystem::absolute(fs_path, ec);
+    if (ec) {
+        normalized = fs_path.lexically_normal();
+    } else {
+        normalized = absolute_path.lexically_normal();
+    }
+    return normalized.string();
+}
+
+bool load_book_from_path(const std::string& canonical_path, bool verbose_success) {
+    std::string error;
+    if (sirio::book::load(canonical_path, &error)) {
+        if (verbose_success) {
+            std::cout << "info string Opening book loaded from " << canonical_path << std::endl;
+        }
+        return true;
+    }
+    std::cout << "info string Failed to load opening book: " << error << std::endl;
+    return false;
+}
+
+void ensure_opening_book_loaded(bool verbose_success) {
+    if (!options.use_book) {
+        return;
+    }
+    if (options.book_file.empty()) {
+        std::cout << "info string Opening book enabled but BookFile is empty" << std::endl;
+        return;
+    }
+
+    std::string error_message;
+    if (auto canonical = canonicalize_book_path(options.book_file, &error_message)) {
+        options.book_file = *canonical;
+        if (!sirio::book::is_loaded()) {
+            load_book_from_path(options.book_file, verbose_success);
+        }
+    } else {
+        std::cout << "info string " << error_message << std::endl;
+    }
+}
+
 void on_use_book(const Option& opt) {
+    bool requested = static_cast<bool>(opt);
+    options.use_book = requested;
     if (g_silent_option_update) {
         return;
     }
+ codex/adjust-usebook-option-in-uci.cpp-p2lidj
+    if (options.use_book) {
+        ensure_opening_book_loaded(true);
+=======
     options.use_book = static_cast<bool>(opt);
     if (!options.use_book) {
         return;
@@ -815,13 +889,38 @@ void on_use_book(const Option& opt) {
         if (!options.book_file.empty()) {
             options.book_file.clear();
         }
+ main
     }
 }
 
 void on_book_file(const Option& opt) {
+    std::string requested = normalize_string_option(static_cast<std::string>(opt));
     if (g_silent_option_update) {
+        options.book_file = requested;
         return;
     }
+ codex/adjust-usebook-option-in-uci.cpp-p2lidj
+
+    if (requested.empty()) {
+        options.book_file.clear();
+        sirio::book::clear();
+        std::cout << "info string Opening book cleared" << std::endl;
+        return;
+    }
+
+    std::string error_message;
+    auto canonical = canonicalize_book_path(requested, &error_message);
+    if (!canonical) {
+        std::cout << "info string " << error_message << std::endl;
+        return;
+    }
+
+    std::string previous = options.book_file;
+    if (load_book_from_path(*canonical, true)) {
+        options.book_file = *canonical;
+    } else {
+        options.book_file = previous;
+=======
     std::string path = normalize_string_option(static_cast<std::string>(opt));
     if (path.empty()) {
         sirio::book::clear();
@@ -849,6 +948,7 @@ void on_book_file(const Option& opt) {
             sirio::book::clear();
             options.book_file.clear();
         }
+ main
     }
 }
 
@@ -1077,6 +1177,19 @@ bool handle_setoption(const std::string& args, sirio::Board& board) {
     bool handled = sirio::uci::handle_setoption(g_options, args);
     g_option_board = nullptr;
     return handled;
+}
+
+void initialize_impl() {
+    if (g_initialized) {
+        return;
+    }
+
+    initialize_engine_options();
+    ensure_options_registered();
+    sync_options_from_state();
+    ensure_opening_book_loaded(true);
+
+    g_initialized = true;
 }
 
 void send_uci_id() {
@@ -1374,6 +1487,9 @@ void handle_bench() {
 
 }  // namespace
 
+ codex/adjust-usebook-option-in-uci.cpp-p2lidj
+void initialize() { initialize_impl(); }
+=======
 void initialize() {
     std::call_once(g_initialize_once, []() {
         initialize_engine_options();
@@ -1390,6 +1506,7 @@ void initialize() {
         }
     });
 }
+ main
 
 int run() {
     initialize();
