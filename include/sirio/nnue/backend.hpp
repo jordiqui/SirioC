@@ -53,8 +53,8 @@ public:
 
     void initialize(const Board &board) override;
     void reset(const Board &board) override;
-    void push(const Board &previous, const std::optional<Move> &move,
-              const Board &current) override;
+    void push(const Board &current, const std::optional<Move> &move,
+              Color mover) override;
     void pop() override;
     int evaluate(const Board &board) override;
 
@@ -63,7 +63,7 @@ public:
 
 private:
     FeatureState compute_state(const Board &board) const;
-    void apply_move_to_state(FeatureState &state, const Board &previous, const Move &move,
+    void apply_move_to_state(FeatureState &state, Color mover, const Move &move,
                              const Board &current);
     std::vector<FeatureState> &stack();
     [[nodiscard]] const std::vector<FeatureState> &stack() const;
@@ -89,8 +89,8 @@ public:
 
     void initialize(const Board &board) override;
     void reset(const Board &board) override;
-    void push(const Board &previous, const std::optional<Move> &move,
-              const Board &current) override;
+    void push(const Board &current, const std::optional<Move> &move,
+              Color mover) override;
     void pop() override;
     int evaluate(const Board &board) override;
 

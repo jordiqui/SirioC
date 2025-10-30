@@ -192,6 +192,32 @@ namespace {
 
 constexpr int kMaxSearchThreads = 1024;
 
+class EvaluationScope {
+public:
+    EvaluationScope(Color mover, std::optional<Move> move, Board &board) : active_(false) {
+        push_evaluation_state(mover, move, board);
+        active_ = true;
+    }
+
+    EvaluationScope(Color mover, const Move *move, Board &board)
+        : EvaluationScope(mover, move ? std::optional<Move>{*move} : std::optional<Move>{}, board) {}
+
+    EvaluationScope(Color mover, std::nullopt_t, Board &board)
+        : EvaluationScope(mover, std::optional<Move>{}, board) {}
+
+    ~EvaluationScope() {
+        if (active_) {
+            pop_evaluation_state();
+        }
+    }
+
+    EvaluationScope(const EvaluationScope &) = delete;
+    EvaluationScope &operator=(const EvaluationScope &) = delete;
+
+private:
+    bool active_;
+};
+
 int clamp_thread_count(int threads) {
     return std::clamp(threads, 1, kMaxSearchThreads);
 }
@@ -720,21 +746,28 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
     if (allow_null_move && !in_check && depth_left >= 3 && static_eval >= beta &&
         has_non_pawn_material(board, board.side_to_move())) {
         Board::NullUndoState null_undo;
+        Color null_mover = board.side_to_move();
         board.make_null_move(null_undo);
-        int reduction = 2 + depth_left / 4;
-        int null_depth = depth_left - 1 - reduction;
-        if (null_depth >= 0) {
-            int null_score = -negamax(board, null_depth, -beta, -beta + 1, ply + 1, nullptr, nullptr,
+        int null_score = std::numeric_limits<int>::min();
+        bool evaluated = false;
+        {
+            EvaluationScope null_eval_scope(null_mover, std::nullopt, board);
+            int reduction = 2 + depth_left / 4;
+            int null_depth = depth_left - 1 - reduction;
+            if (null_depth >= 0) {
+                null_score = -negamax(board, null_depth, -beta, -beta + 1, ply + 1, nullptr, nullptr,
                                       context, static_eval, false);
-            board.undo_null_move(null_undo);
+                evaluated = true;
+            }
+        }
+        board.undo_null_move(null_undo);
+        if (evaluated) {
             if (context.shared->stop.load(std::memory_order_relaxed)) {
                 return 0;
             }
             if (null_score >= beta) {
                 return beta;
             }
-        } else {
-            board.undo_null_move(null_undo);
         }
     }
 
@@ -767,6 +800,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         }
         Board::UndoState undo;
         board.make_move(move, undo);
+        EvaluationScope eval_scope(mover, &move, board);
         bool gives_check = board.in_check(board.side_to_move());
 
         int child_depth = depth_left - 1;
@@ -893,13 +927,14 @@ int quiescence(Board &board, int alpha, int beta, int ply, SearchContext &contex
     bool found_legal = false;
     for (const Move &move : tactical_moves) {
         Board::UndoState undo;
+        Color mover = board.side_to_move();
         try {
             board.make_move(move, undo);
         } catch (const std::exception &) {
             continue;
         }
 
-        Color mover = opposite(board.side_to_move());
+        EvaluationScope eval_scope(mover, &move, board);
         if (board.king_square(mover) >= 0 && board.in_check(mover)) {
             board.undo_move(move, undo);
             continue;

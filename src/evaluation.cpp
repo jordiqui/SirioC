@@ -41,9 +41,9 @@ public:
         pawn_stack_.push_back({current_pawn_key_});
     }
     void reset(const Board &board) override { initialize(board); }
-    void push(const Board &previous, const std::optional<Move> &, const Board &current) override {
+    void push(const Board &current, const std::optional<Move> &, Color) override {
         if (pawn_stack_.empty()) {
-            ensure_pawn_data(previous);
+            ensure_pawn_data(current);
             pawn_stack_.push_back({current_pawn_key_});
         }
 
@@ -1700,15 +1700,19 @@ void initialize_evaluation(const Board &board) {
     state.notifications_enabled = true;
 }
 
-void push_evaluation_state(const Board &previous, const std::optional<Move> &move,
+void push_evaluation_state(Color mover, const std::optional<Move> &move,
                            const Board &current) {
     ensure_thread_backend();
     EvaluationThreadState &state = thread_state();
     if (!state.notifications_enabled) {
         return;
     }
-    ensure_initialized(previous);
-    state.backend->push(previous, move, current);
+    if (!state.initialized) {
+        state.backend->initialize(current);
+        state.initialized = true;
+        state.stack_depth = 1;
+    }
+    state.backend->push(current, move, mover);
     ++state.stack_depth;
 }
 
@@ -1734,14 +1738,14 @@ void notify_position_initialization(const Board &board) {
     initialize_evaluation(board);
 }
 
-void notify_move_applied(const Board &previous, const std::optional<Move> &move,
+void notify_move_applied(Color mover, const std::optional<Move> &move,
                          const Board &current) {
     ensure_thread_backend();
     EvaluationThreadState &state = thread_state();
     if (!state.notifications_enabled) {
         return;
     }
-    push_evaluation_state(previous, move, current);
+    push_evaluation_state(mover, move, current);
 }
 
 int evaluate(const Board &board) {

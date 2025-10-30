@@ -21,8 +21,8 @@ public:
 
     virtual void initialize(const Board &board) = 0;
     virtual void reset(const Board &board) = 0;
-    virtual void push(const Board &previous, const std::optional<Move> &move,
-                      const Board &current) = 0;
+    virtual void push(const Board &current, const std::optional<Move> &move,
+                      Color mover) = 0;
     virtual void pop() = 0;
     virtual int evaluate(const Board &board) = 0;
 
@@ -42,12 +42,12 @@ void use_classical_evaluation();
 EvaluationBackend &active_evaluation_backend();
 
 void initialize_evaluation(const Board &board);
-void push_evaluation_state(const Board &previous, const std::optional<Move> &move,
+void push_evaluation_state(Color mover, const std::optional<Move> &move,
                            const Board &current);
 void pop_evaluation_state();
 
 void notify_position_initialization(const Board &board);
-void notify_move_applied(const Board &previous, const std::optional<Move> &move,
+void notify_move_applied(Color mover, const std::optional<Move> &move,
                          const Board &current);
 
 int evaluate(const Board &board);

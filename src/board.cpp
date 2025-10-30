@@ -563,7 +563,7 @@ Board Board::apply_null_move() const {
     }
 
     result.history_.push(result.state_);
-    notify_move_applied(*this, std::nullopt, result);
+    notify_move_applied(us, std::nullopt, result);
     return result;
 }
 
@@ -571,7 +571,7 @@ Board Board::apply_move(const Move &move) const {
     Board result = *this;
     UndoState undo;
     result.make_move(move, undo);
-    notify_move_applied(*this, std::optional<Move>{move}, result);
+    notify_move_applied(state_.side_to_move, std::optional<Move>{move}, result);
     return result;
 }
 

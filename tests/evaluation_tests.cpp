@@ -1,4 +1,5 @@
 #include <cassert>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -46,7 +47,7 @@ void test_pawn_cache_stability_on_non_pawn_moves() {
     for (const auto &uci : moves) {
         sirio::Move move = sirio::move_from_uci(current, uci);
         sirio::Board next = current.apply_move(move);
-        sirio::push_evaluation_state(current, move, next);
+        sirio::push_evaluation_state(current.side_to_move(), std::optional<sirio::Move>{move}, next);
         (void)sirio::evaluate(next);
         assert(sirio::classical_evaluation_pawn_cache_misses() == baseline_misses);
         history.push_back(next);
