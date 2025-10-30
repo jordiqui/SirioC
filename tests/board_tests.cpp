@@ -237,6 +237,34 @@ void test_king_safety_heavy_piece_alignment() {
     assert(aligned_eval < displaced_eval);
 }
 
+void test_king_safety_heavy_ray_xray() {
+    sirio::use_classical_evaluation();
+
+    sirio::Board xray{"6rk/8/8/8/8/8/6P1/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(xray);
+    int xray_eval = sirio::evaluate(xray);
+
+    sirio::Board reinforced{"6rk/8/8/8/8/6B1/6P1/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(reinforced);
+    int reinforced_eval = sirio::evaluate(reinforced);
+
+    assert(xray_eval < reinforced_eval);
+}
+
+void test_king_safety_castle_file_exposure() {
+    sirio::use_classical_evaluation();
+
+    sirio::Board shielded{"6rk/8/8/8/8/8/6PP/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(shielded);
+    int shielded_eval = sirio::evaluate(shielded);
+
+    sirio::Board exposed{"6rk/8/8/8/8/8/8/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(exposed);
+    int exposed_eval = sirio::evaluate(exposed);
+
+    assert(exposed_eval < shielded_eval);
+}
+
 void test_king_safety_defender_support() {
     sirio::use_classical_evaluation();
 
@@ -415,6 +443,8 @@ int main() {
     test_null_move();
     test_king_safety_advanced_enemy_pawns();
     test_king_safety_heavy_piece_alignment();
+    test_king_safety_heavy_ray_xray();
+    test_king_safety_castle_file_exposure();
     test_king_safety_defender_support();
     test_king_safety_weak_squares();
     test_evaluation_passed_pawn();
