@@ -136,7 +136,6 @@ Classical—110.
 ### Opening book and NNUE
 
 #### UseBook / BookFile
- codex/adjust-usebook-option-in-uci.cpp-p2lidj
 `UseBook` now starts enabled. If no `BookFile` is configured the engine prints a
 warning at startup so you can point it to a Polyglot book. Books provide instant
 moves and conserve time. **Recommended values:** keep the book enabled for
@@ -146,17 +145,6 @@ play. See [docs/uci_options.md](docs/uci_options.md#libro-de-aperturas) for
 step-by-step instructions on downloading and pointing SirioC to the UHO Big
 8Mv5 book (place it in `resources/books/UHO_Big_8Mv5.obk` and update the
 `BookFile` option accordingly).
-=======
-`UseBook` now starts enabled and expects `BookFile` to reference a valid BIN
-file. SirioC loads the configured book during `uci::initialize()` and logs a
-clear `info string` if the path is missing. The recommended source is the
-**UHO Big 8Mvs** book (`UHO_2024-Big_8mvs.bin`): download it, store it as
-`books/UHO_2024-Big_8mvs.bin` inside the repository, and set `BookFile` to that
-path (relative or absolute) in your GUI. **Recommended values:** keep the book
-enabled for Bullet/Blitz/Rapid to avoid early clock usage, and enable it for
-Classical when you trust the book contents; disable it only if you prefer to
-test pure engine play.
- main
 
 #### UseNNUE / EvalFile / EvalFileSmall / NNUEFile
 `UseNNUE` toggles the neural evaluation backend. `EvalFile` and `NNUEFile`
