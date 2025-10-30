@@ -265,6 +265,34 @@ void test_king_safety_weak_squares() {
     assert(exposed_eval < distant_eval);
 }
 
+void test_king_safety_xray_pressure() {
+    sirio::use_classical_evaluation();
+
+    sirio::Board pawn_blocker{"6rk/8/8/8/8/8/6P1/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(pawn_blocker);
+    int pawn_eval = sirio::evaluate(pawn_blocker);
+
+    sirio::Board piece_blocker{"6rk/8/8/8/8/8/6R1/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(piece_blocker);
+    int piece_eval = sirio::evaluate(piece_blocker);
+
+    assert(pawn_eval < piece_eval);
+}
+
+void test_king_safety_open_castled_file() {
+    sirio::use_classical_evaluation();
+
+    sirio::Board covered{"6rk/8/8/8/8/8/6P1/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(covered);
+    int covered_eval = sirio::evaluate(covered);
+
+    sirio::Board exposed{"6rk/8/8/8/8/8/8/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(exposed);
+    int exposed_eval = sirio::evaluate(exposed);
+
+    assert(exposed_eval < covered_eval);
+}
+
 void test_evaluation_passed_pawn() {
     sirio::Board passed{"8/8/8/3P4/8/8/8/3kK3 w - - 0 1"};
     sirio::Board blocked{"8/8/3p4/3P4/8/8/8/3kK3 w - - 0 1"};
@@ -417,6 +445,8 @@ int main() {
     test_king_safety_heavy_piece_alignment();
     test_king_safety_defender_support();
     test_king_safety_weak_squares();
+    test_king_safety_xray_pressure();
+    test_king_safety_open_castled_file();
     test_evaluation_passed_pawn();
     test_syzygy_option_configuration();
     test_evaluation_backend_consistency();
