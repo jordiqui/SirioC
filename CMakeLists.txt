@@ -67,6 +67,7 @@ add_executable(sirio_tests
     tests/perft_quiescence.cpp
     tests/perft_tests.cpp
     tests/tt_tests.cpp
+    tests/time_manager_tests.cpp
 )
 
 target_link_libraries(sirio_tests PRIVATE sirio_core)
