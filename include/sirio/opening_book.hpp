@@ -12,6 +12,7 @@ bool load(const std::string &path, std::string *error = nullptr);
 void clear();
 bool is_loaded();
 std::optional<Move> choose_move(const Board &board);
+bool load_for_initialize(const std::string &path, bool enabled, std::string *message);
 
 }  // namespace sirio::book
 

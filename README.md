@@ -136,10 +136,15 @@ Classical—110.
 ### Opening book and NNUE
 
 #### UseBook / BookFile
-`UseBook` enables the external opening book located at `BookFile`. Books provide
-instant moves and conserve time. **Recommended values:** enable the book for
-Bullet/Blitz/Rapid to avoid early clock usage, and enable it for Classical when
-you trust the book contents; disable if you prefer to test pure engine play.
+`UseBook` now starts enabled and expects `BookFile` to reference a valid BIN
+file. SirioC loads the configured book during `uci::initialize()` and logs a
+clear `info string` if the path is missing. The recommended source is the
+**UHO Big 8Mvs** book (`UHO_2024-Big_8mvs.bin`): download it, store it as
+`books/UHO_2024-Big_8mvs.bin` inside the repository, and set `BookFile` to that
+path (relative or absolute) in your GUI. **Recommended values:** keep the book
+enabled for Bullet/Blitz/Rapid to avoid early clock usage, and enable it for
+Classical when you trust the book contents; disable it only if you prefer to
+test pure engine play.
 
 #### UseNNUE / EvalFile / EvalFileSmall / NNUEFile
 `UseNNUE` toggles the neural evaluation backend. `EvalFile` and `NNUEFile`
