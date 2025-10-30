@@ -9,6 +9,7 @@ namespace sirio {
 
 std::vector<Move> generate_pseudo_legal_moves(const Board &board);
 std::vector<Move> generate_pseudo_legal_tactical_moves(const Board &board);
+std::vector<Move> generate_pseudo_legal_quiet_checks(Board &board);
 std::vector<Move> generate_legal_moves(Board &board);
 std::vector<Move> generate_legal_moves(const Board &board);
 

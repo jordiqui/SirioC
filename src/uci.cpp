@@ -866,6 +866,9 @@ void ensure_options_registered() {
     g_options["nodestime"] = Option(0, 0, 10000);
     g_options["nodestime"].after_set(on_nodes_time);
 
+    g_options["AutoTimeTuning"] = Option(true);
+    g_options["AutoTimeTuning"].after_set(on_auto_time_tuning);
+
     g_options["SyzygyProbeLimit"] = Option(7, 0, 7);
     g_options["SyzygyProbeLimit"].after_set(on_syzygy_probe_limit);
 
@@ -931,6 +934,9 @@ void sync_options_from_state() {
     }
     if (auto* opt = find_option("nodestime")) {
         opt->set_int(options.nodestime);
+    }
+    if (auto* opt = find_option("AutoTimeTuning")) {
+        opt->set_bool(options.auto_time_tuning);
     }
     if (auto* opt = find_option("UCI_Chess960")) {
         opt->set_bool(options.uci_chess960);
