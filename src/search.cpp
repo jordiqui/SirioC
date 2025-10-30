@@ -63,6 +63,7 @@ struct SearchSharedState {
     std::chrono::milliseconds soft_time_limit{0};
     std::chrono::milliseconds hard_time_limit{0};
     std::uint64_t node_limit = 0;
+    int planned_moves_to_go = 0;
     std::mutex background_mutex;
     std::condition_variable background_cv;
 
@@ -1009,6 +1010,7 @@ private:
 struct TimeAllocation {
     std::chrono::milliseconds soft;
     std::chrono::milliseconds hard;
+    int moves_to_go = 0;
 };
 
 void adjust_time_allocation(std::chrono::milliseconds &soft, std::chrono::milliseconds &hard) {
@@ -1058,8 +1060,9 @@ std::optional<TimeAllocation> compute_time_allocation(const Board &board,
         if (soft > hard) {
             soft = hard;
         }
+        set_expected_moves_to_go(1);
         adjust_time_allocation(soft, hard);
-        return TimeAllocation{soft, hard};
+        return TimeAllocation{soft, hard, 1};
     }
 
     Color stm = board.side_to_move();
@@ -1085,16 +1088,18 @@ std::optional<TimeAllocation> compute_time_allocation(const Board &board,
         if (soft > hard) {
             soft = hard;
         }
+        set_expected_moves_to_go(moves_to_go);
         adjust_time_allocation(soft, hard);
-        return TimeAllocation{soft, hard};
+        return TimeAllocation{soft, hard, moves_to_go};
     }
 
     if (increment > 0) {
         int allocation = std::max(increment / 2, 1);
         auto hard = std::chrono::milliseconds{allocation};
         auto soft = hard;
+        set_expected_moves_to_go(1);
         adjust_time_allocation(soft, hard);
-        return TimeAllocation{soft, hard};
+        return TimeAllocation{soft, hard, 1};
     }
 
     return std::nullopt;
@@ -1323,6 +1328,7 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
         shared.has_time_limit = true;
         shared.soft_time_limit = allocation->soft;
         shared.hard_time_limit = allocation->hard;
+        shared.planned_moves_to_go = allocation->moves_to_go;
         if (shared.soft_time_limit.count() <= 0) {
             shared.soft_time_limit = std::chrono::milliseconds{1};
         }
@@ -1432,6 +1438,12 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     auto now = std::chrono::steady_clock::now();
     auto elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now - shared.start_time);
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed_ns);
+    if (allocation.has_value()) {
+        int planned_soft = static_cast<int>(shared.soft_time_limit.count());
+        int elapsed_ms = static_cast<int>(elapsed.count());
+        int moves_to_go = shared.planned_moves_to_go;
+        report_time_observation(moves_to_go, planned_soft, elapsed_ms);
+    }
     NodeThroughputMetrics metrics = compute_node_metrics(shared, best.nodes, elapsed_ns);
     long long elapsed_ms = elapsed.count();
     if (elapsed_ms < 0) {
