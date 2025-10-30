@@ -3,10 +3,13 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
+#include <system_error>
 #include <mutex>
 #include <optional>
 #include <random>
+#include <system_error>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -60,10 +63,40 @@ std::string normalize_fen_key(const std::string &fen) {
 }  // namespace
 
 bool load(const std::string &path, std::string *error) {
-    std::ifstream file(path);
+    std::filesystem::path fs_path{path};
+    std::error_code ec;
+    if (!std::filesystem::exists(fs_path, ec)) {
+        if (error != nullptr) {
+            *error = "No se encontró el libro de aperturas en: " + path;
+            if (ec) {
+                *error += " (" + ec.message() + ")";
+            }
+        }
+        return false;
+    }
+    if (!std::filesystem::is_regular_file(fs_path, ec)) {
+        if (error != nullptr) {
+            *error = "La ruta del libro no es un fichero válido: " + path;
+            if (ec) {
+                *error += " (" + ec.message() + ")";
+            }
+        }
+        return false;
+    }
+
+    std::ifstream file(fs_path, std::ios::binary);
     if (!file) {
         if (error != nullptr) {
-            *error = "No se pudo abrir el libro de aperturas: " + path;
+            std::error_code ec;
+            std::filesystem::path fs_path{path};
+            if (!std::filesystem::exists(fs_path, ec)) {
+                *error = "Archivo de libro de aperturas no encontrado: " + fs_path.string();
+            } else {
+                *error = "No se pudo abrir el libro de aperturas: " + fs_path.string();
+                if (ec) {
+                    *error += " (" + ec.message() + ")";
+                }
+            }
         }
         return false;
     }
@@ -189,6 +222,49 @@ std::optional<Move> choose_move(const Board &board) {
     } catch (const std::exception &) {
         return std::nullopt;
     }
+}
+
+bool load_for_initialize(const std::string &path, bool enabled, std::string *message) {
+    if (!enabled) {
+        return false;
+    }
+
+    if (path.empty()) {
+        if (message != nullptr) {
+            *message =
+                "Opening book enabled but BookFile is empty; configure a valid path to use it.";
+        }
+        return false;
+    }
+
+    std::filesystem::path fs_path{path};
+    std::error_code ec;
+    if (!std::filesystem::exists(fs_path, ec)) {
+        if (message != nullptr) {
+            *message = "Opening book file not found: " + fs_path.string();
+            if (ec) {
+                *message += " (" + ec.message() + ")";
+            }
+        }
+        return false;
+    }
+
+    std::string error;
+    if (load(path, &error)) {
+        if (message != nullptr) {
+            *message = "Opening book loaded from " + fs_path.string();
+        }
+        return true;
+    }
+
+    if (message != nullptr) {
+        if (!error.empty()) {
+            *message = "Failed to load opening book: " + error;
+        } else {
+            *message = "Failed to load opening book: unknown error.";
+        }
+    }
+    return false;
 }
 
 }  // namespace sirio::book

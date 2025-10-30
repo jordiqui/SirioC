@@ -468,6 +468,40 @@ std::vector<Move> generate_pseudo_legal_tactical_moves(const Board &board) {
     return moves;
 }
 
+std::vector<Move> generate_pseudo_legal_quiet_checks(Board &board) {
+    auto pseudo = generate_pseudo_legal_moves(board);
+    std::vector<Move> quiet_checks;
+    quiet_checks.reserve(pseudo.size());
+
+    for (const Move &move : pseudo) {
+        if (move.captured.has_value() || move.promotion.has_value() || move.is_en_passant ||
+            move.is_castling) {
+            continue;
+        }
+
+        Board::UndoState undo;
+        try {
+            board.make_move(move, undo);
+        } catch (const std::exception &) {
+            continue;
+        }
+
+        Color mover = opposite(board.side_to_move());
+        if (board.king_square(mover) >= 0 && board.in_check(mover)) {
+            board.undo_move(move, undo);
+            continue;
+        }
+
+        if (board.in_check(board.side_to_move())) {
+            quiet_checks.push_back(move);
+        }
+
+        board.undo_move(move, undo);
+    }
+
+    return quiet_checks;
+}
+
 std::vector<Move> generate_legal_moves(Board &board) {
     std::vector<Move> legal_moves;
     auto pseudo = generate_pseudo_legal_moves(board);
