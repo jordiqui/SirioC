@@ -18,6 +18,9 @@ Este es un motor original creado por **Jorge Ruiz Centelles**. El núcleo del mo
 - Búsqueda iterativa con control de tiempo adaptativo, cálculo de nodos visitados y soporte para opciones UCI como `SyzygyPath`.
 - Integración opcional con tablebases Syzygy (3-7 piezas) mediante el motor Fathom.
 - Interfaz UCI multihilo con búsqueda *lazy SMP* configurable.
+- Motor de detección de tablas que cubre la regla de las cincuenta jugadas, repeticiones y el material insuficiente descrito en `src/draws.cpp`.
+- Libro de aperturas con ponderación de jugadas, carga en caliente y selección estocástica, implementado en `src/opening_book.cpp`.
+- Gestor de tiempo con sobremargen dinámico basado en latencias observadas y recuento de jugadas previstas (`src/time_manager.cpp`).
 - Suite de pruebas unitarias que cubre inicialización del tablero, compatibilidad FEN, reglas de tablas, heurísticas de evaluación y nuevas utilidades como el movimiento nulo.
 - Benchmarks reproducibles para medir nodos por segundo, precisión táctica y verificación opcional de tablebases.
 - Evaluación NNUE configurable con uno o dos ficheros, permitiendo redes especializadas para medio juego y finales.
@@ -371,7 +374,7 @@ rápidamente sobre arquitecturas o datasets propios antes de promover una red al
 
 ## Próximos pasos sugeridos
 
-- Consolidar una **pipeline de entrenamiento NNUE propia**, definiendo datasets, scripts de entrenamiento y métricas de validación reproducibles.
-- La suite de benchmarks incluye comparativas entre redes internas y referencias públicas gracias a la carga automatizada de `EvalFile` y `EvalFileSmall` en `bench/ccrl_suite.py`.
-- Incorporar un orquestador de matches (`cutechess-cli`, `fastchess`) que ejecute regresiones periódicas con las redes validadas y actualice automáticamente su despliegue en el motor.
+- Exponer una opción UCI para activar el autoajuste de tiempo del motor, conectando `src/uci.cpp` con las rutinas de `include/sirio/time_manager.hpp` y validando la funcionalidad en `tests/time_manager_tests.cpp`.
+- Añadir herramientas de mantenimiento del libro de aperturas que validen pesos, detecten entradas corruptas y permitan generar ficheros desde Polyglot dentro de `src/opening_book.cpp` y pruebas asociadas.
+- Extender la lógica de detección de tablas en `src/draws.cpp` para cubrir límites modernos (75 jugadas, cinco repeticiones) y reflejar los resultados en la salida UCI y las pruebas.
 
