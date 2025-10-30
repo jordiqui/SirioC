@@ -101,6 +101,7 @@ struct SearchContext {
     int selective_depth = 0;
     std::uint64_t local_node_accumulator = 0;
     std::uint64_t total_nodes = 0;
+    bool is_primary_thread = false;
 };
 
 constexpr std::uint64_t node_flush_interval = 512;
@@ -410,6 +411,33 @@ void announce_search_update(const Board &board, const SearchResult &result,
     std::cout << std::endl;
 }
 
+void announce_currmove(const Move &move, int move_index, const SearchContext &context) {
+    if (!context.is_primary_thread || context.shared == nullptr) {
+        return;
+    }
+
+    const SearchSharedState &shared_state = *context.shared;
+    std::uint64_t nodes =
+        shared_state.node_counter.load(std::memory_order_relaxed) + context.local_node_accumulator;
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - shared_state.start_time);
+    long long elapsed_ms = elapsed.count();
+    if (elapsed_ms < 0) {
+        elapsed_ms = 0;
+    }
+
+    TimedAtomicFlagLock lock(info_output_flag, info_output_lock_timeout);
+    if (!lock.owns_lock()) {
+        return;
+    }
+
+    std::cout << "info currmove " << move_to_uci(move) << " currmovenumber " << move_index;
+    if (nodes > 0) {
+        std::cout << " nodes " << nodes;
+    }
+    std::cout << " time " << elapsed_ms << std::endl;
+}
+
 bool is_quiet(const Move &move) {
     return !move.captured.has_value() && !move.promotion.has_value() && !move.is_castling &&
            !move.is_en_passant;
@@ -684,6 +712,9 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
     int move_index = 0;
     for (const Move &move : moves) {
         ++move_index;
+        if (ply == 0) {
+            announce_currmove(move, move_index, context);
+        }
         Color mover = board.side_to_move();
         Board::UndoState undo;
         board.make_move(move, undo);
@@ -1142,6 +1173,7 @@ SearchResult run_search_thread(Board board, int max_depth_limit, SearchSharedSta
     context.shared = &shared;
     context.tt = &tt;
     context.tt_generation = tt_generation;
+    context.is_primary_thread = is_primary;
     SearchResult local = seed;
     Move best_move = seed.has_move ? seed.best_move : Move{};
     bool best_found = seed.has_move;
