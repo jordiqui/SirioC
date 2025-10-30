@@ -208,6 +208,62 @@ void test_null_move() {
     assert(after_second_null.fullmove_number() == after_null.fullmove_number() + 1);
 }
 
+void test_king_safety_advanced_enemy_pawns() {
+    sirio::use_classical_evaluation();
+
+    sirio::Board distant{"6k1/8/5p2/8/8/8/8/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(distant);
+    int distant_eval = sirio::evaluate(distant);
+
+    sirio::Board close{"6k1/8/8/8/8/5p2/8/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(close);
+    int close_eval = sirio::evaluate(close);
+
+    assert(close_eval < distant_eval);
+}
+
+void test_king_safety_heavy_piece_alignment() {
+    sirio::use_classical_evaluation();
+
+    sirio::Board aligned{"6rk/8/8/8/8/8/8/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(aligned);
+    int aligned_eval = sirio::evaluate(aligned);
+
+    sirio::Board displaced{"r5k1/8/8/8/8/8/8/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(displaced);
+    int displaced_eval = sirio::evaluate(displaced);
+
+    assert(aligned_eval < displaced_eval);
+}
+
+void test_king_safety_defender_support() {
+    sirio::use_classical_evaluation();
+
+    sirio::Board defended{"6k1/8/8/8/8/8/8/5RK1 w - - 0 1"};
+    sirio::initialize_evaluation(defended);
+    int defended_eval = sirio::evaluate(defended);
+
+    sirio::Board distant{"6k1/8/8/8/8/8/8/R5K1 w - - 0 1"};
+    sirio::initialize_evaluation(distant);
+    int distant_eval = sirio::evaluate(distant);
+
+    assert(defended_eval > distant_eval);
+}
+
+void test_king_safety_weak_squares() {
+    sirio::use_classical_evaluation();
+
+    sirio::Board exposed{"6k1/8/8/8/8/6q1/8/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(exposed);
+    int exposed_eval = sirio::evaluate(exposed);
+
+    sirio::Board distant_threat{"6k1/q7/8/8/8/8/8/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(distant_threat);
+    int distant_eval = sirio::evaluate(distant_threat);
+
+    assert(exposed_eval < distant_eval);
+}
+
 void test_evaluation_passed_pawn() {
     sirio::Board passed{"8/8/8/3P4/8/8/8/3kK3 w - - 0 1"};
     sirio::Board blocked{"8/8/3p4/3P4/8/8/8/3kK3 w - - 0 1"};
@@ -356,6 +412,10 @@ int main() {
     test_draw_by_repetition_rule();
     test_draw_by_insufficient_material_rule();
     test_null_move();
+    test_king_safety_advanced_enemy_pawns();
+    test_king_safety_heavy_piece_alignment();
+    test_king_safety_defender_support();
+    test_king_safety_weak_squares();
     test_evaluation_passed_pawn();
     test_syzygy_option_configuration();
     test_evaluation_backend_consistency();

@@ -254,6 +254,7 @@ int evaluate_king_safety(const Board &board, Color color,
     Bitboard king_zone = king_attacks(king_sq) | one_bit(king_sq);
     Color enemy = opposite(color);
     Bitboard occupancy = board.occupancy();
+    Bitboard friendly_pawns = board.pieces(color, PieceType::Pawn);
 
     Bitboard enemy_knights = board.pieces(enemy, PieceType::Knight);
     int attack_penalty = 0;
@@ -305,6 +306,97 @@ int evaluate_king_safety(const Board &board, Color color,
         }
     }
 
+    int advanced_pawn_penalty = 0;
+    Bitboard advanced_pawns = enemy_pawns;
+    while (advanced_pawns) {
+        int sq = pop_lsb(advanced_pawns);
+        int file = file_of(sq);
+        if (std::abs(file - king_file) > 1) {
+            continue;
+        }
+        int rank = rank_of(sq);
+        bool advanced = false;
+        if (color == Color::White) {
+            int limit = std::min(7, king_rank + 2);
+            advanced = rank <= limit;
+        } else {
+            int limit = std::max(0, king_rank - 2);
+            advanced = rank >= limit;
+        }
+        if (!advanced) {
+            continue;
+        }
+        int distance = std::abs(rank - king_rank);
+        int proximity_bonus = std::max(0, 3 - distance);
+        advanced_pawn_penalty += 12 + proximity_bonus * 3;
+    }
+
+    int heavy_ray_penalty = 0;
+    Bitboard enemy_heavy = enemy_sliders;
+    Bitboard heavy_tmp = enemy_heavy;
+    while (heavy_tmp) {
+        int sq = pop_lsb(heavy_tmp);
+        Bitboard attacks = rook_attacks(sq, occupancy);
+        if (attacks & one_bit(king_sq)) {
+            int file_diff = std::abs(file_of(sq) - king_file);
+            int rank_diff = std::abs(rank_of(sq) - king_rank);
+            int distance = std::max(file_diff, rank_diff);
+            heavy_ray_penalty += 18 + std::max(0, 4 - distance) * 4;
+        }
+    }
+
+    int defender_bonus = 0;
+    Bitboard friendly_heavy = board.pieces(color, PieceType::Rook) | board.pieces(color, PieceType::Queen);
+    Bitboard friendly_tmp = friendly_heavy;
+    while (friendly_tmp) {
+        int sq = pop_lsb(friendly_tmp);
+        int file_diff = std::abs(file_of(sq) - king_file);
+        int rank_diff = std::abs(rank_of(sq) - king_rank);
+        int distance = std::max(file_diff, rank_diff);
+        if (distance > 2) {
+            continue;
+        }
+        int proximity = std::max(0, 2 - distance);
+        defender_bonus += 10 + proximity * 4;
+        if (file_diff <= 1 && rank_diff <= 1) {
+            defender_bonus += 4;
+        }
+    }
+
+    Bitboard friendly_pawn_attacks =
+        color == Color::White ? pawn_attacks_white(friendly_pawns) : pawn_attacks_black(friendly_pawns);
+    int weak_square_penalty = 0;
+    int forward_rank = color == Color::White ? king_rank + 1 : king_rank - 1;
+    if (forward_rank >= 0 && forward_rank < 8) {
+        for (int file_offset = -1; file_offset <= 1; ++file_offset) {
+            int file = king_file + file_offset;
+            if (file < 0 || file > 7) {
+                continue;
+            }
+            int sq = forward_rank * 8 + file;
+            auto occupant = board.piece_at(sq);
+            if (occupant && occupant->first == color && occupant->second == PieceType::Pawn) {
+                continue;
+            }
+            Bitboard mask = one_bit(sq);
+            bool pawn_supported = (friendly_pawn_attacks & mask) != 0;
+            if (!board.is_square_attacked(sq, enemy)) {
+                continue;
+            }
+            int penalty = 6;
+            if (!pawn_supported) {
+                penalty += 4;
+            }
+            if (!board.is_square_attacked(sq, color)) {
+                penalty += 6;
+            }
+            if (!occupant.has_value()) {
+                penalty += 2;
+            }
+            weak_square_penalty += penalty;
+        }
+    }
+
     bool king_on_dark = ((king_file + king_rank) & 1) != 0;
     bool has_dark_bishop = (board.pieces(color, PieceType::Bishop) & dark_square_mask) != 0;
     int dark_square_penalty = 0;
@@ -328,6 +420,10 @@ int evaluate_king_safety(const Board &board, Color color,
     score -= attack_penalty;
     score -= open_file_penalty;
     score -= dark_square_penalty;
+    score -= advanced_pawn_penalty;
+    score -= heavy_ray_penalty;
+    score -= weak_square_penalty;
+    score += defender_bonus;
     return color == Color::White ? score : -score;
 }
 
