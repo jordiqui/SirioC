@@ -2,13 +2,15 @@
 
 #include <algorithm>
 #include <array>
-#include <memory>
-#include <cstdlib>
 #include <atomic>
+#include <cstdint>
+#include <cstdlib>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "sirio/bitboard.hpp"
 #include "sirio/endgame.hpp"
@@ -18,44 +20,85 @@ namespace sirio {
 
 namespace {
 
+int evaluate_pawn_structure(const Board &board, Color color,
+                            const std::array<int, 8> &friendly_counts,
+                            const std::array<int, 8> &enemy_counts);
+
 class ClassicalEvaluation : public EvaluationBackend {
 public:
+    ClassicalEvaluation() = default;
+    ClassicalEvaluation(const ClassicalEvaluation &) = default;
+    ClassicalEvaluation &operator=(const ClassicalEvaluation &) = default;
+    ClassicalEvaluation(ClassicalEvaluation &&) noexcept = default;
+    ClassicalEvaluation &operator=(ClassicalEvaluation &&) noexcept = default;
+
     void initialize(const Board &board) override {
-        (void)board;
         pawn_cache_.clear();
+        pawn_stack_.clear();
+        pawn_cache_misses_ = 0;
+        current_pawn_key_ = 0;
+        ensure_pawn_data(board);
+        pawn_stack_.push_back({current_pawn_key_});
     }
     void reset(const Board &board) override { initialize(board); }
-    void push(const Board &, const std::optional<Move> &, const Board &) override {}
-    void pop() override {}
+    void push(const Board &previous, const std::optional<Move> &, const Board &current) override {
+        if (pawn_stack_.empty()) {
+            ensure_pawn_data(previous);
+            pawn_stack_.push_back({current_pawn_key_});
+        }
+
+        Bitboard white_pawns = current.pieces(Color::White, PieceType::Pawn);
+        Bitboard black_pawns = current.pieces(Color::Black, PieceType::Pawn);
+        std::uint64_t key = compute_pawn_structure_key(white_pawns, black_pawns);
+        if (pawn_stack_.back().zobrist_key != key) {
+            ensure_pawn_data(current, white_pawns, black_pawns, key);
+        }
+        pawn_stack_.push_back({key});
+        current_pawn_key_ = key;
+    }
+    void pop() override {
+        if (pawn_stack_.empty()) {
+            return;
+        }
+        pawn_stack_.pop_back();
+        if (!pawn_stack_.empty()) {
+            current_pawn_key_ = pawn_stack_.back().zobrist_key;
+        } else {
+            current_pawn_key_ = 0;
+        }
+    }
     int evaluate(const Board &board) override;
 
     [[nodiscard]] std::unique_ptr<EvaluationBackend> clone() const override {
         return std::make_unique<ClassicalEvaluation>(*this);
     }
 
+    [[nodiscard]] std::size_t pawn_cache_misses() const { return pawn_cache_misses_; }
+
 private:
-    struct PawnStructureKey {
-        Bitboard white_pawns;
-        Bitboard black_pawns;
-        bool operator==(const PawnStructureKey &) const = default;
-    };
-
-    struct PawnStructureKeyHash {
-        std::size_t operator()(const PawnStructureKey &key) const noexcept {
-            std::size_t seed = std::hash<Bitboard>{}(key.white_pawns);
-            seed ^= std::hash<Bitboard>{}(key.black_pawns) + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
-            return seed;
-        }
-    };
-
     struct PawnStructureData {
+        std::uint64_t zobrist_key = 0;
+        Bitboard white_pawns = 0;
+        Bitboard black_pawns = 0;
         std::array<int, 8> white_counts{};
         std::array<int, 8> black_counts{};
         int white_score = 0;
         int black_score = 0;
     };
 
-    std::unordered_map<PawnStructureKey, PawnStructureData, PawnStructureKeyHash> pawn_cache_{};
+    struct PawnStackEntry {
+        std::uint64_t zobrist_key = 0;
+    };
+
+    static std::uint64_t compute_pawn_structure_key(Bitboard white_pawns, Bitboard black_pawns);
+    const PawnStructureData &ensure_pawn_data(const Board &board);
+    const PawnStructureData &ensure_pawn_data(const Board &board, Bitboard white_pawns,
+                                              Bitboard black_pawns, std::uint64_t key);
+
+    std::unordered_map<std::uint64_t, PawnStructureData> pawn_cache_{};
+    std::vector<PawnStackEntry> pawn_stack_{};
+    std::uint64_t current_pawn_key_ = 0;
+    std::size_t pawn_cache_misses_ = 0;
 };
 
 constexpr std::array<int, 6> piece_values_mg = {100, 325, 340, 510, 980, 0};
@@ -224,6 +267,34 @@ constexpr std::array<Bitboard, 8> generate_file_masks() {
 
 constexpr auto file_masks = generate_file_masks();
 
+codex/add-zobrist-key-and-update-cache
+std::uint64_t splitmix64(std::uint64_t &state) {
+    state += 0x9E3779B97F4A7C15ULL;
+    std::uint64_t z = state;
+    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+    z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+    return z ^ (z >> 31);
+}
+
+struct PawnZobristTables {
+    std::array<std::uint64_t, 64> white{};
+    std::array<std::uint64_t, 64> black{};
+};
+
+const PawnZobristTables &pawn_zobrist_tables() {
+    static const PawnZobristTables tables = [] {
+        PawnZobristTables result{};
+        std::uint64_t seed = 0xC6A4A7935BD1E995ULL;
+        for (auto &value : result.white) {
+            value = splitmix64(seed);
+        }
+        for (auto &value : result.black) {
+            value = splitmix64(seed);
+        }
+        return result;
+    }();
+    return tables;
+=======
 struct MobilityScore {
     int middlegame = 0;
     int endgame = 0;
@@ -287,6 +358,7 @@ Bitboard compute_passed_pawns(const Board &board, Color color) {
         }
     }
     return passed;
+ main
 }
 
 int mirror_square(int square) { return square ^ 56; }
@@ -299,6 +371,60 @@ std::array<int, 8> pawn_file_counts(const Board &board, Color color) {
         ++counts[file_of(sq)];
     }
     return counts;
+}
+
+std::uint64_t ClassicalEvaluation::compute_pawn_structure_key(Bitboard white_pawns,
+                                                              Bitboard black_pawns) {
+    const auto &tables = pawn_zobrist_tables();
+    std::uint64_t key = 0;
+    Bitboard pawns = white_pawns;
+    while (pawns) {
+        int sq = pop_lsb(pawns);
+        key ^= tables.white[static_cast<std::size_t>(sq)];
+    }
+    pawns = black_pawns;
+    while (pawns) {
+        int sq = pop_lsb(pawns);
+        key ^= tables.black[static_cast<std::size_t>(sq)];
+    }
+    return key;
+}
+
+const ClassicalEvaluation::PawnStructureData &ClassicalEvaluation::ensure_pawn_data(
+    const Board &board, Bitboard white_pawns, Bitboard black_pawns, std::uint64_t key) {
+    auto it = pawn_cache_.find(key);
+    if (it != pawn_cache_.end() && it->second.white_pawns == white_pawns &&
+        it->second.black_pawns == black_pawns) {
+        current_pawn_key_ = key;
+        return it->second;
+    }
+
+    PawnStructureData data;
+    data.zobrist_key = key;
+    data.white_pawns = white_pawns;
+    data.black_pawns = black_pawns;
+    data.white_counts = pawn_file_counts(board, Color::White);
+    data.black_counts = pawn_file_counts(board, Color::Black);
+    data.white_score =
+        evaluate_pawn_structure(board, Color::White, data.white_counts, data.black_counts);
+    data.black_score =
+        evaluate_pawn_structure(board, Color::Black, data.black_counts, data.white_counts);
+
+    auto [new_it, inserted] = pawn_cache_.emplace(key, data);
+    if (!inserted) {
+        new_it->second = data;
+    }
+    ++pawn_cache_misses_;
+    current_pawn_key_ = key;
+    return new_it->second;
+}
+
+const ClassicalEvaluation::PawnStructureData &ClassicalEvaluation::ensure_pawn_data(
+    const Board &board) {
+    Bitboard white_pawns = board.pieces(Color::White, PieceType::Pawn);
+    Bitboard black_pawns = board.pieces(Color::Black, PieceType::Pawn);
+    std::uint64_t key = compute_pawn_structure_key(white_pawns, black_pawns);
+    return ensure_pawn_data(board, white_pawns, black_pawns, key);
 }
 
 int evaluate_pawn_structure(const Board &board, Color color,
@@ -1292,24 +1418,20 @@ int ClassicalEvaluation::evaluate(const Board &board) {
     Bitboard white_pawns = board.pieces(Color::White, PieceType::Pawn);
     Bitboard black_pawns = board.pieces(Color::Black, PieceType::Pawn);
 
-    PawnStructureKey key{white_pawns, black_pawns};
-    auto cache_it = pawn_cache_.find(key);
-    if (cache_it == pawn_cache_.end()) {
-        PawnStructureData data;
-        data.white_counts = pawn_file_counts(board, Color::White);
-        data.black_counts = pawn_file_counts(board, Color::Black);
-        data.white_score =
-            evaluate_pawn_structure(board, Color::White, data.white_counts, data.black_counts);
-        data.black_score =
-            evaluate_pawn_structure(board, Color::Black, data.black_counts, data.white_counts);
-        cache_it = pawn_cache_.emplace(key, std::move(data)).first;
+    std::uint64_t pawn_key = compute_pawn_structure_key(white_pawns, black_pawns);
+    const PawnStructureData &pawn_data =
+        ensure_pawn_data(board, white_pawns, black_pawns, pawn_key);
+    if (pawn_stack_.empty()) {
+        pawn_stack_.push_back({pawn_key});
+    } else {
+        pawn_stack_.back().zobrist_key = pawn_key;
     }
 
-    const auto &white_counts = cache_it->second.white_counts;
-    const auto &black_counts = cache_it->second.black_counts;
+    const auto &white_counts = pawn_data.white_counts;
+    const auto &black_counts = pawn_data.black_counts;
 
-    int pawn_structure_white = cache_it->second.white_score;
-    int pawn_structure_black = cache_it->second.black_score;
+    int pawn_structure_white = pawn_data.white_score;
+    int pawn_structure_black = pawn_data.black_score;
     mg_score += scale_term(pawn_structure_white, pawn_structure_mg_weight);
     eg_score += scale_term(pawn_structure_white, pawn_structure_eg_weight);
     mg_score += scale_term(pawn_structure_black, pawn_structure_mg_weight);
@@ -1558,6 +1680,19 @@ void use_classical_evaluation() {
 EvaluationBackend &active_evaluation_backend() {
     ensure_thread_backend();
     return *thread_state().backend;
+}
+
+std::size_t classical_evaluation_pawn_cache_misses() {
+    ensure_thread_backend();
+    EvaluationThreadState &state = thread_state();
+    if (!state.backend) {
+        return 0;
+    }
+    auto *classical = dynamic_cast<ClassicalEvaluation *>(state.backend.get());
+    if (!classical) {
+        return 0;
+    }
+    return classical->pawn_cache_misses();
 }
 
 void initialize_evaluation(const Board &board) {
