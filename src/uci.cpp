@@ -73,7 +73,7 @@ struct EngineOptions {
     int syzygy_probe_limit = 7;
     bool hash_persist = false;
     std::string hash_persist_file;
-    bool use_book = false;
+    bool use_book = true;
     std::string book_file;
     bool persistent_analysis = false;
     std::string persistent_analysis_file;
@@ -86,6 +86,7 @@ OptionsMap g_options;
 bool g_options_registered = false;
 bool g_silent_option_update = false;
 sirio::Board* g_option_board = nullptr;
+bool g_initialized = false;
 
 struct SilentUpdateGuard {
     SilentUpdateGuard() : previous(g_silent_option_update) { g_silent_option_update = true; }
@@ -733,39 +734,107 @@ void on_eval_file_small(const Option& opt) {
     }
 }
 
+std::optional<std::string> canonicalize_book_path(const std::string& raw_path, std::string* error_message) {
+    std::filesystem::path fs_path{raw_path};
+    std::error_code ec;
+    if (!std::filesystem::exists(fs_path, ec)) {
+        if (error_message != nullptr) {
+            *error_message = "Opening book file not found: " + raw_path;
+            if (ec) {
+                *error_message += " (" + ec.message() + ")";
+            }
+        }
+        return std::nullopt;
+    }
+    if (!std::filesystem::is_regular_file(fs_path, ec)) {
+        if (error_message != nullptr) {
+            *error_message = "Opening book path is not a regular file: " + raw_path;
+            if (ec) {
+                *error_message += " (" + ec.message() + ")";
+            }
+        }
+        return std::nullopt;
+    }
+
+    std::filesystem::path normalized;
+    std::filesystem::path absolute_path = std::filesystem::absolute(fs_path, ec);
+    if (ec) {
+        normalized = fs_path.lexically_normal();
+    } else {
+        normalized = absolute_path.lexically_normal();
+    }
+    return normalized.string();
+}
+
+bool load_book_from_path(const std::string& canonical_path, bool verbose_success) {
+    std::string error;
+    if (sirio::book::load(canonical_path, &error)) {
+        if (verbose_success) {
+            std::cout << "info string Opening book loaded from " << canonical_path << std::endl;
+        }
+        return true;
+    }
+    std::cout << "info string Failed to load opening book: " << error << std::endl;
+    return false;
+}
+
+void ensure_opening_book_loaded(bool verbose_success) {
+    if (!options.use_book) {
+        return;
+    }
+    if (options.book_file.empty()) {
+        std::cout << "info string Opening book enabled but BookFile is empty" << std::endl;
+        return;
+    }
+
+    std::string error_message;
+    if (auto canonical = canonicalize_book_path(options.book_file, &error_message)) {
+        options.book_file = *canonical;
+        if (!sirio::book::is_loaded()) {
+            load_book_from_path(options.book_file, verbose_success);
+        }
+    } else {
+        std::cout << "info string " << error_message << std::endl;
+    }
+}
+
 void on_use_book(const Option& opt) {
+    bool requested = static_cast<bool>(opt);
+    options.use_book = requested;
     if (g_silent_option_update) {
         return;
     }
-    options.use_book = static_cast<bool>(opt);
-    if (options.use_book && !options.book_file.empty() && !sirio::book::is_loaded()) {
-        std::string error;
-        if (sirio::book::load(options.book_file, &error)) {
-            std::cout << "info string Opening book loaded from " << options.book_file << std::endl;
-        } else {
-            std::cout << "info string Failed to load opening book: " << error << std::endl;
-            options.book_file.clear();
-        }
+    if (options.use_book) {
+        ensure_opening_book_loaded(true);
     }
 }
 
 void on_book_file(const Option& opt) {
+    std::string requested = normalize_string_option(static_cast<std::string>(opt));
     if (g_silent_option_update) {
+        options.book_file = requested;
         return;
     }
-    std::string path = normalize_string_option(static_cast<std::string>(opt));
-    options.book_file = path;
-    if (path.empty()) {
+
+    if (requested.empty()) {
+        options.book_file.clear();
         sirio::book::clear();
         std::cout << "info string Opening book cleared" << std::endl;
+        return;
+    }
+
+    std::string error_message;
+    auto canonical = canonicalize_book_path(requested, &error_message);
+    if (!canonical) {
+        std::cout << "info string " << error_message << std::endl;
+        return;
+    }
+
+    std::string previous = options.book_file;
+    if (load_book_from_path(*canonical, true)) {
+        options.book_file = *canonical;
     } else {
-        std::string error;
-        if (sirio::book::load(path, &error)) {
-            std::cout << "info string Opening book loaded from " << path << std::endl;
-        } else {
-            std::cout << "info string Failed to load opening book: " << error << std::endl;
-            options.book_file.clear();
-        }
+        options.book_file = previous;
     }
 }
 
@@ -861,7 +930,7 @@ void ensure_options_registered() {
     g_options["EvalFileSmall"] = Option(std::string(kDefaultEvalFileSmall));
     g_options["EvalFileSmall"].after_set(on_eval_file_small);
 
-    g_options["UseBook"] = Option(false);
+    g_options["UseBook"] = Option(true);
     g_options["UseBook"].after_set(on_use_book);
 
     g_options["BookFile"] = Option(std::string(""));
@@ -984,6 +1053,19 @@ bool handle_setoption(const std::string& args, sirio::Board& board) {
     bool handled = sirio::uci::handle_setoption(g_options, args);
     g_option_board = nullptr;
     return handled;
+}
+
+void initialize_impl() {
+    if (g_initialized) {
+        return;
+    }
+
+    initialize_engine_options();
+    ensure_options_registered();
+    sync_options_from_state();
+    ensure_opening_book_loaded(true);
+
+    g_initialized = true;
 }
 
 void send_uci_id() {
@@ -1281,12 +1363,13 @@ void handle_bench() {
 
 }  // namespace
 
+void initialize() { initialize_impl(); }
+
 int run() {
+    initialize();
+
     sirio::Board board;
     sirio::initialize_evaluation(board);
-    initialize_engine_options();
-    ensure_options_registered();
-    sync_options_from_state();
 
     std::string line;
 
