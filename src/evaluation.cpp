@@ -148,14 +148,34 @@ const std::array<const std::array<int, 64> *, 6> piece_square_tables_eg = {
 constexpr int weight_scale = 100;
 constexpr int pawn_structure_mg_weight = 80;
 constexpr int pawn_structure_eg_weight = 110;
-constexpr int king_safety_mg_weight = 110;
-constexpr int king_safety_eg_weight = 50;
+constexpr int king_safety_mg_weight = 125;
+constexpr int king_safety_eg_weight = 60;
 constexpr int mobility_mg_weight = 90;
 constexpr int mobility_eg_weight = 100;
 constexpr int minor_piece_mg_weight = 95;
 constexpr int minor_piece_eg_weight = 105;
 
-constexpr std::array<int, 8> king_attackers_table = {0, 6, 14, 24, 36, 50, 66, 84};
+constexpr std::array<int, 8> king_attackers_table = {0, 8, 18, 32, 50, 72, 98, 128};
+
+constexpr int diagonal_king_direct_penalty = 20;
+constexpr int diagonal_critical_base_penalty = 12;
+constexpr int diagonal_open_bonus = 6;
+constexpr int diagonal_pawn_blocker_bonus = 8;
+constexpr int diagonal_piece_blocker_bonus = 4;
+constexpr int diagonal_distance_scale = 3;
+
+constexpr int rook_king_direct_penalty = 18;
+constexpr int rook_critical_base_penalty = 10;
+constexpr int rook_open_bonus = 5;
+constexpr int rook_pawn_blocker_bonus = 7;
+constexpr int rook_piece_blocker_bonus = 3;
+constexpr int rook_distance_scale = 2;
+
+constexpr int critical_square_extra_penalty = 4;
+
+constexpr int knight_two_step_weight = 5;
+constexpr int bishop_two_step_weight = 4;
+constexpr int threat_synergy_weight = 6;
 
 constexpr Bitboard light_square_mask = 0x55AA55AA55AA55AAULL;
 constexpr Bitboard dark_square_mask = 0xAA55AA55AA55AA55ULL;
@@ -314,8 +334,9 @@ int evaluate_king_safety(const Board &board, Color color,
 
     Bitboard enemy_knights = board.pieces(enemy, PieceType::Knight);
     int attack_penalty = 0;
-    while (enemy_knights) {
-        int sq = pop_lsb(enemy_knights);
+    Bitboard tmp_knights = enemy_knights;
+    while (tmp_knights) {
+        int sq = pop_lsb(tmp_knights);
         Bitboard attacks = knight_attacks(sq) & king_zone;
         int hits = std::popcount(attacks);
         if (hits != 0) {
@@ -452,6 +473,125 @@ int evaluate_king_safety(const Board &board, Color color,
         }
     }
     attackers += heavy_ray_attackers;
+
+    Bitboard diagonal_targets = one_bit(king_sq);
+    Bitboard rook_targets = one_bit(king_sq);
+    Bitboard critical_targets = 0;
+    auto add_target = [&](Bitboard &mask, int sq) {
+        if (sq >= 0 && sq < 64) {
+            mask |= one_bit(sq);
+        }
+    };
+    int front_dir = color == Color::White ? 8 : -8;
+    int front_square = king_sq + front_dir;
+    if (front_square >= 0 && front_square < 64) {
+        add_target(rook_targets, front_square);
+        add_target(diagonal_targets, front_square);
+        critical_targets |= one_bit(front_square);
+        int second_front = front_square + front_dir;
+        if (second_front >= 0 && second_front < 64) {
+            add_target(rook_targets, second_front);
+        }
+        if (king_file > 0) {
+            int left_front = front_square - 1;
+            add_target(diagonal_targets, left_front);
+            critical_targets |= one_bit(left_front);
+        }
+        if (king_file < 7) {
+            int right_front = front_square + 1;
+            add_target(diagonal_targets, right_front);
+            critical_targets |= one_bit(right_front);
+        }
+    }
+    diagonal_targets |= one_bit(king_sq);
+    rook_targets |= one_bit(king_sq);
+    critical_targets |= one_bit(king_sq);
+
+    int ray_pressure_penalty = 0;
+    int sacrificial_attackers = 0;
+
+    Bitboard diagonal_attackers = enemy_bishops | enemy_queens;
+    Bitboard diag_iter = diagonal_attackers;
+    while (diag_iter) {
+        int attacker_sq = pop_lsb(diag_iter);
+        Bitboard attacks = bishop_attacks(attacker_sq, occupancy) & diagonal_targets;
+        Bitboard relevant = attacks;
+        while (relevant) {
+            int target_sq = pop_lsb(relevant);
+            int distance =
+                std::max(std::abs(file_of(target_sq) - file_of(attacker_sq)),
+                         std::abs(rank_of(target_sq) - rank_of(attacker_sq)));
+            int closeness = std::max(0, 3 - distance);
+            auto occupant = board.piece_at(target_sq);
+            bool friendly_blocker = occupant && occupant->first == color;
+            bool pawn_blocker = friendly_blocker && occupant->second == PieceType::Pawn;
+            bool target_is_king = target_sq == king_sq;
+            int penalty = 0;
+            if (target_is_king) {
+                penalty = diagonal_king_direct_penalty + closeness * diagonal_distance_scale;
+                if (!friendly_blocker) {
+                    penalty += diagonal_open_bonus;
+                }
+            } else {
+                penalty = diagonal_critical_base_penalty + closeness * diagonal_distance_scale;
+                if (friendly_blocker) {
+                    penalty += pawn_blocker ? diagonal_pawn_blocker_bonus : diagonal_piece_blocker_bonus;
+                } else {
+                    penalty += diagonal_open_bonus;
+                    if (critical_targets & one_bit(target_sq)) {
+                        penalty += critical_square_extra_penalty;
+                    }
+                }
+            }
+            ray_pressure_penalty += penalty;
+            if (!target_is_king && pawn_blocker) {
+                ++sacrificial_attackers;
+            }
+        }
+    }
+
+    Bitboard rook_attackers = enemy_rooks | enemy_queens;
+    Bitboard rook_iter = rook_attackers;
+    while (rook_iter) {
+        int attacker_sq = pop_lsb(rook_iter);
+        Bitboard attacks = rook_attacks(attacker_sq, occupancy) & rook_targets;
+        Bitboard relevant = attacks;
+        while (relevant) {
+            int target_sq = pop_lsb(relevant);
+            int distance =
+                std::max(std::abs(file_of(target_sq) - file_of(attacker_sq)),
+                         std::abs(rank_of(target_sq) - rank_of(attacker_sq)));
+            int closeness = std::max(0, 3 - distance);
+            auto occupant = board.piece_at(target_sq);
+            bool friendly_blocker = occupant && occupant->first == color;
+            bool pawn_blocker = friendly_blocker && occupant->second == PieceType::Pawn;
+            bool target_is_king = target_sq == king_sq;
+            int penalty = 0;
+            if (target_is_king) {
+                penalty = rook_king_direct_penalty + closeness * rook_distance_scale;
+                if (!friendly_blocker) {
+                    penalty += rook_open_bonus;
+                }
+            } else {
+                penalty = rook_critical_base_penalty + closeness * rook_distance_scale;
+                if (friendly_blocker) {
+                    penalty += pawn_blocker ? rook_pawn_blocker_bonus : rook_piece_blocker_bonus;
+                } else {
+                    penalty += rook_open_bonus;
+                    if (critical_targets & one_bit(target_sq)) {
+                        penalty += critical_square_extra_penalty;
+                    }
+                }
+            }
+            ray_pressure_penalty += penalty;
+            if (!target_is_king && pawn_blocker) {
+                ++sacrificial_attackers;
+            }
+        }
+    }
+
+    attack_penalty += ray_pressure_penalty;
+    attackers += sacrificial_attackers;
 
     int defender_bonus = 0;
     Bitboard friendly_heavy = board.pieces(color, PieceType::Rook) | board.pieces(color, PieceType::Queen);
@@ -591,6 +731,53 @@ int evaluate_king_safety(const Board &board, Color color,
                 }
             }
         }
+    }
+
+    auto chebyshev_distance = [](int a, int b) {
+        int file_diff = std::abs(file_of(a) - file_of(b));
+        int rank_diff = std::abs(rank_of(a) - rank_of(b));
+        return std::max(file_diff, rank_diff);
+    };
+
+    int knight_two_step_hits = 0;
+    Bitboard knight_iter_two = enemy_knights;
+    while (knight_iter_two) {
+        int sq = pop_lsb(knight_iter_two);
+        Bitboard attacks = knight_attacks(sq);
+        Bitboard relevant = attacks;
+        while (relevant) {
+            int target = pop_lsb(relevant);
+            if (chebyshev_distance(target, king_sq) <= 2) {
+                ++knight_two_step_hits;
+            }
+        }
+    }
+
+    int bishop_two_step_hits = 0;
+    Bitboard bishop_iter_two = enemy_bishops;
+    while (bishop_iter_two) {
+        int sq = pop_lsb(bishop_iter_two);
+        Bitboard attacks = bishop_attacks(sq, occupancy);
+        Bitboard relevant = attacks;
+        while (relevant) {
+            int target = pop_lsb(relevant);
+            if (chebyshev_distance(target, king_sq) <= 2) {
+                ++bishop_two_step_hits;
+            }
+        }
+    }
+
+    int combined_threat_penalty = knight_two_step_hits * knight_two_step_weight +
+                                  bishop_two_step_hits * bishop_two_step_weight;
+    if (knight_two_step_hits > 0 && bishop_two_step_hits > 0) {
+        int synergy = std::min(knight_two_step_hits, bishop_two_step_hits);
+        combined_threat_penalty += synergy * threat_synergy_weight;
+    }
+    if (combined_threat_penalty > 0) {
+        attack_penalty += combined_threat_penalty;
+    }
+    if (knight_two_step_hits > 0 && bishop_two_step_hits > 0) {
+        ++attackers;
     }
 
     attackers += castle_attackers;
