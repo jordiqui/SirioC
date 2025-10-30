@@ -17,10 +17,14 @@
 void run_perft_tests();
 void run_tt_tests();
 void run_evaluation_phase_tests();
+ codex/modificar-generate_tactical_moves-para-jaques-y-promociones
+void run_quiescence_benchmarks();
+=======
  codex/modify-generate_tactical_moves-for-check-promotions
 void run_quiescence_perft_benchmarks();
 =======
 void run_time_manager_tests();
+ main
  main
 
 namespace {
@@ -460,7 +464,11 @@ int main() {
     run_tt_tests();
     run_quiescence_perft_benchmarks();
     run_perft_tests();
+ codex/modificar-generate_tactical_moves-para-jaques-y-promociones
+    run_quiescence_benchmarks();
+=======
     run_time_manager_tests();
+ main
     std::cout << "All tests passed.\n";
     return 0;
 }

@@ -40,7 +40,11 @@ constexpr int max_search_depth = 128;
 constexpr int mate_threshold = mate_score - max_search_depth;
 constexpr std::array<int, static_cast<std::size_t>(PieceType::Count)> mvv_values = {
     100, 320, 330, 500, 900, 20000};
+ codex/modificar-generate_tactical_moves-para-jaques-y-promociones
+constexpr int quiescence_futility_margin = 90;
+=======
 constexpr int quiescence_quiet_check_margin = 300;
+ main
 
 std::atomic<int> search_thread_count{1};
 
@@ -411,6 +415,18 @@ void announce_currmove(const Move &move, int move_index, const SearchContext &co
 bool is_quiet(const Move &move) {
     return !move.captured.has_value() && !move.promotion.has_value() && !move.is_castling &&
            !move.is_en_passant;
+}
+
+int quiescence_material_gain(const Move &move) {
+    int gain = 0;
+    if (move.captured.has_value()) {
+        gain += mvv_values[static_cast<std::size_t>(*move.captured)];
+    }
+    if (move.promotion.has_value()) {
+        constexpr std::size_t pawn_index = static_cast<std::size_t>(PieceType::Pawn);
+        gain += mvv_values[static_cast<std::size_t>(*move.promotion)] - mvv_values[pawn_index];
+    }
+    return gain;
 }
 
 int mvv_lva_score(const Move &move) {
@@ -799,6 +815,15 @@ int quiescence(Board &board, int alpha, int beta, int ply, SearchContext &contex
         }
     }
 
+ codex/modificar-generate_tactical_moves-para-jaques-y-promociones
+    auto moves = generate_pseudo_legal_tactical_moves(board);
+    auto quiet_checks = generate_pseudo_legal_quiet_checks(board);
+    if (!quiet_checks.empty()) {
+        moves.reserve(moves.size() + quiet_checks.size());
+        moves.insert(moves.end(), quiet_checks.begin(), quiet_checks.end());
+    }
+    if (moves.empty()) {
+=======
     auto tactical_moves = generate_pseudo_legal_tactical_moves(board);
     {
         auto pseudo_moves = generate_pseudo_legal_moves(board);
@@ -827,17 +852,23 @@ int quiescence(Board &board, int alpha, int beta, int ply, SearchContext &contex
         }
     }
     if (tactical_moves.empty()) {
+main
         return alpha;
     }
 
-    order_moves(tactical_moves, context, ply, std::nullopt);
+    order_moves(moves, context, ply, std::nullopt);
 
     bool found_legal = false;
+ codex/modificar-generate_tactical_moves-para-jaques-y-promociones
+    for (const Move &move : moves) {
+        int material_gain = quiescence_material_gain(move);
+=======
     for (const Move &move : tactical_moves) {
         if (!in_check && !move.captured.has_value() && !move.promotion.has_value() &&
             stand_pat + quiescence_quiet_check_margin <= alpha) {
             continue;
         }
+ main
         Board::UndoState undo;
         try {
             board.make_move(move, undo);
@@ -847,6 +878,14 @@ int quiescence(Board &board, int alpha, int beta, int ply, SearchContext &contex
 
         Color mover = opposite(board.side_to_move());
         if (board.king_square(mover) >= 0 && board.in_check(mover)) {
+            board.undo_move(move, undo);
+            continue;
+        }
+
+        bool gives_check = board.in_check(board.side_to_move());
+
+        if (!gives_check && !move.promotion.has_value() &&
+            stand_pat + material_gain + quiescence_futility_margin < alpha) {
             board.undo_move(move, undo);
             continue;
         }
