@@ -1024,6 +1024,7 @@ std::optional<TimeAllocation> compute_time_allocation(const Board &board,
         if (soft > hard) {
             soft = hard;
         }
+        sirio::set_moves_to_go_hint(limits.moves_to_go > 0 ? limits.moves_to_go : 1);
         adjust_time_allocation(soft, hard);
         return TimeAllocation{soft, hard};
     }
@@ -1032,6 +1033,8 @@ std::optional<TimeAllocation> compute_time_allocation(const Board &board,
     int time_left = stm == Color::White ? limits.time_left_white : limits.time_left_black;
     int increment = stm == Color::White ? limits.increment_white : limits.increment_black;
     int moves_to_go = limits.moves_to_go > 0 ? limits.moves_to_go : 30;
+
+    sirio::set_moves_to_go_hint(moves_to_go);
 
     if (time_left > 0) {
         int allocation = time_left / std::max(1, moves_to_go);
@@ -1059,6 +1062,7 @@ std::optional<TimeAllocation> compute_time_allocation(const Board &board,
         int allocation = std::max(increment / 2, 1);
         auto hard = std::chrono::milliseconds{allocation};
         auto soft = hard;
+        sirio::set_moves_to_go_hint(moves_to_go);
         adjust_time_allocation(soft, hard);
         return TimeAllocation{soft, hard};
     }
@@ -1412,6 +1416,22 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     best.knps_after = metrics.knps_after;
     if (shared.timed_out.load(std::memory_order_relaxed)) {
         best.timed_out = true;
+    }
+
+    if (allocation.has_value()) {
+        int elapsed_ms = best.time_ms;
+        if (elapsed_ms < 0) {
+            elapsed_ms = 0;
+        }
+        int hard_budget = static_cast<int>(allocation->hard.count());
+        if (hard_budget < 0) {
+            hard_budget = 0;
+        }
+        int overshoot = elapsed_ms - hard_budget;
+        if (overshoot < 0) {
+            overshoot = 0;
+        }
+        sirio::record_latency_sample(overshoot);
     }
 
     return best;
