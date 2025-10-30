@@ -832,6 +832,7 @@ void ensure_options_registered() {
     g_options["Move Overhead"].after_set(on_move_overhead);
     g_options["Minimum Thinking Time"].after_set(on_minimum_thinking_time);
     g_options["Slow Mover"].after_set(on_slow_mover);
+    g_options["AutoTimeTuning"].after_set(on_auto_time_tuning);
     g_options["UCI_LimitStrength"].after_set(on_uci_limit_strength);
     g_options["UCI_AnalyseMode"].after_set(on_uci_analyse_mode);
     g_options["UCI_Elo"].after_set(on_uci_elo);
@@ -927,6 +928,9 @@ void sync_options_from_state() {
     }
     if (auto* opt = find_option("Slow Mover")) {
         opt->set_int(options.slow_mover);
+    }
+    if (auto* opt = find_option("AutoTimeTuning")) {
+        opt->set_bool(options.auto_time_tuning);
     }
     if (auto* opt = find_option("nodestime")) {
         opt->set_int(options.nodestime);
