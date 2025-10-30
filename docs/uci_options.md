@@ -45,6 +45,8 @@ sirio::uci::handle_setoption(Options, full_line_after_keyword_setoption);
 - UCI_Elo (spin 1320..3190, default 3190)
 - Debug Log File (string "")
 - EvalFile (string "nn-1c0000000000.nnue")
+- UseBook (check true)
+- BookFile (string "")
 - SyzygyPath (string "")
 - SyzygyProbeDepth (spin 0..128, default 1)
 - Syzygy50MoveRule (check true)
@@ -97,6 +99,7 @@ redes NNUE desde disco. La primera ruta es la preferida; la segunda se usa como 
 las versiones más recientes publicadas por el proyecto Stockfish. Recuerda cumplir con su licencia
 si las redistribuyes junto a SirioC.
 
+ codex/adjust-usebook-option-in-uci.cpp-p2lidj
 ## Libro de aperturas
 
 `UseBook` está activada por defecto. Si la opción `BookFile` queda vacía, el motor emitirá un mensaje
@@ -114,6 +117,23 @@ descargar un fichero en formato Polyglot (`.bin` o `.obk`) y apuntar `BookFile` 
 Si la ruta es correcta, el motor responderá con `info string Opening book loaded from ...`. Si el
 archivo no existe o el formato es incorrecto, verás un mensaje explicando el motivo para que puedas
 corregirlo.
+=======
+## Opening book setup in SirioC
+
+SirioC activa la opción `UseBook` por defecto y espera un fichero en `BookFile`
+para inicializar el repertorio durante `uci::initialize()`. El libro recomendado
+es **UHO Big 8Mvs**, distribuido en formato BIN con nombre
+`UHO_2024-Big_8mvs.bin`. Para usarlo:
+
+1. Descarga el fichero desde el repositorio oficial de UHO Big 8Mvs.
+2. Crea un directorio `books/` en la raíz del proyecto (si aún no existe).
+3. Copia el archivo descargado como `books/UHO_2024-Big_8mvs.bin`.
+4. Establece `BookFile` a la ruta absoluta o relativa del fichero, por ejemplo
+   `BookFile books/UHO_2024-Big_8mvs.bin` dentro de tu GUI UCI.
+
+Si la ruta configurada no existe, SirioC informará del problema mediante
+`info string` y mantendrá el libro desactivado hasta recibir una ruta válida.
+ main
 
 ## License
 Placed under the same license as SirioC repository (inherit).

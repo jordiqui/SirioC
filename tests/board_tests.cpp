@@ -17,6 +17,19 @@
 void run_perft_tests();
 void run_tt_tests();
 void run_evaluation_phase_tests();
+ codex/add-dynamic-overhead-recalculation-logic-w059bn
+void run_time_manager_tests();
+=======
+ codex/modificar-generate_tactical_moves-para-jaques-y-promociones
+void run_quiescence_benchmarks();
+=======
+ codex/modify-generate_tactical_moves-for-check-promotions
+void run_quiescence_perft_benchmarks();
+=======
+void run_time_manager_tests();
+ main
+ main
+ main
 
 namespace {
 int square_index(char file, int rank) {
@@ -237,6 +250,34 @@ void test_king_safety_heavy_piece_alignment() {
     assert(aligned_eval < displaced_eval);
 }
 
+void test_king_safety_heavy_ray_xray() {
+    sirio::use_classical_evaluation();
+
+    sirio::Board xray{"6rk/8/8/8/8/8/6P1/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(xray);
+    int xray_eval = sirio::evaluate(xray);
+
+    sirio::Board reinforced{"6rk/8/8/8/8/6B1/6P1/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(reinforced);
+    int reinforced_eval = sirio::evaluate(reinforced);
+
+    assert(xray_eval < reinforced_eval);
+}
+
+void test_king_safety_castle_file_exposure() {
+    sirio::use_classical_evaluation();
+
+    sirio::Board shielded{"6rk/8/8/8/8/8/6PP/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(shielded);
+    int shielded_eval = sirio::evaluate(shielded);
+
+    sirio::Board exposed{"6rk/8/8/8/8/8/8/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(exposed);
+    int exposed_eval = sirio::evaluate(exposed);
+
+    assert(exposed_eval < shielded_eval);
+}
+
 void test_king_safety_defender_support() {
     sirio::use_classical_evaluation();
 
@@ -263,6 +304,34 @@ void test_king_safety_weak_squares() {
     int distant_eval = sirio::evaluate(distant_threat);
 
     assert(exposed_eval < distant_eval);
+}
+
+void test_king_safety_xray_pressure() {
+    sirio::use_classical_evaluation();
+
+    sirio::Board pawn_blocker{"6rk/8/8/8/8/8/6P1/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(pawn_blocker);
+    int pawn_eval = sirio::evaluate(pawn_blocker);
+
+    sirio::Board piece_blocker{"6rk/8/8/8/8/8/6R1/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(piece_blocker);
+    int piece_eval = sirio::evaluate(piece_blocker);
+
+    assert(pawn_eval < piece_eval);
+}
+
+void test_king_safety_open_castled_file() {
+    sirio::use_classical_evaluation();
+
+    sirio::Board covered{"6rk/8/8/8/8/8/6P1/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(covered);
+    int covered_eval = sirio::evaluate(covered);
+
+    sirio::Board exposed{"6rk/8/8/8/8/8/8/6K1 w - - 0 1"};
+    sirio::initialize_evaluation(exposed);
+    int exposed_eval = sirio::evaluate(exposed);
+
+    assert(exposed_eval < covered_eval);
 }
 
 void test_evaluation_passed_pawn() {
@@ -415,15 +484,26 @@ int main() {
     test_null_move();
     test_king_safety_advanced_enemy_pawns();
     test_king_safety_heavy_piece_alignment();
+    test_king_safety_heavy_ray_xray();
+    test_king_safety_castle_file_exposure();
     test_king_safety_defender_support();
     test_king_safety_weak_squares();
+    test_king_safety_xray_pressure();
+    test_king_safety_open_castled_file();
     test_evaluation_passed_pawn();
     test_syzygy_option_configuration();
     test_evaluation_backend_consistency();
     test_nnue_backend_material_weights();
+    run_time_manager_tests();
     run_evaluation_phase_tests();
     run_tt_tests();
+    run_quiescence_perft_benchmarks();
     run_perft_tests();
+ codex/modificar-generate_tactical_moves-para-jaques-y-promociones
+    run_quiescence_benchmarks();
+=======
+    run_time_manager_tests();
+ main
     std::cout << "All tests passed.\n";
     return 0;
 }
