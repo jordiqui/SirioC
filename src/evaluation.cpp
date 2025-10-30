@@ -146,8 +146,8 @@ const std::array<const std::array<int, 64> *, 6> piece_square_tables_eg = {
     &pawn_table, &knight_table, &bishop_table, &rook_table, &queen_table, &king_table_endgame};
 
 constexpr int weight_scale = 100;
-constexpr int pawn_structure_mg_weight = 80;
-constexpr int pawn_structure_eg_weight = 110;
+constexpr int pawn_structure_mg_weight = 72;
+constexpr int pawn_structure_eg_weight = 102;
 constexpr int king_safety_mg_weight = 110;
 constexpr int king_safety_eg_weight = 50;
 constexpr int mobility_mg_weight = 90;
@@ -159,6 +159,13 @@ constexpr std::array<int, 8> king_attackers_table = {0, 6, 14, 24, 36, 50, 66, 8
 
 constexpr Bitboard light_square_mask = 0x55AA55AA55AA55AAULL;
 constexpr Bitboard dark_square_mask = 0xAA55AA55AA55AA55ULL;
+
+constexpr int backward_pawn_penalty = 18;
+constexpr int backward_pawn_rank_scale = 2;
+constexpr int connected_passed_bonus = 18;
+constexpr int connected_passed_scale = 4;
+constexpr int pawn_chain_bonus = 12;
+constexpr int bishop_color_pawn_penalty = 6;
 
 constexpr std::array<Bitboard, 8> generate_file_masks() {
     std::array<Bitboard, 8> masks{};
@@ -196,8 +203,37 @@ int evaluate_pawn_structure(const Board &board, Color color,
         }
     }
 
-    Bitboard pawns = board.pieces(color, PieceType::Pawn);
+    Bitboard friendly_pawns = board.pieces(color, PieceType::Pawn);
+    Bitboard pawns = friendly_pawns;
     Bitboard enemy_pawns = board.pieces(opposite(color), PieceType::Pawn);
+    Bitboard enemy_pawn_attacks =
+        color == Color::White ? pawn_attacks_black(enemy_pawns) : pawn_attacks_white(enemy_pawns);
+    Bitboard occupancy = board.occupancy();
+    Bitboard bishops = board.pieces(color, PieceType::Bishop);
+    bool has_light_bishop = (bishops & light_square_mask) != 0;
+    bool has_dark_bishop = (bishops & dark_square_mask) != 0;
+
+    auto is_passed_pawn = [&](int pawn_sq) {
+        int pawn_file = file_of(pawn_sq);
+        int pawn_rank = rank_of(pawn_sq);
+        for (int adj = std::max(0, pawn_file - 1); adj <= std::min(7, pawn_file + 1); ++adj) {
+            Bitboard mask = 0;
+            if (color == Color::White) {
+                for (int r = pawn_rank + 1; r < 8; ++r) {
+                    mask |= one_bit(r * 8 + adj);
+                }
+            } else {
+                for (int r = pawn_rank - 1; r >= 0; --r) {
+                    mask |= one_bit(r * 8 + adj);
+                }
+            }
+            if (enemy_pawns & mask) {
+                return false;
+            }
+        }
+        return true;
+    };
+
     while (pawns) {
         int sq = pop_lsb(pawns);
         int file = file_of(sq);
@@ -212,6 +248,65 @@ int evaluate_pawn_structure(const Board &board, Color color,
         }
         if (isolated) {
             score -= 15;
+        }
+
+        Bitboard advance_mask = 0;
+        if (color == Color::White) {
+            for (int r = rank + 1; r < 8; ++r) {
+                advance_mask |= one_bit(r * 8 + file);
+            }
+        } else {
+            for (int r = rank - 1; r >= 0; --r) {
+                advance_mask |= one_bit(r * 8 + file);
+            }
+        }
+
+        Bitboard lateral_cover_mask = 0;
+        if (file > 0) {
+            if (color == Color::White) {
+                for (int r = rank; r < 8; ++r) {
+                    lateral_cover_mask |= one_bit(r * 8 + (file - 1));
+                }
+            } else {
+                for (int r = rank; r >= 0; --r) {
+                    lateral_cover_mask |= one_bit(r * 8 + (file - 1));
+                }
+            }
+        }
+        if (file < 7) {
+            if (color == Color::White) {
+                for (int r = rank; r < 8; ++r) {
+                    lateral_cover_mask |= one_bit(r * 8 + (file + 1));
+                }
+            } else {
+                for (int r = rank; r >= 0; --r) {
+                    lateral_cover_mask |= one_bit(r * 8 + (file + 1));
+                }
+            }
+        }
+
+        int forward_sq = -1;
+        Bitboard forward_bit = 0;
+        if (color == Color::White && rank < 7) {
+            forward_sq = sq + 8;
+            forward_bit = one_bit(forward_sq);
+        } else if (color == Color::Black && rank > 0) {
+            forward_sq = sq - 8;
+            forward_bit = one_bit(forward_sq);
+        }
+
+        bool enemy_controls_forward = (forward_bit != 0) && (enemy_pawn_attacks & forward_bit);
+        bool enemy_blocking_forward = false;
+        if ((forward_bit != 0) && (occupancy & forward_bit)) {
+            auto piece = board.piece_at(forward_sq);
+            enemy_blocking_forward = piece && piece->first != color;
+        }
+
+        int relative_rank = color == Color::White ? rank : (7 - rank);
+        bool has_lateral_support = (friendly_pawns & lateral_cover_mask) != 0;
+        if (!has_lateral_support && forward_bit != 0 && !(friendly_pawns & advance_mask) &&
+            (enemy_controls_forward || enemy_blocking_forward)) {
+            score -= backward_pawn_penalty + relative_rank * backward_pawn_rank_scale;
         }
 
         bool passed = true;
@@ -234,9 +329,51 @@ int evaluate_pawn_structure(const Board &board, Color color,
                 break;
             }
         }
+
         if (passed) {
-            int advancement = color == Color::White ? rank : (7 - rank);
-            score += 30 + advancement * 10;
+            int base_bonus = 28 + relative_rank * 12;
+            bool connected_passed = false;
+            Bitboard connected_candidates = friendly_pawns & lateral_cover_mask;
+            Bitboard tmp_candidates = connected_candidates;
+            while (tmp_candidates) {
+                int other_sq = pop_lsb(tmp_candidates);
+                if (is_passed_pawn(other_sq)) {
+                    connected_passed = true;
+                    break;
+                }
+            }
+
+            score += base_bonus;
+            if (connected_passed) {
+                score += connected_passed_bonus + relative_rank * connected_passed_scale;
+            }
+        }
+
+        if (relative_rank == 3 || relative_rank == 4) {
+            bool in_chain = false;
+            if (color == Color::White) {
+                if (file > 0 && rank > 0 && (friendly_pawns & one_bit(sq - 9))) {
+                    in_chain = true;
+                }
+                if (file < 7 && rank > 0 && (friendly_pawns & one_bit(sq - 7))) {
+                    in_chain = true;
+                }
+            } else {
+                if (file > 0 && rank < 7 && (friendly_pawns & one_bit(sq + 7))) {
+                    in_chain = true;
+                }
+                if (file < 7 && rank < 7 && (friendly_pawns & one_bit(sq + 9))) {
+                    in_chain = true;
+                }
+            }
+            if (in_chain) {
+                score += pawn_chain_bonus + relative_rank;
+            }
+        }
+
+        bool is_light_square = ((file + rank) & 1) != 0;
+        if ((is_light_square && has_light_bishop) || (!is_light_square && has_dark_bishop)) {
+            score -= bishop_color_pawn_penalty;
         }
     }
 
