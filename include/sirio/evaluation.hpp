@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <string>
@@ -33,6 +34,8 @@ std::unique_ptr<EvaluationBackend> make_nnue_evaluation(const std::string &path,
                                                         std::string *error_message = nullptr);
 std::unique_ptr<EvaluationBackend> make_nnue_evaluation(
     const nnue::MultiNetworkConfig &config, std::string *error_message = nullptr);
+
+std::size_t classical_evaluation_pawn_cache_misses();
 
 void set_evaluation_backend(std::unique_ptr<EvaluationBackend> backend);
 void use_classical_evaluation();
