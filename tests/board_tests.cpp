@@ -17,6 +17,7 @@
 void run_perft_tests();
 void run_tt_tests();
 void run_evaluation_phase_tests();
+void run_quiescence_benchmarks();
 
 namespace {
 int square_index(char file, int rank) {
@@ -424,6 +425,7 @@ int main() {
     run_evaluation_phase_tests();
     run_tt_tests();
     run_perft_tests();
+    run_quiescence_benchmarks();
     std::cout << "All tests passed.\n";
     return 0;
 }

@@ -64,6 +64,7 @@ target_link_libraries(sirio PRIVATE sirio_core)
 add_executable(sirio_tests
     tests/board_tests.cpp
     tests/evaluation_tests.cpp
+    tests/perft_quiescence.cpp
     tests/perft_tests.cpp
     tests/tt_tests.cpp
 )
