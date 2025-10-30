@@ -276,18 +276,21 @@ bool is_pawn_storm_move(const Move &move, Color mover) {
     if (move.piece != PieceType::Pawn) {
         return false;
     }
+
     const int from_rank = rank_of(move.from);
     const int to_rank = rank_of(move.to);
+
     if (mover == Color::White) {
-        if (to_rank < from_rank) {
+        if (to_rank <= from_rank) {
             return false;
         }
-        return (to_rank >= 3) && (move.captured.has_value() || (to_rank - from_rank) >= 1);
+        return (to_rank >= 4) && (move.captured.has_value() || (to_rank - from_rank) >= 1);
     }
-    if (to_rank > from_rank) {
+
+    if (to_rank >= from_rank) {
         return false;
     }
-    return (to_rank <= 4) && (move.captured.has_value() || (from_rank - to_rank) >= 1);
+    return (to_rank <= 3) && (move.captured.has_value() || (from_rank - to_rank) >= 1);
 }
 
 bool is_major_decision(const Move &move, Color mover) {
