@@ -659,18 +659,8 @@ int ClassicalEvaluation::evaluate(const Board &board) {
     const auto &white_counts = cache_it->second.white_counts;
     const auto &black_counts = cache_it->second.black_counts;
 
- codex/add-caching-for-evaluate_pawn_structure
-    score += cache_it->second.white_score;
-    score += cache_it->second.black_score;
-    score += evaluate_king_safety(board, Color::White, white_counts);
-    score += evaluate_king_safety(board, Color::Black, black_counts);
-    score += evaluate_mobility(board, Color::White);
-    score += evaluate_mobility(board, Color::Black);
-    score += evaluate_minor_pieces(board, Color::White);
-    score += evaluate_minor_pieces(board, Color::Black);
-=======
-    int pawn_structure_white = evaluate_pawn_structure(board, Color::White, white_counts, black_counts);
-    int pawn_structure_black = evaluate_pawn_structure(board, Color::Black, black_counts, white_counts);
+    int pawn_structure_white = cache_it->second.white_score;
+    int pawn_structure_black = cache_it->second.black_score;
     mg_score += scale_term(pawn_structure_white, pawn_structure_mg_weight);
     eg_score += scale_term(pawn_structure_white, pawn_structure_eg_weight);
     mg_score += scale_term(pawn_structure_black, pawn_structure_mg_weight);
@@ -696,7 +686,6 @@ int ClassicalEvaluation::evaluate(const Board &board) {
     eg_score += scale_term(minor_white, minor_piece_eg_weight);
     mg_score += scale_term(minor_black, minor_piece_mg_weight);
     eg_score += scale_term(minor_black, minor_piece_eg_weight);
- main
 
     int max_material = std::max(material_white, material_black);
     if (max_material <= endgame_material_threshold) {
