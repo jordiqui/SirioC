@@ -30,8 +30,12 @@ public:
     }
 };
 
-constexpr std::array<int, 6> piece_values = {100, 320, 330, 500, 900, 0};
-constexpr int bishop_pair_bonus = 40;
+constexpr std::array<int, 6> piece_values_mg = {100, 325, 340, 510, 980, 0};
+constexpr std::array<int, 6> piece_values_eg = {100, 310, 320, 520, 1000, 0};
+constexpr std::array<int, 6> piece_phase_values = {0, 1, 1, 2, 4, 0};
+constexpr int max_game_phase = 24;
+constexpr int bishop_pair_bonus_mg = 45;
+constexpr int bishop_pair_bonus_eg = 35;
 constexpr int endgame_material_threshold = 1300;
 constexpr int king_distance_scale = 12;
 constexpr int king_corner_scale = 6;
@@ -97,8 +101,31 @@ constexpr std::array<int, 64> king_table = {
     20,  20,  0,   0,   0,   0,   20,  20,
     20,  30,  10,  0,   0,   10,  30,  20};
 
-const std::array<const std::array<int, 64> *, 6> piece_square_tables = {
+constexpr std::array<int, 64> king_table_endgame = {
+    -50, -40, -30, -20, -20, -30, -40, -50,
+    -30, -20, -10, 0,   0,   -10, -20, -30,
+    -30, -10, 20,  30,  30,  20,  -10, -30,
+    -30, -10, 30,  40,  40,  30,  -10, -30,
+    -30, -10, 30,  40,  40,  30,  -10, -30,
+    -30, -10, 20,  30,  30,  20,  -10, -30,
+    -30, -30, 0,   0,   0,   0,   -30, -30,
+    -50, -40, -30, -20, -20, -30, -40, -50};
+
+const std::array<const std::array<int, 64> *, 6> piece_square_tables_mg = {
     &pawn_table, &knight_table, &bishop_table, &rook_table, &queen_table, &king_table};
+
+const std::array<const std::array<int, 64> *, 6> piece_square_tables_eg = {
+    &pawn_table, &knight_table, &bishop_table, &rook_table, &queen_table, &king_table_endgame};
+
+constexpr int weight_scale = 100;
+constexpr int pawn_structure_mg_weight = 80;
+constexpr int pawn_structure_eg_weight = 110;
+constexpr int king_safety_mg_weight = 120;
+constexpr int king_safety_eg_weight = 40;
+constexpr int mobility_mg_weight = 90;
+constexpr int mobility_eg_weight = 100;
+constexpr int minor_piece_mg_weight = 95;
+constexpr int minor_piece_eg_weight = 105;
 
 constexpr Bitboard light_square_mask = 0x55AA55AA55AA55AAULL;
 constexpr Bitboard dark_square_mask = 0xAA55AA55AA55AA55ULL;
@@ -438,48 +465,87 @@ int ClassicalEvaluation::evaluate(const Board &board) {
         return *endgame_eval;
     }
 
-    int score = 0;
+    int mg_score = 0;
+    int eg_score = 0;
     int material_white = 0;
     int material_black = 0;
+    int game_phase = 0;
+
+    auto scale_term = [](int value, int weight) {
+        int scaled = value * weight;
+        if (scaled >= 0) {
+            return (scaled + weight_scale / 2) / weight_scale;
+        }
+        return (scaled - weight_scale / 2) / weight_scale;
+    };
+
     for (int color_index = 0; color_index < 2; ++color_index) {
         Color color = color_index == 0 ? Color::White : Color::Black;
-        for (std::size_t piece_index = 0; piece_index < piece_values.size(); ++piece_index) {
+        for (std::size_t piece_index = 0; piece_index < piece_values_mg.size(); ++piece_index) {
             PieceType type = static_cast<PieceType>(piece_index);
             Bitboard pieces = board.pieces(color, type);
             while (pieces) {
                 int square = pop_lsb(pieces);
-                int base_value = piece_values[piece_index];
+                int base_value_mg = piece_values_mg[piece_index];
+                int base_value_eg = piece_values_eg[piece_index];
                 int table_index = color == Color::White ? square : mirror_square(square);
-                int ps_value = (*piece_square_tables[piece_index])[table_index];
-                int total = base_value + ps_value;
-                score += color == Color::White ? total : -total;
+                int ps_value_mg = (*piece_square_tables_mg[piece_index])[table_index];
+                int ps_value_eg = (*piece_square_tables_eg[piece_index])[table_index];
+                int total_mg = base_value_mg + ps_value_mg;
+                int total_eg = base_value_eg + ps_value_eg;
                 if (color == Color::White) {
-                    material_white += base_value;
+                    mg_score += total_mg;
+                    eg_score += total_eg;
+                    material_white += base_value_mg;
                 } else {
-                    material_black += base_value;
+                    mg_score -= total_mg;
+                    eg_score -= total_eg;
+                    material_black += base_value_mg;
                 }
+                game_phase += piece_phase_values[piece_index];
             }
         }
     }
 
     if (board.has_bishop_pair(Color::White)) {
-        score += bishop_pair_bonus;
+        mg_score += bishop_pair_bonus_mg;
+        eg_score += bishop_pair_bonus_eg;
     }
     if (board.has_bishop_pair(Color::Black)) {
-        score -= bishop_pair_bonus;
+        mg_score -= bishop_pair_bonus_mg;
+        eg_score -= bishop_pair_bonus_eg;
     }
 
     auto white_counts = pawn_file_counts(board, Color::White);
     auto black_counts = pawn_file_counts(board, Color::Black);
 
-    score += evaluate_pawn_structure(board, Color::White, white_counts, black_counts);
-    score += evaluate_pawn_structure(board, Color::Black, black_counts, white_counts);
-    score += evaluate_king_safety(board, Color::White, white_counts);
-    score += evaluate_king_safety(board, Color::Black, black_counts);
-    score += evaluate_mobility(board, Color::White);
-    score += evaluate_mobility(board, Color::Black);
-    score += evaluate_minor_pieces(board, Color::White);
-    score += evaluate_minor_pieces(board, Color::Black);
+    int pawn_structure_white = evaluate_pawn_structure(board, Color::White, white_counts, black_counts);
+    int pawn_structure_black = evaluate_pawn_structure(board, Color::Black, black_counts, white_counts);
+    mg_score += scale_term(pawn_structure_white, pawn_structure_mg_weight);
+    eg_score += scale_term(pawn_structure_white, pawn_structure_eg_weight);
+    mg_score += scale_term(pawn_structure_black, pawn_structure_mg_weight);
+    eg_score += scale_term(pawn_structure_black, pawn_structure_eg_weight);
+
+    int king_safety_white = evaluate_king_safety(board, Color::White, white_counts);
+    int king_safety_black = evaluate_king_safety(board, Color::Black, black_counts);
+    mg_score += scale_term(king_safety_white, king_safety_mg_weight);
+    eg_score += scale_term(king_safety_white, king_safety_eg_weight);
+    mg_score += scale_term(king_safety_black, king_safety_mg_weight);
+    eg_score += scale_term(king_safety_black, king_safety_eg_weight);
+
+    int mobility_white = evaluate_mobility(board, Color::White);
+    int mobility_black = evaluate_mobility(board, Color::Black);
+    mg_score += scale_term(mobility_white, mobility_mg_weight);
+    eg_score += scale_term(mobility_white, mobility_eg_weight);
+    mg_score += scale_term(mobility_black, mobility_mg_weight);
+    eg_score += scale_term(mobility_black, mobility_eg_weight);
+
+    int minor_white = evaluate_minor_pieces(board, Color::White);
+    int minor_black = evaluate_minor_pieces(board, Color::Black);
+    mg_score += scale_term(minor_white, minor_piece_mg_weight);
+    eg_score += scale_term(minor_white, minor_piece_eg_weight);
+    mg_score += scale_term(minor_black, minor_piece_mg_weight);
+    eg_score += scale_term(minor_black, minor_piece_eg_weight);
 
     int max_material = std::max(material_white, material_black);
     if (max_material <= endgame_material_threshold) {
@@ -493,31 +559,40 @@ int ClassicalEvaluation::evaluate(const Board &board) {
         }
         int advantage = material_white - material_black;
         if (advantage > 0) {
-            score += closeness * king_distance_scale;
+            eg_score += closeness * king_distance_scale;
             int corner_distance = king_corner_distance_table[static_cast<std::size_t>(black_king)];
-            score += (7 - corner_distance) * king_corner_scale;
+            eg_score += (7 - corner_distance) * king_corner_scale;
             int friendly_corner_distance =
                 king_corner_distance_table[static_cast<std::size_t>(white_king)];
-            score -= friendly_corner_distance * (king_corner_scale / 2);
+            eg_score -= friendly_corner_distance * (king_corner_scale / 2);
             int file_diff = std::abs((white_king % 8) - (black_king % 8));
             int rank_diff = std::abs((white_king / 8) - (black_king / 8));
             if ((file_diff == 0 || rank_diff == 0) && ((distance & 1) == 1)) {
-                score += king_opposition_bonus;
+                eg_score += king_opposition_bonus;
             }
         } else if (advantage < 0) {
-            score -= closeness * king_distance_scale;
+            eg_score -= closeness * king_distance_scale;
             int corner_distance = king_corner_distance_table[static_cast<std::size_t>(white_king)];
-            score -= (7 - corner_distance) * king_corner_scale;
+            eg_score -= (7 - corner_distance) * king_corner_scale;
             int friendly_corner_distance =
                 king_corner_distance_table[static_cast<std::size_t>(black_king)];
-            score += friendly_corner_distance * (king_corner_scale / 2);
+            eg_score += friendly_corner_distance * (king_corner_scale / 2);
             int file_diff = std::abs((white_king % 8) - (black_king % 8));
             int rank_diff = std::abs((white_king / 8) - (black_king / 8));
             if ((file_diff == 0 || rank_diff == 0) && ((distance & 1) == 1)) {
-                score -= king_opposition_bonus;
+                eg_score -= king_opposition_bonus;
             }
         }
     }
+
+    int phase = std::clamp(game_phase, 0, max_game_phase);
+    int combined = mg_score * phase + eg_score * (max_game_phase - phase);
+    if (combined >= 0) {
+        combined += max_game_phase / 2;
+    } else {
+        combined -= max_game_phase / 2;
+    }
+    int score = max_game_phase != 0 ? combined / max_game_phase : 0;
 
     Bitboard white_bishops = board.pieces(Color::White, PieceType::Bishop);
     Bitboard black_bishops = board.pieces(Color::Black, PieceType::Bishop);
