@@ -684,9 +684,28 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
             announce_currmove(move, move_index, context);
         }
         Color mover = board.side_to_move();
+        Color opponent = opposite(mover);
+        bool moved_from_attacked = board.is_square_attacked(move.from, opponent);
         Board::UndoState undo;
         board.make_move(move, undo);
         bool gives_check = board.in_check(board.side_to_move());
+
+        Color defender = board.side_to_move();
+        bool moved_into_attack = board.is_square_attacked(move.to, defender);
+        bool square_defended = board.is_square_attacked(move.to, mover);
+        bool central_pawn_sacrifice = false;
+        if (move.piece == PieceType::Pawn && !move.captured.has_value()) {
+            int to_file = file_of(move.to);
+            bool central_file = (to_file == 3 || to_file == 4);
+            int to_rank = rank_of(move.to);
+            bool advanced = mover == Color::White ? to_rank >= 3 : to_rank <= 4;
+            if (central_file && advanced && moved_into_attack && !square_defended) {
+                central_pawn_sacrifice = true;
+            }
+        }
+        bool postponed_capture = moved_into_attack && !square_defended;
+        bool responds_to_threat = moved_from_attacked;
+        bool tactical_danger = postponed_capture || central_pawn_sacrifice || responds_to_threat;
 
         int child_depth = depth_left - 1;
         if (gives_check && child_depth < max_search_depth - (ply + 1)) {
@@ -700,18 +719,23 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         int reduction = 0;
         if (child_depth > 0 && depth_left >= 3 && move_index > 1 && is_quiet(move) && !gives_check) {
             bool improving = static_eval > parent_static_eval;
-            reduction = 1;
-            if (depth_left >= 5 && move_index > 4) {
-                ++reduction;
-            }
-            if (!improving) {
-                ++reduction;
-            }
-            if (reduction > child_depth - 1) {
-                reduction = child_depth - 1;
-            }
-            if (reduction < 0) {
-                reduction = 0;
+            if (!tactical_danger) {
+                int depth_factor = std::max(0, depth_left - 2);
+                int move_factor = std::max(0, move_index - 2);
+                if (depth_factor > 0 && move_factor > 0) {
+                    int base_reduction = 1 + (depth_factor * move_factor) / 6;
+                    if (depth_left >= 6) {
+                        ++base_reduction;
+                    }
+                    if (move_index >= 8) {
+                        ++base_reduction;
+                    }
+                    if (!improving && base_reduction > 0) {
+                        ++base_reduction;
+                    }
+                    int max_reduction = std::max(0, child_depth - 1);
+                    reduction = std::min(base_reduction, max_reduction);
+                }
             }
         }
 
