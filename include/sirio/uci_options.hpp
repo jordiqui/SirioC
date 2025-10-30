@@ -188,6 +188,7 @@ inline void register_essential_options(OptionsMap& o){
     o["Move Overhead"]         = Option(10, 0, 5000);
     o["Minimum Thinking Time"] = Option(100, 0, 5000);
     o["Slow Mover"]            = Option(100, 10, 1000);
+    o["AutoTimeTuning"]        = Option(true);
 
     // Strength limiting
     o["UCI_LimitStrength"] = Option(false);

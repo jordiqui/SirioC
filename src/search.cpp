@@ -41,6 +41,11 @@ constexpr int max_search_depth = 128;
 constexpr int mate_threshold = mate_score - max_search_depth;
 constexpr std::array<int, static_cast<std::size_t>(PieceType::Count)> mvv_values = {
     100, 320, 330, 500, 900, 20000};
+ codex/modificar-generate_tactical_moves-para-jaques-y-promociones
+constexpr int quiescence_futility_margin = 90;
+=======
+constexpr int quiescence_quiet_check_margin = 300;
+ main
 
 std::atomic<int> search_thread_count{1};
 
@@ -63,6 +68,7 @@ struct SearchSharedState {
     std::chrono::milliseconds soft_time_limit{0};
     std::chrono::milliseconds hard_time_limit{0};
     std::uint64_t node_limit = 0;
+    int planned_moves_to_go = 0;
     std::mutex background_mutex;
     std::condition_variable background_cv;
 
@@ -487,6 +493,18 @@ bool is_quiet(const Move &move) {
            !move.is_en_passant;
 }
 
+int quiescence_material_gain(const Move &move) {
+    int gain = 0;
+    if (move.captured.has_value()) {
+        gain += mvv_values[static_cast<std::size_t>(*move.captured)];
+    }
+    if (move.promotion.has_value()) {
+        constexpr std::size_t pawn_index = static_cast<std::size_t>(PieceType::Pawn);
+        gain += mvv_values[static_cast<std::size_t>(*move.promotion)] - mvv_values[pawn_index];
+    }
+    return gain;
+}
+
 int mvv_lva_score(const Move &move) {
     if (!move.captured.has_value()) {
         return 0;
@@ -761,13 +779,34 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         }
         Color mover = board.side_to_move();
         Color opponent = opposite(mover);
+ codex/revise-reduction-logic-in-search.cpp
         bool piece_under_attack = false;
         if (!in_check) {
             piece_under_attack = board.is_square_attacked(move.from, opponent);
         }
+=======
+        bool moved_from_attacked = board.is_square_attacked(move.from, opponent);
+ main
         Board::UndoState undo;
         board.make_move(move, undo);
         bool gives_check = board.in_check(board.side_to_move());
+
+        Color defender = board.side_to_move();
+        bool moved_into_attack = board.is_square_attacked(move.to, defender);
+        bool square_defended = board.is_square_attacked(move.to, mover);
+        bool central_pawn_sacrifice = false;
+        if (move.piece == PieceType::Pawn && !move.captured.has_value()) {
+            int to_file = file_of(move.to);
+            bool central_file = (to_file == 3 || to_file == 4);
+            int to_rank = rank_of(move.to);
+            bool advanced = mover == Color::White ? to_rank >= 3 : to_rank <= 4;
+            if (central_file && advanced && moved_into_attack && !square_defended) {
+                central_pawn_sacrifice = true;
+            }
+        }
+        bool postponed_capture = moved_into_attack && !square_defended;
+        bool responds_to_threat = moved_from_attacked;
+        bool tactical_danger = postponed_capture || central_pawn_sacrifice || responds_to_threat;
 
         int child_depth = depth_left - 1;
         if (gives_check && child_depth < max_search_depth - (ply + 1)) {
@@ -781,6 +820,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         int reduction = 0;
         if (child_depth > 0 && depth_left >= 3 && move_index > 1 && is_quiet(move) && !gives_check) {
             bool improving = static_eval > parent_static_eval;
+ codex/revise-reduction-logic-in-search.cpp
             bool delayed_capture_threat = creates_delayed_capture_threat(board, move, mover);
             bool central_sacrifice = is_central_pawn_sacrifice(board, move, mover);
             bool responds_to_threat = in_check || piece_under_attack;
@@ -800,6 +840,24 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
                 }
                 if (reduction < 0) {
                     reduction = 0;
+=======
+            if (!tactical_danger) {
+                int depth_factor = std::max(0, depth_left - 2);
+                int move_factor = std::max(0, move_index - 2);
+                if (depth_factor > 0 && move_factor > 0) {
+                    int base_reduction = 1 + (depth_factor * move_factor) / 6;
+                    if (depth_left >= 6) {
+                        ++base_reduction;
+                    }
+                    if (move_index >= 8) {
+                        ++base_reduction;
+                    }
+                    if (!improving && base_reduction > 0) {
+                        ++base_reduction;
+                    }
+                    int max_reduction = std::max(0, child_depth - 1);
+                    reduction = std::min(base_reduction, max_reduction);
+ main
                 }
             }
         }
@@ -875,23 +933,71 @@ int quiescence(Board &board, int alpha, int beta, int ply, SearchContext &contex
             return syzygy_wdl_to_score(tb->wdl, ply);
         }
     }
+    const bool in_check = board.in_check(board.side_to_move());
     int stand_pat = evaluate_for_current_player(board);
-    if (stand_pat >= beta) {
-        return stand_pat;
-    }
-    if (stand_pat > alpha) {
-        alpha = stand_pat;
+    if (!in_check) {
+        if (stand_pat >= beta) {
+            return stand_pat;
+        }
+        if (stand_pat > alpha) {
+            alpha = stand_pat;
+        }
     }
 
+ codex/modificar-generate_tactical_moves-para-jaques-y-promociones
+    auto moves = generate_pseudo_legal_tactical_moves(board);
+    auto quiet_checks = generate_pseudo_legal_quiet_checks(board);
+    if (!quiet_checks.empty()) {
+        moves.reserve(moves.size() + quiet_checks.size());
+        moves.insert(moves.end(), quiet_checks.begin(), quiet_checks.end());
+    }
+    if (moves.empty()) {
+=======
     auto tactical_moves = generate_pseudo_legal_tactical_moves(board);
+    {
+        auto pseudo_moves = generate_pseudo_legal_moves(board);
+        for (const Move &move : pseudo_moves) {
+            if (move.captured.has_value() || move.promotion.has_value() || move.is_castling) {
+                continue;
+            }
+            Board::UndoState undo;
+            try {
+                board.make_move(move, undo);
+            } catch (const std::exception &) {
+                continue;
+            }
+
+            Color mover = opposite(board.side_to_move());
+            if (board.king_square(mover) >= 0 && board.in_check(mover)) {
+                board.undo_move(move, undo);
+                continue;
+            }
+
+            if (board.in_check(board.side_to_move())) {
+                tactical_moves.push_back(move);
+            }
+
+            board.undo_move(move, undo);
+        }
+    }
     if (tactical_moves.empty()) {
+main
         return alpha;
     }
 
-    order_moves(tactical_moves, context, ply, std::nullopt);
+    order_moves(moves, context, ply, std::nullopt);
 
     bool found_legal = false;
+ codex/modificar-generate_tactical_moves-para-jaques-y-promociones
+    for (const Move &move : moves) {
+        int material_gain = quiescence_material_gain(move);
+=======
     for (const Move &move : tactical_moves) {
+        if (!in_check && !move.captured.has_value() && !move.promotion.has_value() &&
+            stand_pat + quiescence_quiet_check_margin <= alpha) {
+            continue;
+        }
+ main
         Board::UndoState undo;
         try {
             board.make_move(move, undo);
@@ -901,6 +1007,14 @@ int quiescence(Board &board, int alpha, int beta, int ply, SearchContext &contex
 
         Color mover = opposite(board.side_to_move());
         if (board.king_square(mover) >= 0 && board.in_check(mover)) {
+            board.undo_move(move, undo);
+            continue;
+        }
+
+        bool gives_check = board.in_check(board.side_to_move());
+
+        if (!gives_check && !move.promotion.has_value() &&
+            stand_pat + material_gain + quiescence_futility_margin < alpha) {
             board.undo_move(move, undo);
             continue;
         }
@@ -1064,6 +1178,7 @@ private:
 struct TimeAllocation {
     std::chrono::milliseconds soft;
     std::chrono::milliseconds hard;
+    int moves_to_go = 0;
 };
 
 void adjust_time_allocation(std::chrono::milliseconds &soft, std::chrono::milliseconds &hard) {
@@ -1113,14 +1228,21 @@ std::optional<TimeAllocation> compute_time_allocation(const Board &board,
         if (soft > hard) {
             soft = hard;
         }
+ codex/add-dynamic-overhead-recalculation-logic-w059bn
+        sirio::set_moves_to_go_hint(limits.moves_to_go > 0 ? limits.moves_to_go : 1);
+=======
+        set_expected_moves_to_go(1);
+ main
         adjust_time_allocation(soft, hard);
-        return TimeAllocation{soft, hard};
+        return TimeAllocation{soft, hard, 1};
     }
 
     Color stm = board.side_to_move();
     int time_left = stm == Color::White ? limits.time_left_white : limits.time_left_black;
     int increment = stm == Color::White ? limits.increment_white : limits.increment_black;
     int moves_to_go = limits.moves_to_go > 0 ? limits.moves_to_go : 30;
+
+    sirio::set_moves_to_go_hint(moves_to_go);
 
     if (time_left > 0) {
         int allocation = time_left / std::max(1, moves_to_go);
@@ -1140,16 +1262,22 @@ std::optional<TimeAllocation> compute_time_allocation(const Board &board,
         if (soft > hard) {
             soft = hard;
         }
+        set_expected_moves_to_go(moves_to_go);
         adjust_time_allocation(soft, hard);
-        return TimeAllocation{soft, hard};
+        return TimeAllocation{soft, hard, moves_to_go};
     }
 
     if (increment > 0) {
         int allocation = std::max(increment / 2, 1);
         auto hard = std::chrono::milliseconds{allocation};
         auto soft = hard;
+ codex/add-dynamic-overhead-recalculation-logic-w059bn
+        sirio::set_moves_to_go_hint(moves_to_go);
+=======
+        set_expected_moves_to_go(1);
+ main
         adjust_time_allocation(soft, hard);
-        return TimeAllocation{soft, hard};
+        return TimeAllocation{soft, hard, 1};
     }
 
     return std::nullopt;
@@ -1378,6 +1506,7 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
         shared.has_time_limit = true;
         shared.soft_time_limit = allocation->soft;
         shared.hard_time_limit = allocation->hard;
+        shared.planned_moves_to_go = allocation->moves_to_go;
         if (shared.soft_time_limit.count() <= 0) {
             shared.soft_time_limit = std::chrono::milliseconds{1};
         }
@@ -1487,6 +1616,12 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     auto now = std::chrono::steady_clock::now();
     auto elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now - shared.start_time);
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed_ns);
+    if (allocation.has_value()) {
+        int planned_soft = static_cast<int>(shared.soft_time_limit.count());
+        int elapsed_ms = static_cast<int>(elapsed.count());
+        int moves_to_go = shared.planned_moves_to_go;
+        report_time_observation(moves_to_go, planned_soft, elapsed_ms);
+    }
     NodeThroughputMetrics metrics = compute_node_metrics(shared, best.nodes, elapsed_ns);
     long long elapsed_ms = elapsed.count();
     if (elapsed_ms < 0) {
@@ -1501,6 +1636,22 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     best.knps_after = metrics.knps_after;
     if (shared.timed_out.load(std::memory_order_relaxed)) {
         best.timed_out = true;
+    }
+
+    if (allocation.has_value()) {
+        int elapsed_ms = best.time_ms;
+        if (elapsed_ms < 0) {
+            elapsed_ms = 0;
+        }
+        int hard_budget = static_cast<int>(allocation->hard.count());
+        if (hard_budget < 0) {
+            hard_budget = 0;
+        }
+        int overshoot = elapsed_ms - hard_budget;
+        if (overshoot < 0) {
+            overshoot = 0;
+        }
+        sirio::record_latency_sample(overshoot);
     }
 
     return best;
