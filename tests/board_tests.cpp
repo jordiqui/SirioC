@@ -17,6 +17,7 @@
 void run_perft_tests();
 void run_tt_tests();
 void run_evaluation_phase_tests();
+void run_quiescence_perft_benchmarks();
 
 namespace {
 int square_index(char file, int rank) {
@@ -423,6 +424,7 @@ int main() {
     test_nnue_backend_material_weights();
     run_evaluation_phase_tests();
     run_tt_tests();
+    run_quiescence_perft_benchmarks();
     run_perft_tests();
     std::cout << "All tests passed.\n";
     return 0;

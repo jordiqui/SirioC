@@ -40,6 +40,7 @@ constexpr int max_search_depth = 128;
 constexpr int mate_threshold = mate_score - max_search_depth;
 constexpr std::array<int, static_cast<std::size_t>(PieceType::Count)> mvv_values = {
     100, 320, 330, 500, 900, 20000};
+constexpr int quiescence_quiet_check_margin = 300;
 
 std::atomic<int> search_thread_count{1};
 
@@ -786,15 +787,44 @@ int quiescence(Board &board, int alpha, int beta, int ply, SearchContext &contex
             return syzygy_wdl_to_score(tb->wdl, ply);
         }
     }
+    const bool in_check = board.in_check(board.side_to_move());
     int stand_pat = evaluate_for_current_player(board);
-    if (stand_pat >= beta) {
-        return stand_pat;
-    }
-    if (stand_pat > alpha) {
-        alpha = stand_pat;
+    if (!in_check) {
+        if (stand_pat >= beta) {
+            return stand_pat;
+        }
+        if (stand_pat > alpha) {
+            alpha = stand_pat;
+        }
     }
 
     auto tactical_moves = generate_pseudo_legal_tactical_moves(board);
+    {
+        auto pseudo_moves = generate_pseudo_legal_moves(board);
+        for (const Move &move : pseudo_moves) {
+            if (move.captured.has_value() || move.promotion.has_value() || move.is_castling) {
+                continue;
+            }
+            Board::UndoState undo;
+            try {
+                board.make_move(move, undo);
+            } catch (const std::exception &) {
+                continue;
+            }
+
+            Color mover = opposite(board.side_to_move());
+            if (board.king_square(mover) >= 0 && board.in_check(mover)) {
+                board.undo_move(move, undo);
+                continue;
+            }
+
+            if (board.in_check(board.side_to_move())) {
+                tactical_moves.push_back(move);
+            }
+
+            board.undo_move(move, undo);
+        }
+    }
     if (tactical_moves.empty()) {
         return alpha;
     }
@@ -803,6 +833,10 @@ int quiescence(Board &board, int alpha, int beta, int ply, SearchContext &contex
 
     bool found_legal = false;
     for (const Move &move : tactical_moves) {
+        if (!in_check && !move.captured.has_value() && !move.promotion.has_value() &&
+            stand_pat + quiescence_quiet_check_margin <= alpha) {
+            continue;
+        }
         Board::UndoState undo;
         try {
             board.make_move(move, undo);
