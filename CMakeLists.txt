@@ -65,6 +65,7 @@ add_executable(sirio_tests
     tests/board_tests.cpp
     tests/evaluation_tests.cpp
     tests/perft_tests.cpp
+    tests/search_tests.cpp
     tests/tt_tests.cpp
 )
 

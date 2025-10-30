@@ -28,6 +28,7 @@
 #include "sirio/time_manager.hpp"
 #include "sirio/transposition_table.hpp"
 #include "sirio/syzygy.hpp"
+#include "sirio/bitboard.hpp"
 
 namespace sirio {
 
@@ -266,6 +267,81 @@ bool is_major_decision(const Move &move, Color mover) {
         return is_pawn_storm_move(move, mover);
     }
     return false;
+}
+
+Bitboard attacks_from_square(const Board &board, const Move &move, Color mover) {
+    const int to = move.to;
+    switch (move.piece) {
+        case PieceType::Pawn:
+            if (mover == Color::White) {
+                return pawn_attacks_white(one_bit(to));
+            }
+            return pawn_attacks_black(one_bit(to));
+        case PieceType::Knight:
+            return knight_attacks(to);
+        case PieceType::Bishop:
+            return bishop_attacks(to, board.occupancy());
+        case PieceType::Rook:
+            return rook_attacks(to, board.occupancy());
+        case PieceType::Queen:
+            return queen_attacks(to, board.occupancy());
+        case PieceType::King:
+            return king_attacks(to);
+        default:
+            break;
+    }
+    return 0;
+}
+
+bool creates_delayed_capture_threat(const Board &board, const Move &move, Color mover) {
+    Bitboard attacks = attacks_from_square(board, move, mover);
+    if (attacks == 0) {
+        return false;
+    }
+    Color opponent = board.side_to_move();
+    Bitboard enemy_occ = board.occupancy(opponent);
+    Bitboard targets = attacks & enemy_occ;
+    if (targets == 0) {
+        return false;
+    }
+
+    Bitboard probe = targets;
+    while (probe) {
+        int square = pop_lsb(probe);
+        if (!board.is_square_attacked(square, opponent)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool is_central_pawn_sacrifice(const Board &board, const Move &move, Color mover) {
+    if (move.piece != PieceType::Pawn || move.captured.has_value() || move.is_en_passant) {
+        return false;
+    }
+    int file = file_of(move.to);
+    if (file < 2 || file > 5) {
+        return false;
+    }
+    int rank = rank_of(move.to);
+    if (mover == Color::White) {
+        if (rank < 3) {
+            return false;
+        }
+    } else {
+        if (rank > 4) {
+            return false;
+        }
+    }
+
+    Color opponent = board.side_to_move();
+    if (!board.is_square_attacked(move.to, opponent)) {
+        return false;
+    }
+    if (board.is_square_attacked(move.to, mover)) {
+        return false;
+    }
+    return true;
 }
 
 int syzygy_wdl_to_score(int wdl, int ply) {
@@ -684,6 +760,11 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
             announce_currmove(move, move_index, context);
         }
         Color mover = board.side_to_move();
+        Color opponent = opposite(mover);
+        bool piece_under_attack = false;
+        if (!in_check) {
+            piece_under_attack = board.is_square_attacked(move.from, opponent);
+        }
         Board::UndoState undo;
         board.make_move(move, undo);
         bool gives_check = board.in_check(board.side_to_move());
@@ -700,18 +781,26 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         int reduction = 0;
         if (child_depth > 0 && depth_left >= 3 && move_index > 1 && is_quiet(move) && !gives_check) {
             bool improving = static_eval > parent_static_eval;
-            reduction = 1;
-            if (depth_left >= 5 && move_index > 4) {
-                ++reduction;
-            }
-            if (!improving) {
-                ++reduction;
-            }
-            if (reduction > child_depth - 1) {
-                reduction = child_depth - 1;
-            }
-            if (reduction < 0) {
-                reduction = 0;
+            bool delayed_capture_threat = creates_delayed_capture_threat(board, move, mover);
+            bool central_sacrifice = is_central_pawn_sacrifice(board, move, mover);
+            bool responds_to_threat = in_check || piece_under_attack;
+            bool tactical_danger = responds_to_threat || delayed_capture_threat || central_sacrifice;
+            if (!tactical_danger) {
+                int depth_component = std::max(0, (depth_left - 2) / 2);
+                int move_component = std::max(0, (move_index - 2) / 3);
+                reduction = depth_component + move_component;
+                if (reduction <= 0) {
+                    reduction = 1;
+                }
+                if (!improving) {
+                    ++reduction;
+                }
+                if (reduction > child_depth - 1) {
+                    reduction = child_depth - 1;
+                }
+                if (reduction < 0) {
+                    reduction = 0;
+                }
             }
         }
 
@@ -1464,6 +1553,19 @@ void request_stop_search() {
         active_search_state->stop.store(true, std::memory_order_relaxed);
         stop_requested_pending.store(false, std::memory_order_relaxed);
     }
+}
+
+bool creates_delayed_capture_threat_for_tests(const Board &board, const Move &move, Color mover) {
+    return creates_delayed_capture_threat(board, move, mover);
+}
+
+bool is_central_pawn_sacrifice_for_tests(const Board &board, const Move &move, Color mover) {
+    return is_central_pawn_sacrifice(board, move, mover);
+}
+
+bool responds_to_direct_threat_for_tests(const Board &board, const Move &move, Color mover, bool in_check) {
+    Color opponent = opposite(mover);
+    return in_check || board.is_square_attacked(move.from, opponent);
 }
 
 }  // namespace sirio
