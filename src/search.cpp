@@ -55,8 +55,6 @@ struct SearchSharedState {
     std::atomic<bool> soft_limit_reached{false};
     std::atomic<bool> timed_out{false};
     std::atomic<std::uint64_t> node_counter{0};
-    std::atomic<std::uint64_t> node_update_flushes{0};
-    std::atomic<std::uint64_t> node_update_time_ns{0};
     std::atomic<int> background_tasks{0};
     bool has_time_limit = false;
     bool has_node_limit = false;
@@ -163,40 +161,13 @@ std::uint64_t safe_scaled_rate(std::uint64_t numerator, std::uint64_t denominato
     return static_cast<std::uint64_t>(scaled);
 }
 
-NodeThroughputMetrics compute_node_metrics(const SearchSharedState &shared, std::uint64_t nodes,
+NodeThroughputMetrics compute_node_metrics(const SearchSharedState &, std::uint64_t nodes,
                                            std::chrono::nanoseconds elapsed) {
     NodeThroughputMetrics metrics{};
     auto elapsed_ns = static_cast<std::uint64_t>(elapsed.count());
     metrics.nps = safe_scaled_rate(nodes, elapsed_ns, 1'000'000'000ULL);
     metrics.knps_after = safe_scaled_rate(nodes, elapsed_ns, 1'000'000ULL);
     metrics.knps_before = metrics.knps_after;
-
-    auto flushes = shared.node_update_flushes.load(std::memory_order_relaxed);
-    auto flush_time_ns = shared.node_update_time_ns.load(std::memory_order_relaxed);
-    if (flushes > 0 && elapsed_ns > 0) {
-        long double per_update_ns = static_cast<long double>(flush_time_ns) /
-                                    static_cast<long double>(flushes);
-        long double additional_updates = static_cast<long double>(nodes) -
-                                         static_cast<long double>(flushes);
-        if (additional_updates < 0.0L) {
-            additional_updates = 0.0L;
-        }
-        long double simulated_elapsed = static_cast<long double>(elapsed_ns) +
-                                        additional_updates * per_update_ns;
-        if (simulated_elapsed > 0.0L) {
-            long double knps_before = static_cast<long double>(nodes) * 1'000'000.0L /
-                                      simulated_elapsed;
-            if (knps_before < 0.0L) {
-                metrics.knps_before = 0;
-            } else if (knps_before >=
-                       static_cast<long double>(std::numeric_limits<std::uint64_t>::max())) {
-                metrics.knps_before = std::numeric_limits<std::uint64_t>::max();
-            } else {
-                metrics.knps_before = static_cast<std::uint64_t>(knps_before);
-            }
-        }
-    }
-
     return metrics;
 }
 
@@ -208,13 +179,7 @@ void flush_thread_node_counter(SearchContext &context) {
         return;
     }
     SearchSharedState &shared = *context.shared;
-    auto start = std::chrono::steady_clock::now();
     shared.node_counter.fetch_add(context.local_node_accumulator, std::memory_order_relaxed);
-    auto end = std::chrono::steady_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-    shared.node_update_time_ns.fetch_add(static_cast<std::uint64_t>(elapsed.count()),
-                                         std::memory_order_relaxed);
-    shared.node_update_flushes.fetch_add(1, std::memory_order_relaxed);
     context.local_node_accumulator = 0;
 }
 
