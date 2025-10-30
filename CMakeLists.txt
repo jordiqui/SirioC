@@ -66,6 +66,7 @@ add_executable(sirio_tests
     tests/evaluation_tests.cpp
     tests/perft_quiescence.cpp
     tests/perft_tests.cpp
+    tests/search_tests.cpp
     tests/tt_tests.cpp
     tests/time_manager_tests.cpp
 )

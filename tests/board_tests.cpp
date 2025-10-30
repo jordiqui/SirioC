@@ -17,6 +17,9 @@
 void run_perft_tests();
 void run_tt_tests();
 void run_evaluation_phase_tests();
+codex/revise-reduction-logic-in-search.cpp
+void run_search_tests();
+=======
  codex/revise-reduction-calculation-in-search.cpp
 void run_search_tests();
 =======
@@ -30,6 +33,7 @@ void run_quiescence_benchmarks();
 void run_quiescence_perft_benchmarks();
 =======
 void run_time_manager_tests();
+ main
  main
  main
  main
@@ -498,7 +502,11 @@ int main() {
     test_syzygy_option_configuration();
     test_evaluation_backend_consistency();
     test_nnue_backend_material_weights();
+ codex/revise-reduction-logic-in-search.cpp
+    run_search_tests();
+=======
     run_time_manager_tests();
+ main
     run_evaluation_phase_tests();
     run_search_tests();
     run_tt_tests();
