@@ -35,11 +35,19 @@ de peones, seguridad del rey, movilidad, piezas menores). Cada término se reesc
 `scale_term`, permitiendo que la misma heurística pese distinto en apertura y final antes de
 combinarse en la interpolación final.【F:src/evaluation.cpp†L470-L566】
 
+`evaluate_pawn_structure` construye máscaras de avance y cobertura lateral para identificar peones
+retrasados sin apoyo y penalizarlos, además de comprobar si los peones pasados están conectados con
+otros peones libres en archivos adyacentes. También refuerza las cadenas asentadas en cuarta y
+quinta fila (relativa al color) y aplica un castigo cuando un peón ocupa casillas del mismo color
+que el alfil propio, reduciendo la movilidad de la pieza ligera.【F:src/evaluation.cpp†L206-L341】
+
 ## 6.5. Tapering the evaluation
 
 Las heurísticas secundarias (estructura de peones, movilidad, seguridad del rey o valoración de
 caballos y alfiles) utilizan factores de ponderación distintos para medio juego y final mediante
-`scale_term`. Además, cuando el material restante cae por debajo de `endgame_material_threshold`,
+`scale_term`. La estructura de peones se pondera con `pawn_structure_mg_weight = 72` y
+`pawn_structure_eg_weight = 102` para equilibrar las nuevas bonificaciones posicionales. Además,
+cuando el material restante cae por debajo de `endgame_material_threshold`,
 el módulo de finales refuerza la proximidad de los reyes, la búsqueda de esquinas y la oposición
 con puntuaciones exclusivamente asociadas al final de partida.【F:src/evaluation.cpp†L512-L566】
 
