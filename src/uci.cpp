@@ -62,6 +62,7 @@ struct EngineOptions {
     int minimum_thinking_time = 100;
     int slow_mover = 100;
     int nodestime = 0;
+    bool auto_time_tuning = true;
     bool uci_chess960 = false;
     bool uci_limit_strength = false;
     bool uci_analyse_mode = false;
@@ -155,6 +156,7 @@ void apply_time_management_options() {
     sirio::set_minimum_thinking_time(options.minimum_thinking_time);
     sirio::set_slow_mover(options.slow_mover);
     sirio::set_nodestime(options.nodestime);
+    sirio::set_auto_time_tuning(options.auto_time_tuning);
 }
 
 void initialize_engine_options() {
@@ -633,6 +635,14 @@ void on_nodes_time(const Option& opt) {
     apply_time_management_options();
 }
 
+void on_auto_time_tuning(const Option& opt) {
+    if (g_silent_option_update) {
+        return;
+    }
+    options.auto_time_tuning = static_cast<bool>(opt);
+    apply_time_management_options();
+}
+
 void on_uci_chess960(const Option& opt) {
     if (g_silent_option_update) {
         return;
@@ -855,6 +865,9 @@ void ensure_options_registered() {
     g_options["nodestime"] = Option(0, 0, 10000);
     g_options["nodestime"].after_set(on_nodes_time);
 
+    g_options["AutoTimeTuning"] = Option(true);
+    g_options["AutoTimeTuning"].after_set(on_auto_time_tuning);
+
     g_options["SyzygyProbeLimit"] = Option(7, 0, 7);
     g_options["SyzygyProbeLimit"].after_set(on_syzygy_probe_limit);
 
@@ -917,6 +930,9 @@ void sync_options_from_state() {
     }
     if (auto* opt = find_option("nodestime")) {
         opt->set_int(options.nodestime);
+    }
+    if (auto* opt = find_option("AutoTimeTuning")) {
+        opt->set_bool(options.auto_time_tuning);
     }
     if (auto* opt = find_option("UCI_Chess960")) {
         opt->set_bool(options.uci_chess960);
