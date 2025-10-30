@@ -74,7 +74,7 @@ struct EngineOptions {
     int syzygy_probe_limit = 7;
     bool hash_persist = false;
     std::string hash_persist_file;
-    bool use_book = false;
+    bool use_book = true;
     std::string book_file;
     bool persistent_analysis = false;
     std::string persistent_analysis_file;
@@ -87,6 +87,7 @@ OptionsMap g_options;
 bool g_options_registered = false;
 bool g_silent_option_update = false;
 sirio::Board* g_option_board = nullptr;
+std::once_flag g_initialize_once;
 
 struct SilentUpdateGuard {
     SilentUpdateGuard() : previous(g_silent_option_update) { g_silent_option_update = true; }
@@ -336,6 +337,56 @@ std::string normalize_string_option(const std::string& value) {
         return std::string{};
     }
     return value;
+}
+
+bool validate_book_file_path(const std::string& path, std::string* normalized,
+                             std::string* error_message) {
+    if (path.empty()) {
+        if (normalized != nullptr) {
+            normalized->clear();
+        }
+        return true;
+    }
+
+    std::filesystem::path fs_path{path};
+    if (!fs_path.is_absolute()) {
+        fs_path = std::filesystem::current_path() / fs_path;
+    }
+
+    std::error_code ec;
+    if (!std::filesystem::exists(fs_path, ec)) {
+        if (error_message != nullptr) {
+            if (ec) {
+                *error_message = "Opening book path error (" + ec.message() + ") for " + path;
+            } else {
+                *error_message = "Opening book file not found: " + fs_path.string();
+            }
+        }
+        return false;
+    }
+
+    if (!std::filesystem::is_regular_file(fs_path, ec)) {
+        if (error_message != nullptr) {
+            *error_message = "Opening book path is not a file: " + fs_path.string();
+            if (ec) {
+                *error_message += " (" + ec.message() + ")";
+            }
+        }
+        return false;
+    }
+
+    std::filesystem::path normalized_path = std::filesystem::weakly_canonical(fs_path, ec);
+    if (ec) {
+        normalized_path = std::filesystem::absolute(fs_path, ec);
+        if (ec) {
+            normalized_path = fs_path.lexically_normal();
+        }
+    }
+
+    if (normalized != nullptr) {
+        *normalized = normalized_path.string();
+    }
+    return true;
 }
 
 void print_loaded_nnue_info(const sirio::nnue::NetworkInfo& info) {
@@ -748,12 +799,20 @@ void on_use_book(const Option& opt) {
         return;
     }
     options.use_book = static_cast<bool>(opt);
-    if (options.use_book && !options.book_file.empty() && !sirio::book::is_loaded()) {
-        std::string error;
-        if (sirio::book::load(options.book_file, &error)) {
-            std::cout << "info string Opening book loaded from " << options.book_file << std::endl;
-        } else {
-            std::cout << "info string Failed to load opening book: " << error << std::endl;
+    if (!options.use_book) {
+        return;
+    }
+    if (sirio::book::is_loaded()) {
+        return;
+    }
+    std::string message;
+    if (sirio::book::load_for_initialize(options.book_file, options.use_book, &message)) {
+        std::cout << "info string " << message << std::endl;
+    } else {
+        if (!message.empty()) {
+            std::cout << "info string " << message << std::endl;
+        }
+        if (!options.book_file.empty()) {
             options.book_file.clear();
         }
     }
@@ -764,16 +823,30 @@ void on_book_file(const Option& opt) {
         return;
     }
     std::string path = normalize_string_option(static_cast<std::string>(opt));
-    options.book_file = path;
     if (path.empty()) {
         sirio::book::clear();
         std::cout << "info string Opening book cleared" << std::endl;
+        options.book_file.clear();
     } else {
-        std::string error;
-        if (sirio::book::load(path, &error)) {
-            std::cout << "info string Opening book loaded from " << path << std::endl;
+        std::string normalized_path;
+        std::string validation_error;
+        if (!validate_book_file_path(path, &normalized_path, &validation_error)) {
+            std::cout << "info string " << validation_error << std::endl;
+            sirio::book::clear();
+            options.book_file.clear();
+            return;
+        }
+        std::string message;
+        if (sirio::book::load_for_initialize(normalized_path, true, &message)) {
+            options.book_file = normalized_path;
+            if (!message.empty()) {
+                std::cout << "info string " << message << std::endl;
+            }
         } else {
-            std::cout << "info string Failed to load opening book: " << error << std::endl;
+            if (!message.empty()) {
+                std::cout << "info string " << message << std::endl;
+            }
+            sirio::book::clear();
             options.book_file.clear();
         }
     }
@@ -875,7 +948,7 @@ void ensure_options_registered() {
     g_options["EvalFileSmall"] = Option(std::string(kDefaultEvalFileSmall));
     g_options["EvalFileSmall"].after_set(on_eval_file_small);
 
-    g_options["UseBook"] = Option(false);
+    g_options["UseBook"] = Option(true);
     g_options["UseBook"].after_set(on_use_book);
 
     g_options["BookFile"] = Option(std::string(""));
@@ -1301,12 +1374,28 @@ void handle_bench() {
 
 }  // namespace
 
+void initialize() {
+    std::call_once(g_initialize_once, []() {
+        initialize_engine_options();
+        ensure_options_registered();
+        sync_options_from_state();
+
+        std::string message;
+        if (sirio::book::load_for_initialize(options.book_file, options.use_book, &message)) {
+            if (!message.empty()) {
+                std::cout << "info string " << message << std::endl;
+            }
+        } else if (!message.empty()) {
+            std::cout << "info string " << message << std::endl;
+        }
+    });
+}
+
 int run() {
+    initialize();
+
     sirio::Board board;
     sirio::initialize_evaluation(board);
-    initialize_engine_options();
-    ensure_options_registered();
-    sync_options_from_state();
 
     std::string line;
 

@@ -45,6 +45,8 @@ sirio::uci::handle_setoption(Options, full_line_after_keyword_setoption);
 - UCI_Elo (spin 1320..3190, default 3190)
 - Debug Log File (string "")
 - EvalFile (string "nn-1c0000000000.nnue")
+- UseBook (check true)
+- BookFile (string "")
 - SyzygyPath (string "")
 - SyzygyProbeDepth (spin 0..128, default 1)
 - Syzygy50MoveRule (check true)
@@ -94,6 +96,22 @@ redes NNUE desde disco. La primera ruta es la preferida; la segunda se usa como 
 `nn-1c0000000000.nnue` como principal y `nn-37f18f62d772.nnue` como alternativa, ambas basadas en
 las versiones más recientes publicadas por el proyecto Stockfish. Recuerda cumplir con su licencia
 si las redistribuyes junto a SirioC.
+
+## Opening book setup in SirioC
+
+SirioC activa la opción `UseBook` por defecto y espera un fichero en `BookFile`
+para inicializar el repertorio durante `uci::initialize()`. El libro recomendado
+es **UHO Big 8Mvs**, distribuido en formato BIN con nombre
+`UHO_2024-Big_8mvs.bin`. Para usarlo:
+
+1. Descarga el fichero desde el repositorio oficial de UHO Big 8Mvs.
+2. Crea un directorio `books/` en la raíz del proyecto (si aún no existe).
+3. Copia el archivo descargado como `books/UHO_2024-Big_8mvs.bin`.
+4. Establece `BookFile` a la ruta absoluta o relativa del fichero, por ejemplo
+   `BookFile books/UHO_2024-Big_8mvs.bin` dentro de tu GUI UCI.
+
+Si la ruta configurada no existe, SirioC informará del problema mediante
+`info string` y mantendrá el libro desactivado hasta recibir una ruta válida.
 
 ## License
 Placed under the same license as SirioC repository (inherit).
