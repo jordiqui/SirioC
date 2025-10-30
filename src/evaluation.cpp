@@ -8,6 +8,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <unordered_map>
 
 #include "sirio/bitboard.hpp"
 #include "sirio/endgame.hpp"
@@ -19,7 +20,10 @@ namespace {
 
 class ClassicalEvaluation : public EvaluationBackend {
 public:
-    void initialize(const Board &board) override { (void)board; }
+    void initialize(const Board &board) override {
+        (void)board;
+        pawn_cache_.clear();
+    }
     void reset(const Board &board) override { initialize(board); }
     void push(const Board &, const std::optional<Move> &, const Board &) override {}
     void pop() override {}
@@ -28,6 +32,30 @@ public:
     [[nodiscard]] std::unique_ptr<EvaluationBackend> clone() const override {
         return std::make_unique<ClassicalEvaluation>(*this);
     }
+
+private:
+    struct PawnStructureKey {
+        Bitboard white_pawns;
+        Bitboard black_pawns;
+        bool operator==(const PawnStructureKey &) const = default;
+    };
+
+    struct PawnStructureKeyHash {
+        std::size_t operator()(const PawnStructureKey &key) const noexcept {
+            std::size_t seed = std::hash<Bitboard>{}(key.white_pawns);
+            seed ^= std::hash<Bitboard>{}(key.black_pawns) + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
+            return seed;
+        }
+    };
+
+    struct PawnStructureData {
+        std::array<int, 8> white_counts{};
+        std::array<int, 8> black_counts{};
+        int white_score = 0;
+        int black_score = 0;
+    };
+
+    std::unordered_map<PawnStructureKey, PawnStructureData, PawnStructureKeyHash> pawn_cache_{};
 };
 
 constexpr std::array<int, 6> piece_values = {100, 320, 330, 500, 900, 0};
@@ -469,11 +497,27 @@ int ClassicalEvaluation::evaluate(const Board &board) {
         score -= bishop_pair_bonus;
     }
 
-    auto white_counts = pawn_file_counts(board, Color::White);
-    auto black_counts = pawn_file_counts(board, Color::Black);
+    Bitboard white_pawns = board.pieces(Color::White, PieceType::Pawn);
+    Bitboard black_pawns = board.pieces(Color::Black, PieceType::Pawn);
 
-    score += evaluate_pawn_structure(board, Color::White, white_counts, black_counts);
-    score += evaluate_pawn_structure(board, Color::Black, black_counts, white_counts);
+    PawnStructureKey key{white_pawns, black_pawns};
+    auto cache_it = pawn_cache_.find(key);
+    if (cache_it == pawn_cache_.end()) {
+        PawnStructureData data;
+        data.white_counts = pawn_file_counts(board, Color::White);
+        data.black_counts = pawn_file_counts(board, Color::Black);
+        data.white_score =
+            evaluate_pawn_structure(board, Color::White, data.white_counts, data.black_counts);
+        data.black_score =
+            evaluate_pawn_structure(board, Color::Black, data.black_counts, data.white_counts);
+        cache_it = pawn_cache_.emplace(key, std::move(data)).first;
+    }
+
+    const auto &white_counts = cache_it->second.white_counts;
+    const auto &black_counts = cache_it->second.black_counts;
+
+    score += cache_it->second.white_score;
+    score += cache_it->second.black_score;
     score += evaluate_king_safety(board, Color::White, white_counts);
     score += evaluate_king_safety(board, Color::Black, black_counts);
     score += evaluate_mobility(board, Color::White);
