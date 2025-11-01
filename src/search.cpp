@@ -10,6 +10,7 @@
 #include <functional>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <sstream>
@@ -19,6 +20,8 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+
+#include "engine/work_queue_watchdog.hpp"
 
 #include "sirio/draws.hpp"
 #include "sirio/endgame.hpp"
@@ -984,7 +987,10 @@ public:
         }
         int to_add = desired - current;
         for (int i = 0; i < to_add; ++i) {
-            workers_.emplace_back([this]() { worker_loop(); });
+            auto control = std::make_unique<WorkerControl>();
+            std::size_t index = workers_.size();
+            workers_.push_back(std::move(control));
+            spawn_worker_locked(index);
         }
     }
 
@@ -992,6 +998,7 @@ public:
         {
             std::lock_guard<std::mutex> lock(mutex_);
             tasks_.push_back(Task{std::move(task), &shared});
+            engine::WorkQueueWatchdog::instance().update_queue_size(tasks_.size());
         }
         cv_.notify_one();
     }
@@ -1011,6 +1018,12 @@ private:
         SearchSharedState *shared;
     };
 
+    struct WorkerControl {
+        std::thread thread;
+        std::shared_ptr<engine::WorkQueueRegistration> registration;
+        std::atomic<bool> exit_requested{false};
+    };
+
     SearchThreadPool() {
         ensure_size(recommended_search_threads());
     }
@@ -1019,18 +1032,32 @@ private:
         shutdown();
     }
 
-    void worker_loop() {
+    void worker_loop(WorkerControl *control,
+                     std::shared_ptr<engine::WorkQueueRegistration> registration) {
         while (true) {
+            registration->pulse();
             Task task;
             {
                 std::unique_lock<std::mutex> lock(mutex_);
-                cv_.wait(lock, [&]() { return shutdown_ || !tasks_.empty(); });
+                cv_.wait(lock, [&]() {
+                    return shutdown_ || control->exit_requested.load(std::memory_order_relaxed) ||
+                           !tasks_.empty();
+                });
                 if (shutdown_ && tasks_.empty()) {
-                    return;
+                    break;
+                }
+                if (control->exit_requested.load(std::memory_order_relaxed)) {
+                    if (!tasks_.empty()) {
+                        cv_.notify_one();
+                    }
+                    break;
                 }
                 task = std::move(tasks_.front());
                 tasks_.pop_front();
+                engine::WorkQueueWatchdog::instance().update_queue_size(tasks_.size());
             }
+
+            registration->pulse();
 
             if (task.func) {
                 task.func();
@@ -1039,22 +1066,89 @@ private:
                 task.shared->notify_background_task_complete();
             }
         }
+        registration->mark_inactive();
+    }
+
+    void spawn_worker_locked(std::size_t index) {
+        if (shutdown_) {
+            return;
+        }
+        WorkerControl *control = workers_[index].get();
+        control->exit_requested.store(false, std::memory_order_relaxed);
+        auto registration = engine::WorkQueueWatchdog::instance().register_worker([this, index]() {
+            request_worker_restart(index);
+        });
+        control->registration = registration;
+        control->thread = std::thread([this, control, registration]() {
+            worker_loop(control, registration);
+        });
+    }
+
+    void request_worker_restart(std::size_t index) {
+        std::thread old_thread;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (index >= workers_.size()) {
+                return;
+            }
+            if (shutdown_) {
+                return;
+            }
+            WorkerControl *control = workers_[index].get();
+            if (control == nullptr) {
+                return;
+            }
+            bool expected = false;
+            if (!control->exit_requested.compare_exchange_strong(expected, true,
+                                                                  std::memory_order_acq_rel)) {
+                return;
+            }
+            old_thread = std::move(control->thread);
+        }
+
+        cv_.notify_all();
+
+        if (old_thread.joinable()) {
+            old_thread.join();
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (index >= workers_.size()) {
+                return;
+            }
+            if (shutdown_) {
+                return;
+            }
+            WorkerControl *control = workers_[index].get();
+            if (control == nullptr) {
+                return;
+            }
+            spawn_worker_locked(index);
+        }
     }
 
     void shutdown() {
         {
             std::lock_guard<std::mutex> lock(mutex_);
             shutdown_ = true;
+            engine::WorkQueueWatchdog::instance().update_queue_size(tasks_.size());
+            for (auto &worker : workers_) {
+                if (worker) {
+                    worker->exit_requested.store(true, std::memory_order_relaxed);
+                }
+            }
         }
         cv_.notify_all();
         for (auto &worker : workers_) {
-            if (worker.joinable()) {
-                worker.join();
+            if (worker && worker->thread.joinable()) {
+                worker->thread.join();
             }
         }
+        engine::WorkQueueWatchdog::instance().shutdown();
     }
 
-    std::vector<std::thread> workers_;
+    std::vector<std::unique_ptr<WorkerControl>> workers_;
     std::mutex mutex_;
     std::condition_variable cv_;
     std::deque<Task> tasks_;

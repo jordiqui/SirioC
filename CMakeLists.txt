@@ -18,6 +18,7 @@ add_library(sirio_core
     src/move.cpp
     src/movegen.cpp
     src/opening_book.cpp
+    src/engine/work_queue_watchdog.cpp
     src/search.cpp
     src/time_manager.cpp
     src/tt.cpp
