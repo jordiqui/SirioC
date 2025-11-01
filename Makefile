@@ -17,7 +17,8 @@ OBJDIR := $(BUILDDIR)/obj
 BINDIR := $(BUILDDIR)/bin
 
 NNUE_SRCS := $(wildcard $(SRCDIR)/nnue/*.cpp)
-CORE_CPP_SRCS := $(filter-out $(SRCDIR)/main.cpp,$(wildcard $(SRCDIR)/*.cpp)) $(NNUE_SRCS)
+ENGINE_SRCS := $(wildcard $(SRCDIR)/engine/*.cpp)
+CORE_CPP_SRCS := $(filter-out $(SRCDIR)/main.cpp,$(wildcard $(SRCDIR)/*.cpp)) $(NNUE_SRCS) $(ENGINE_SRCS)
 THIRDPARTY_SRCS := $(filter-out third_party/fathom/tbcore.c,$(wildcard third_party/fathom/*.c))
 CORE_OBJS := $(patsubst $(SRCDIR)/%.cpp,$(OBJDIR)/src/%.o,$(CORE_CPP_SRCS))
 THIRDPARTY_OBJS := $(patsubst third_party/%.c,$(OBJDIR)/third_party/%.o,$(THIRDPARTY_SRCS))
@@ -72,4 +73,4 @@ clean:
 	rm -rf $(BUILDDIR)
 
 dirs:
-	@mkdir -p $(OBJDIR)/src $(OBJDIR)/src/nnue $(OBJDIR)/tests $(OBJDIR)/bench $(OBJDIR)/third_party/fathom $(BINDIR)
+	@mkdir -p $(OBJDIR)/src $(OBJDIR)/src/nnue $(OBJDIR)/src/engine $(OBJDIR)/tests $(OBJDIR)/bench $(OBJDIR)/third_party/fathom $(BINDIR)
