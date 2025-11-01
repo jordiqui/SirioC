@@ -32,6 +32,8 @@ Este es un motor original creado por **Jorge Ruiz Centelles**. El núcleo del mo
 - [Búsqueda y ordenación de movimientos](docs/search.md)
 - [Comunicación UCI](docs/communication.md)
 - [Integración con GUIs UCI](docs/gui.md)
+- [Comparativa con otros motores](docs/engine_comparison.md)
+- [Listas de verificación para contribuciones](docs/review_checklists.md)
 
 ## Settings
 
@@ -377,4 +379,14 @@ rápidamente sobre arquitecturas o datasets propios antes de promover una red al
 - Exponer una opción UCI para activar el autoajuste de tiempo del motor, conectando `src/uci.cpp` con las rutinas de `include/sirio/time_manager.hpp` y validando la funcionalidad en `tests/time_manager_tests.cpp`.
 - Añadir herramientas de mantenimiento del libro de aperturas que validen pesos, detecten entradas corruptas y permitan generar ficheros desde Polyglot dentro de `src/opening_book.cpp` y pruebas asociadas.
 - Extender la lógica de detección de tablas en `src/draws.cpp` para cubrir límites modernos (75 jugadas, cinco repeticiones) y reflejar los resultados en la salida UCI y las pruebas.
+
+## Revisión y difusión de guías
+
+Todos los colaboradores deben revisar las listas de verificación descritas en
+[`docs/review_checklists.md`](docs/review_checklists.md) antes de abrir o evaluar
+una Pull Request. Comparte el enlace a este documento y a la
+[`comparativa de motores`](docs/engine_comparison.md) en los canales habituales
+del proyecto (por ejemplo, mensajes de bienvenida, plantillas de PR o foros
+internos) para asegurar que las futuras revisiones se ajusten a la filosofía de
+SirioC.
 
