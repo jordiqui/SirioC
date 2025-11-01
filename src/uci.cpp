@@ -251,6 +251,38 @@ void output_search_result(const sirio::Board& board, const sirio::SearchLimits& 
                   << " nodes " << nodes << " nps " << nps << " knps_before " << knps_before
                   << " knps_after " << knps_after << " hashfull 0 tbhits 0 time " << time_ms
                   << " pv " << pv_string << std::endl;
+        auto emit_telemetry = [](const sirio::SearchInstrumentationSnapshot& snapshot) {
+            auto escape_json = [](const std::string& value) {
+                std::string escaped;
+                escaped.reserve(value.size());
+                for (char ch : value) {
+                    if (ch == '\\' || ch == '\"') {
+                        escaped.push_back('\\');
+                    }
+                    escaped.push_back(ch);
+                }
+                return escaped;
+            };
+            std::ostringstream stream;
+            stream << "{\"main_nodes\":" << snapshot.main_nodes
+                   << ",\"quiescence_nodes\":" << snapshot.quiescence_nodes << ",\"timeline\":";
+            stream << '[';
+            bool first = true;
+            for (const auto& event : snapshot.timeline) {
+                if (!first) {
+                    stream << ',';
+                }
+                stream << "{\"label\":\"" << escape_json(event.label) << "\",";
+                stream << "\"elapsed_ms\":" << event.elapsed_ms << ',';
+                stream << "\"delta_ms\":" << event.delta_ms << ',';
+                stream << "\"nodes\":" << event.nodes << '}';
+                first = false;
+            }
+            stream << ']';
+            stream << '}';
+            std::cout << "info string telemetry " << stream.str() << std::endl;
+        };
+        emit_telemetry(result.instrumentation);
         if (limits.infinite) {
             std::lock_guard<std::mutex> lock(pending_result_mutex);
             pending_infinite_result = result;
