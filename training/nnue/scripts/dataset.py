@@ -39,7 +39,7 @@ class DatasetMetadata:
         )
 
 
-class PieceCountDataset(Dataset[Tuple[torch.Tensor, torch.Tensor]]):
+class PieceCountDataset(Dataset[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     """PyTorch Dataset wrapper around the `.npz` files created by the pipeline."""
 
     def __init__(self, npz_path: str | pathlib.Path) -> None:
@@ -51,8 +51,8 @@ class PieceCountDataset(Dataset[Tuple[torch.Tensor, torch.Tensor]]):
     def __len__(self) -> int:  # type: ignore[override]
         return self.features.shape[0]
 
-    def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:  # type: ignore[override]
-        return self.features[index], self.targets[index]
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:  # type: ignore[override]
+        return self.features[index], self.targets[index], self.ply[index]
 
 
 def deterministic_split(dataset: Dataset, validation_split: float, seed: int) -> Tuple[Subset, Subset]:

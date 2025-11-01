@@ -216,6 +216,10 @@ constexpr int minor_piece_eg_weight = 105;
 
 constexpr std::array<int, 8> king_attackers_table = {0, 8, 18, 32, 50, 72, 98, 128};
 
+constexpr int queen_ring_distance_scale = 6;
+constexpr int missing_shield_file_penalty = 12;
+constexpr int flank_pawn_gap_penalty = 6;
+
 constexpr int diagonal_king_direct_penalty = 20;
 constexpr int diagonal_critical_base_penalty = 12;
 constexpr int diagonal_open_bonus = 6;
@@ -762,6 +766,31 @@ int evaluate_king_safety(const Board &board, Color color,
 
     Bitboard king_zone = king_attacks(king_sq) | one_bit(king_sq);
     Color enemy = opposite(color);
+    Bitboard enemy_queens = board.pieces(enemy, PieceType::Queen);
+    int queen_pressure = 0;
+    Bitboard tmp_queens = enemy_queens;
+    while (tmp_queens) {
+        int sq = pop_lsb(tmp_queens);
+        int file_diff = std::abs(file_of(sq) - king_file);
+        int rank_diff = std::abs(rank_of(sq) - king_rank);
+        int chebyshev = std::max(file_diff, rank_diff);
+        if (chebyshev <= 4) {
+            queen_pressure += (4 - chebyshev) * queen_ring_distance_scale;
+        }
+    }
+
+    if (friendly_counts[king_file] == 0) {
+        queen_pressure += missing_shield_file_penalty;
+    }
+    int flank_gaps = 0;
+    if (king_file > 0 && friendly_counts[king_file - 1] == 0) {
+        ++flank_gaps;
+    }
+    if (king_file < 7 && friendly_counts[king_file + 1] == 0) {
+        ++flank_gaps;
+    }
+    queen_pressure += flank_gaps * flank_pawn_gap_penalty;
+    score -= queen_pressure;
     Bitboard occupancy = board.occupancy();
     Bitboard friendly_pawns = board.pieces(color, PieceType::Pawn);
     auto enemy_counts = pawn_file_counts(board, enemy);
@@ -805,7 +834,6 @@ int evaluate_king_safety(const Board &board, Color color,
         }
     }
 
-    Bitboard enemy_queens = board.pieces(enemy, PieceType::Queen);
     tmp = enemy_queens;
     while (tmp) {
         int sq = pop_lsb(tmp);

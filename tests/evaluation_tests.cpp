@@ -33,6 +33,18 @@ void test_king_safety_tapering() {
     assert(mid_eval < end_eval);
 }
 
+void test_queen_ring_pressure_penalty() {
+    sirio::Board safe_position{"4k3/8/8/8/8/8/8/4K3 w - - 0 1"};
+    sirio::initialize_evaluation(safe_position);
+    int baseline = sirio::evaluate(safe_position);
+
+    sirio::Board pressured{"4k3/8/8/8/8/6q1/8/4K3 w - - 0 1"};
+    sirio::initialize_evaluation(pressured);
+    int under_attack = sirio::evaluate(pressured);
+
+    assert(under_attack < baseline);
+}
+
 void test_pawn_cache_stability_on_non_pawn_moves() {
     sirio::Board board{"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"};
     sirio::initialize_evaluation(board);
@@ -72,5 +84,6 @@ void run_evaluation_phase_tests() {
     sirio::use_classical_evaluation();
     test_passed_pawn_scaling();
     test_king_safety_tapering();
+    test_queen_ring_pressure_penalty();
     test_pawn_cache_stability_on_non_pawn_moves();
 }

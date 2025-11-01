@@ -18,6 +18,7 @@ void run_perft_tests();
 void run_tt_tests();
 void run_evaluation_phase_tests();
 void run_search_tests();
+void run_nnue_backend_tests();
 
 namespace {
 int square_index(char file, int rank) {
@@ -422,6 +423,7 @@ int main() {
     test_syzygy_option_configuration();
     test_evaluation_backend_consistency();
     test_nnue_backend_material_weights();
+    run_nnue_backend_tests();
     run_search_tests();
     run_evaluation_phase_tests();
     run_tt_tests();

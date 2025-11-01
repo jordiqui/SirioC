@@ -93,25 +93,60 @@ def make_dataloaders(config: dict[str, Any]) -> Tuple[PieceCountDataset, DataLoa
     return dataset, train_loader, val_loader, metadata
 
 
-def compute_metrics(predictions: torch.Tensor, targets: torch.Tensor) -> Dict[str, float]:
-    mse = torch.mean((predictions - targets) ** 2).item()
-    mae = torch.mean(torch.abs(predictions - targets)).item()
-    return {"mse": float(mse), "mae": float(mae)}
+def compute_metrics(
+    predictions: torch.Tensor, targets: torch.Tensor, ply: torch.Tensor | None = None
+) -> Dict[str, float]:
+    preds = predictions.detach().cpu()
+    tgts = targets.detach().cpu()
+
+    diff = preds - tgts
+    mse = torch.mean(diff ** 2).item()
+    mae = torch.mean(torch.abs(diff)).item()
+
+    metrics: Dict[str, float] = {"mse": float(mse), "mae": float(mae), "bias": float(diff.mean().item())}
+
+    if preds.numel() > 1:
+        centered_pred = preds - preds.mean()
+        centered_tgt = tgts - tgts.mean()
+        denom = torch.linalg.vector_norm(centered_pred) * torch.linalg.vector_norm(centered_tgt)
+        if denom.item() > 1e-12:
+            pearson = torch.dot(centered_pred.view(-1), centered_tgt.view(-1)) / denom
+            metrics["pearson_r"] = float(pearson.item())
+        else:
+            metrics["pearson_r"] = 0.0
+
+    if ply is not None:
+        ply_cpu = ply.detach().cpu()
+        abs_diff = torch.abs(diff)
+        phase_windows = {
+            "early_game": (0, 20),
+            "mid_game": (20, 50),
+            "late_game": (50, 200),
+        }
+        for label, (lo, hi) in phase_windows.items():
+            mask = (ply_cpu >= lo) & (ply_cpu < hi)
+            if torch.count_nonzero(mask) > 0:
+                metrics[f"{label}_mae"] = float(torch.mean(abs_diff[mask]).item())
+
+    return metrics
 
 
 def evaluate(model: PieceCountModel, loader: DataLoader, device: torch.device) -> Dict[str, float]:
     model.eval()
     preds: list[torch.Tensor] = []
     tgts: list[torch.Tensor] = []
+    plies: list[torch.Tensor] = []
     with torch.no_grad():
-        for features, targets in loader:
+        for features, targets, ply in loader:
             features = features.to(device)
             targets = targets.to(device)
             preds.append(model(features))
             tgts.append(targets)
-    predictions = torch.cat(preds)
-    targets = torch.cat(tgts)
-    return compute_metrics(predictions, targets)
+            plies.append(ply)
+    predictions = torch.cat(preds) if preds else torch.empty(0)
+    targets = torch.cat(tgts) if tgts else torch.empty(0)
+    ply_tensor = torch.cat(plies) if plies else None
+    return compute_metrics(predictions, targets, ply_tensor)
 
 
 def train_one_epoch(model: PieceCountModel, loader: DataLoader, optimizer: torch.optim.Optimizer, device: torch.device, gradient_clip: float | None) -> Dict[str, float]:
@@ -119,7 +154,8 @@ def train_one_epoch(model: PieceCountModel, loader: DataLoader, optimizer: torch
     total_loss = 0.0
     total_examples = 0
     total_abs_error = 0.0
-    for features, targets in loader:
+    total_bias = 0.0
+    for features, targets, _ in loader:
         features = features.to(device)
         targets = targets.to(device)
         optimizer.zero_grad()
@@ -133,10 +169,12 @@ def train_one_epoch(model: PieceCountModel, loader: DataLoader, optimizer: torch
         batch_size = features.shape[0]
         total_loss += loss.item() * batch_size
         total_abs_error += torch.sum(torch.abs(predictions - targets)).item()
+        total_bias += torch.sum((predictions - targets).detach()).item()
         total_examples += batch_size
     mse = total_loss / max(1, total_examples)
     mae = total_abs_error / max(1, total_examples)
-    return {"mse": mse, "mae": mae}
+    bias = total_bias / max(1, total_examples)
+    return {"mse": mse, "mae": mae, "bias": bias}
 
 
 def save_checkpoint(model: PieceCountModel, path: pathlib.Path, metadata: Dict[str, Any]) -> None:
