@@ -67,9 +67,27 @@ reemplazan cuando la nueva búsqueda alcanza igual o mayor profundidad.【F:src/
 Al alcanzar profundidad cero, SirioC no se detiene en una evaluación estática inmediata. En su
 lugar ejecuta una quiescence search que examina todas las capturas, promociones y capturas al paso
 legales. Esta extensión evita el horizonte táctico y estabiliza la valoración al descartar ruidos
-producidos por entregas superficiales.【F:src/search.cpp†L254-L289】
+producidos por entregas superficiales.【F:src/search.cpp†L1103-L1165】
 
+## 5.4. Podas selectivas comparables a Stockfish/Berserk/Obsidian
 
-## 5.4. Lazy SMP multihilo
+La versión actual incorpora *late move reductions* (LMR) con una tabla logarítmica precomputada
+similar a la aproximación de Stockfish, pero ajustada para mantener las heurísticas propias de
+SirioC. El factor base se calcula en `late_move_reduction_base`, que evalúa la profundidad restante
+y el índice de la jugada para derivar la reducción inicial.【F:src/search.cpp†L33-L74】 Posteriormente,
+`negamax` ajusta este valor en función de si la jugada mejora la evaluación, si la pieza estaba
+amenazada y si existen patrones tácticos particulares del motor (sacrificios centrales, amenazas
+aplazadas, etc.), de forma análoga al enfoque híbrido utilizado por Berserk u Obsidian para no
+rebajar jugadas con potencial táctico.【F:src/search.cpp†L1008-L1054】 El resultado es una poda más
+agresiva de las jugadas tardías manteniendo la identidad estratégica previa.
+
+Además, se introduce una evaluación estática de intercambios (SEE) inspirada en las implementaciones
+de referencia. La función `static_exchange_score` simula recapturas alternas utilizando bitboards y
+listas de atacantes, lo que permite descartar capturas perdedoras tanto en la búsqueda principal como
+en la quiescence.【F:src/search.cpp†L221-L386】【F:src/search.cpp†L996-L1044】【F:src/search.cpp†L1129-L1156】
+Este filtro evita explorar sacrificios claramente desfavorables de la misma manera que hacen motores
+como Obsidian para reducir el ruido táctico.
+
+## 5.5. Lazy SMP multihilo
 
 La búsqueda principal se ejecuta ahora en varios hilos siguiendo el modelo *lazy SMP*: el hilo principal avanza con profundidades crecientes mientras que los hilos secundarios se incorporan con un ligero retardo y comparten el mejor resultado global mediante `publish_best_result`. Cada hilo tiene su propio `SearchContext` y tabla de transposición, pero comparten un `SearchSharedState` que controla los límites de tiempo y nodos, además del contador total de nodos visitados. Cuando el hilo primario detecta que se alcanza el límite de tiempo blando o duro, propaga la orden de parada al resto estableciendo `stop` en el estado compartido.【F:src/search.cpp†L688-L857】

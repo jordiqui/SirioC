@@ -20,6 +20,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include <cmath>
 
 #include "engine/work_queue_watchdog.hpp"
 
@@ -44,6 +45,33 @@ constexpr int max_search_depth = 128;
 constexpr int mate_threshold = mate_score - max_search_depth;
 constexpr std::array<int, static_cast<std::size_t>(PieceType::Count)> mvv_values = {
     100, 320, 330, 500, 900, 20000};
+constexpr std::array<int, static_cast<std::size_t>(PieceType::Count)> see_piece_values = {
+    100, 320, 330, 500, 900, 20000};
+
+constexpr int max_lmr_depth = 64;
+constexpr int max_lmr_moves = 64;
+
+int late_move_reduction_base(int depth, int move_index) {
+    depth = std::clamp(depth, 0, max_lmr_depth - 1);
+    move_index = std::clamp(move_index, 0, max_lmr_moves - 1);
+    static const std::array<std::array<int, max_lmr_moves>, max_lmr_depth> table = [] {
+        std::array<std::array<int, max_lmr_moves>, max_lmr_depth> result{};
+        for (int d = 0; d < max_lmr_depth; ++d) {
+            for (int m = 0; m < max_lmr_moves; ++m) {
+                if (d == 0 || m == 0) {
+                    result[d][m] = 0;
+                    continue;
+                }
+                const double depth_factor = std::log(static_cast<double>(d + 1));
+                const double move_factor = std::log(static_cast<double>(m + 1));
+                const double reduction = (depth_factor * move_factor) / 1.95;
+                result[d][m] = reduction < 0.0 ? 0 : static_cast<int>(std::round(reduction));
+            }
+        }
+        return result;
+    }();
+    return table[depth][move_index];
+}
 
 std::atomic<int> search_thread_count{1};
 
@@ -192,6 +220,174 @@ constexpr std::uint64_t time_check_interval = 2048;
 }  // namespace
 
 namespace {
+
+struct AttackersByColor {
+    std::array<std::array<Bitboard, static_cast<std::size_t>(PieceType::Count)>, 2> data{};
+};
+
+std::array<std::array<Bitboard, static_cast<std::size_t>(PieceType::Count)>, 2> collect_piece_sets(
+    const Board &board) {
+    std::array<std::array<Bitboard, static_cast<std::size_t>(PieceType::Count)>, 2> pieces{};
+    for (Color color : {Color::White, Color::Black}) {
+        auto color_index = static_cast<std::size_t>(color == Color::White ? 0 : 1);
+        for (std::size_t type_index = 0; type_index < static_cast<std::size_t>(PieceType::Count);
+             ++type_index) {
+            pieces[color_index][type_index] =
+                board.pieces(color, static_cast<PieceType>(type_index));
+        }
+    }
+    return pieces;
+}
+
+AttackersByColor attackers_to_square(const std::array<std::array<Bitboard, static_cast<std::size_t>(PieceType::Count)>, 2> &pieces,
+                                     int square, Bitboard occupancy) {
+    AttackersByColor attackers{};
+    const Bitboard square_bb = one_bit(square);
+
+    auto &white_attackers = attackers.data[0];
+    auto &black_attackers = attackers.data[1];
+
+    const Bitboard white_pawns = pieces[0][static_cast<std::size_t>(PieceType::Pawn)];
+    const Bitboard black_pawns = pieces[1][static_cast<std::size_t>(PieceType::Pawn)];
+    const Bitboard white_pawn_origins = ((square_bb & not_file_h_mask) >> 7) |
+                                        ((square_bb & not_file_a_mask) >> 9);
+    const Bitboard black_pawn_origins = ((square_bb & not_file_a_mask) << 7) |
+                                        ((square_bb & not_file_h_mask) << 9);
+
+    white_attackers[static_cast<std::size_t>(PieceType::Pawn)] = white_pawns & white_pawn_origins;
+    black_attackers[static_cast<std::size_t>(PieceType::Pawn)] = black_pawns & black_pawn_origins;
+
+    const Bitboard knight_mask = knight_attacks(square);
+    white_attackers[static_cast<std::size_t>(PieceType::Knight)] =
+        pieces[0][static_cast<std::size_t>(PieceType::Knight)] & knight_mask;
+    black_attackers[static_cast<std::size_t>(PieceType::Knight)] =
+        pieces[1][static_cast<std::size_t>(PieceType::Knight)] & knight_mask;
+
+    const Bitboard bishop_mask = bishop_attacks(square, occupancy);
+    const Bitboard rook_mask = rook_attacks(square, occupancy);
+
+    white_attackers[static_cast<std::size_t>(PieceType::Bishop)] =
+        pieces[0][static_cast<std::size_t>(PieceType::Bishop)] & bishop_mask;
+    black_attackers[static_cast<std::size_t>(PieceType::Bishop)] =
+        pieces[1][static_cast<std::size_t>(PieceType::Bishop)] & bishop_mask;
+
+    white_attackers[static_cast<std::size_t>(PieceType::Rook)] =
+        pieces[0][static_cast<std::size_t>(PieceType::Rook)] & rook_mask;
+    black_attackers[static_cast<std::size_t>(PieceType::Rook)] =
+        pieces[1][static_cast<std::size_t>(PieceType::Rook)] & rook_mask;
+
+    const Bitboard queen_mask = bishop_mask | rook_mask;
+    white_attackers[static_cast<std::size_t>(PieceType::Queen)] =
+        pieces[0][static_cast<std::size_t>(PieceType::Queen)] & queen_mask;
+    black_attackers[static_cast<std::size_t>(PieceType::Queen)] =
+        pieces[1][static_cast<std::size_t>(PieceType::Queen)] & queen_mask;
+
+    const Bitboard king_mask = king_attacks(square);
+    white_attackers[static_cast<std::size_t>(PieceType::King)] =
+        pieces[0][static_cast<std::size_t>(PieceType::King)] & king_mask;
+    black_attackers[static_cast<std::size_t>(PieceType::King)] =
+        pieces[1][static_cast<std::size_t>(PieceType::King)] & king_mask;
+
+    return attackers;
+}
+
+int pick_attacker_square(Bitboard attackers) {
+    if (attackers == 0) {
+        return -1;
+    }
+    return bit_scan_forward(attackers);
+}
+
+int static_exchange_score(const Board &board, const Move &move) {
+    if (!move.captured.has_value() && !move.is_en_passant) {
+        return 0;
+    }
+
+    auto pieces = collect_piece_sets(board);
+    Bitboard occupancy = board.occupancy();
+    const int target_square = move.to;
+    const Bitboard target_bb = one_bit(target_square);
+    const Color us = board.side_to_move();
+    const Color them = opposite(us);
+    auto color_index = [](Color color) { return color == Color::White ? 0 : 1; };
+
+    std::array<int, max_search_depth> gain{};
+    int depth = 0;
+
+    const Bitboard from_bb = one_bit(move.from);
+    pieces[color_index(us)][static_cast<std::size_t>(move.piece)] &= ~from_bb;
+    occupancy &= ~from_bb;
+
+    int captured_value = 0;
+    if (move.is_en_passant) {
+        const int captured_square = us == Color::White ? target_square - 8 : target_square + 8;
+        const Bitboard captured_bb = one_bit(captured_square);
+        pieces[color_index(them)][static_cast<std::size_t>(PieceType::Pawn)] &= ~captured_bb;
+        occupancy &= ~captured_bb;
+        captured_value = see_piece_values[static_cast<std::size_t>(PieceType::Pawn)];
+    } else if (move.captured.has_value()) {
+        pieces[color_index(them)][static_cast<std::size_t>(*move.captured)] &= ~target_bb;
+        occupancy &= ~target_bb;
+        captured_value = see_piece_values[static_cast<std::size_t>(*move.captured)];
+    }
+
+    const PieceType placed_piece = move.promotion.has_value() ? *move.promotion : move.piece;
+    pieces[color_index(us)][static_cast<std::size_t>(placed_piece)] |= target_bb;
+    occupancy |= target_bb;
+
+    gain[0] = captured_value;
+
+    Color side = them;
+    Color occupant_color = us;
+    PieceType occupant_piece = placed_piece;
+
+    AttackersByColor attackers;
+
+    while (true) {
+        attackers = attackers_to_square(pieces, target_square, occupancy);
+        const auto idx = static_cast<std::size_t>(color_index(side));
+        PieceType attacker_type = PieceType::Count;
+        int attacker_square = -1;
+        for (std::size_t type_index = 0; type_index < static_cast<std::size_t>(PieceType::Count);
+             ++type_index) {
+            Bitboard candidates = attackers.data[idx][type_index];
+            if (candidates == 0) {
+                continue;
+            }
+            attacker_type = static_cast<PieceType>(type_index);
+            attacker_square = pick_attacker_square(candidates);
+            break;
+        }
+
+        if (attacker_square < 0) {
+            break;
+        }
+
+        ++depth;
+        gain[depth] = see_piece_values[static_cast<std::size_t>(occupant_piece)] - gain[depth - 1];
+
+        const Bitboard attacker_bb = one_bit(attacker_square);
+        pieces[idx][static_cast<std::size_t>(attacker_type)] &= ~attacker_bb;
+        occupancy &= ~attacker_bb;
+
+        pieces[color_index(occupant_color)][static_cast<std::size_t>(occupant_piece)] &= ~target_bb;
+        occupancy &= ~target_bb;
+
+        occupant_color = side;
+        occupant_piece = attacker_type;
+        pieces[color_index(occupant_color)][static_cast<std::size_t>(occupant_piece)] |= target_bb;
+        occupancy |= target_bb;
+
+        side = opposite(side);
+    }
+
+    while (depth > 0) {
+        gain[depth - 1] = -std::max(-gain[depth - 1], gain[depth]);
+        --depth;
+    }
+
+    return gain[0];
+}
 
 constexpr int kMaxSearchThreads = 1024;
 
@@ -801,6 +997,15 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         if (!in_check) {
             piece_under_attack = board.is_square_attacked(move.from, opponent);
         }
+        bool quiet_move = is_quiet(move);
+        bool tactical_move = !quiet_move;
+        bool is_tt_move = tt_move.has_value() && same_move(*tt_move, move);
+        if (!in_check && tactical_move && !is_tt_move) {
+            int see_score = static_exchange_score(board, move);
+            if (see_score < 0 && depth_left <= 5 && !move.promotion.has_value()) {
+                continue;
+            }
+        }
         Board::UndoState undo;
         board.make_move(move, undo);
         EvaluationScope eval_scope(mover, &move, board);
@@ -816,28 +1021,24 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         child_depth = std::min(child_depth, std::max(0, max_search_depth - (ply + 1)));
 
         int reduction = 0;
-        if (child_depth > 0 && depth_left >= 3 && move_index > 1 && is_quiet(move) && !gives_check) {
+        if (child_depth > 0 && depth_left >= 3 && move_index > 1 && quiet_move && !gives_check) {
             bool improving = static_eval > parent_static_eval;
             bool delayed_capture_threat = creates_delayed_capture_threat(board, move, mover);
             bool central_sacrifice = is_central_pawn_sacrifice(board, move, mover);
             bool responds_to_threat = in_check || piece_under_attack;
             bool tactical_danger = responds_to_threat || delayed_capture_threat || central_sacrifice;
             if (!tactical_danger) {
-                int depth_component = std::max(0, (depth_left - 2) / 2);
-                int move_component = std::max(0, (move_index - 2) / 3);
-                reduction = depth_component + move_component;
-                if (reduction <= 0) {
-                    reduction = 1;
+                int base_reduction = late_move_reduction_base(child_depth, move_index);
+                if (base_reduction <= 0) {
+                    base_reduction = 1;
                 }
                 if (!improving) {
-                    ++reduction;
+                    ++base_reduction;
                 }
-                if (reduction > child_depth - 1) {
-                    reduction = child_depth - 1;
+                if (piece_under_attack) {
+                    base_reduction = std::max(base_reduction - 1, 0);
                 }
-                if (reduction < 0) {
-                    reduction = 0;
-                }
+                reduction = std::clamp(base_reduction, 0, std::max(0, child_depth - 1));
             }
         }
 
@@ -929,6 +1130,9 @@ int quiescence(Board &board, int alpha, int beta, int ply, SearchContext &contex
 
     bool found_legal = false;
     for (const Move &move : tactical_moves) {
+        if (static_exchange_score(board, move) < 0) {
+            continue;
+        }
         Board::UndoState undo;
         Color mover = board.side_to_move();
         try {
@@ -1695,6 +1899,10 @@ bool is_central_pawn_sacrifice_for_tests(const Board &board, const Move &move, C
 bool responds_to_direct_threat_for_tests(const Board &board, const Move &move, Color mover, bool in_check) {
     Color opponent = opposite(mover);
     return in_check || board.is_square_attacked(move.from, opponent);
+}
+
+int static_exchange_eval_for_tests(const Board &board, const Move &move) {
+    return static_exchange_score(board, move);
 }
 
 }  // namespace sirio
