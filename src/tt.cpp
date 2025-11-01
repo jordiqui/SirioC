@@ -195,6 +195,25 @@ std::optional<TTEntry> GlobalTranspositionTable::probe(std::uint64_t key) const 
     return result;
 }
 
+void GlobalTranspositionTable::prefetch(std::uint64_t key) const {
+#if defined(__GNUC__) || defined(__clang__)
+    std::shared_lock lock(global_mutex_, std::defer_lock);
+    if (!lock.try_lock()) {
+        return;
+    }
+    if (clusters_.empty()) {
+        return;
+    }
+    const std::size_t index = cluster_index(key);
+    const Cluster &cluster = clusters_[index];
+    for (const auto &entry : cluster.entries) {
+        __builtin_prefetch(static_cast<const void *>(&entry), 0, 1);
+    }
+#else
+    (void)key;
+#endif
+}
+
 bool GlobalTranspositionTable::save(const std::string &path, std::string *error) const {
     std::unique_lock lock(global_mutex_);
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
