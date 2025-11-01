@@ -23,6 +23,19 @@ struct SearchLimits {
     bool infinite = false;
 };
 
+struct SearchEventRecord {
+    std::string label;
+    std::uint64_t elapsed_ms = 0;
+    std::uint64_t delta_ms = 0;
+    std::uint64_t nodes = 0;
+};
+
+struct SearchInstrumentationSnapshot {
+    std::uint64_t main_nodes = 0;
+    std::uint64_t quiescence_nodes = 0;
+    std::vector<SearchEventRecord> timeline;
+};
+
 struct SearchResult {
     Move best_move;
     int score = 0;
@@ -36,6 +49,7 @@ struct SearchResult {
     std::uint64_t knps_before = 0;
     std::uint64_t knps_after = 0;
     std::vector<Move> principal_variation;
+    SearchInstrumentationSnapshot instrumentation;
 };
 
 SearchResult search_best_move(const Board &board, const SearchLimits &limits);

@@ -1,0 +1,239 @@
+{
+  "name": "Berserk Gauntlet Bench",
+  "source": "Community shared berserk bench suite",
+  "limit": {
+    "type": "depth",
+    "value": 14
+  },
+  "threads": 1,
+  "positions": [
+    {
+      "fen": "rnbq1k1r/ppp1bppp/4pn2/8/2B5/2NP1N2/PPP2PPP/R1BQR1K1 b - - 2 8",
+      "moves": []
+    },
+    {
+      "fen": "rnbq1k1r/pp2bppp/4pn2/2p5/2B2B2/2NP1N2/PPP2PPP/R2QR1K1 b - - 1 9",
+      "moves": []
+    },
+    {
+      "fen": "r1bq1k1r/pp2bppp/2n1pn2/2p5/2B1NB2/3P1N2/PPP2PPP/R2QR1K1 b - - 3 10",
+      "moves": []
+    },
+    {
+      "fen": "r1bq1k1r/pp2bppp/2n1p3/2p5/2B1PB2/5N2/PPP2PPP/R2QR1K1 b - - 0 11",
+      "moves": []
+    },
+    {
+      "fen": "r1b2k1r/pp2bppp/2n1p3/2p5/2B1PB2/5N2/PPP2PPP/3RR1K1 b - - 0 12",
+      "moves": []
+    },
+    {
+      "fen": "r1b1k2r/pp2bppp/2n1p3/2p5/2B1PB2/2P2N2/PP3PPP/3RR1K1 b - - 0 13",
+      "moves": []
+    },
+    {
+      "fen": "r1b1k2r/1p2bppp/p1n1p3/2p5/4PB2/2P2N2/PP2BPPP/3RR1K1 b - - 1 14",
+      "moves": []
+    },
+    {
+      "fen": "r1b1k2r/4bppp/p1n1p3/1pp5/P3PB2/2P2N2/1P2BPPP/3RR1K1 b - - 0 15",
+      "moves": []
+    },
+    {
+      "fen": "r1b1k2r/4bppp/p1n1p3/1P6/2p1PB2/2P2N2/1P2BPPP/3RR1K1 b - - 0 16",
+      "moves": []
+    },
+    {
+      "fen": "r1b1k2r/4bppp/2n1p3/1p6/2p1PB2/1PP2N2/4BPPP/3RR1K1 b - - 0 17",
+      "moves": []
+    },
+    {
+      "fen": "r3k2r/3bbppp/2n1p3/1p6/2P1PB2/2P2N2/4BPPP/3RR1K1 b - - 0 18",
+      "moves": []
+    },
+    {
+      "fen": "r3k2r/3bbppp/2n1p3/8/1pP1P3/2P2N2/3BBPPP/3RR1K1 b - - 1 19",
+      "moves": []
+    },
+    {
+      "fen": "1r2k2r/3bbppp/2n1p3/8/1pPNP3/2P5/3BBPPP/3RR1K1 b - - 3 20",
+      "moves": []
+    },
+    {
+      "fen": "1r2k2r/3bbppp/2n1p3/8/2PNP3/2B5/4BPPP/3RR1K1 b - - 0 21",
+      "moves": []
+    },
+    {
+      "fen": "1r2k2r/3bb1pp/2n1pp2/1N6/2P1P3/2B5/4BPPP/3RR1K1 b - - 1 22",
+      "moves": []
+    },
+    {
+      "fen": "1r2k2r/3b2pp/2n1pp2/1N6/1BP1P3/8/4BPPP/3RR1K1 b - - 0 23",
+      "moves": []
+    },
+    {
+      "fen": "1r2k2r/3b2pp/4pp2/1N6/1nP1P3/8/3RBPPP/4R1K1 b - - 1 24",
+      "moves": []
+    },
+    {
+      "fen": "1r5r/3bk1pp/4pp2/1N6/1nP1PP2/8/3RB1PP/4R1K1 b - - 0 25",
+      "moves": []
+    },
+    {
+      "fen": "1r5r/3bk1pp/2n1pp2/1N6/2P1PP2/8/3RBKPP/4R3 b - - 2 26",
+      "moves": []
+    },
+    {
+      "fen": "1r5r/3bk1pp/2n2p2/1N2p3/2P1PP2/6P1/3RBK1P/4R3 b - - 0 27",
+      "moves": []
+    },
+    {
+      "fen": "1r1r4/3bk1pp/2n2p2/1N2p3/2P1PP2/6P1/3RBK1P/R7 b - - 2 28",
+      "moves": []
+    },
+    {
+      "fen": "1r1r4/N3k1pp/2n1bp2/4p3/2P1PP2/6P1/3RBK1P/R7 b - - 4 29",
+      "moves": []
+    },
+    {
+      "fen": "1r1r4/3bk1pp/2N2p2/4p3/2P1PP2/6P1/3RBK1P/R7 b - - 0 30",
+      "moves": []
+    },
+    {
+      "fen": "1r1R4/4k1pp/2b2p2/4p3/2P1PP2/6P1/4BK1P/R7 b - - 0 31",
+      "moves": []
+    },
+    {
+      "fen": "3r4/4k1pp/2b2p2/4P3/2P1P3/6P1/4BK1P/R7 b - - 0 32",
+      "moves": []
+    },
+    {
+      "fen": "3r4/R3k1pp/2b5/4p3/2P1P3/6P1/4BK1P/8 b - - 1 33",
+      "moves": []
+    },
+    {
+      "fen": "8/3rk1pp/2b5/R3p3/2P1P3/6P1/4BK1P/8 b - - 3 34",
+      "moves": []
+    },
+    {
+      "fen": "8/3r2pp/2bk4/R1P1p3/4P3/6P1/4BK1P/8 b - - 0 35",
+      "moves": []
+    },
+    {
+      "fen": "8/2kr2pp/2b5/R1P1p3/4P3/4K1P1/4B2P/8 b - - 2 36",
+      "moves": []
+    },
+    {
+      "fen": "1k6/3r2pp/2b5/RBP1p3/4P3/4K1P1/7P/8 b - - 4 37",
+      "moves": []
+    },
+    {
+      "fen": "8/1k1r2pp/2b5/R1P1p3/4P3/3BK1P1/7P/8 b - - 6 38",
+      "moves": []
+    },
+    {
+      "fen": "1k6/3r2pp/2b5/2P1p3/4P3/3BK1P1/7P/R7 b - - 8 39",
+      "moves": []
+    },
+    {
+      "fen": "1k6/r5pp/2b5/2P1p3/4P3/3BK1P1/7P/5R2 b - - 10 40",
+      "moves": []
+    },
+    {
+      "fen": "1k3R2/6pp/2b5/2P1p3/4P3/r2BK1P1/7P/8 b - - 12 41",
+      "moves": []
+    },
+    {
+      "fen": "5R2/2k3pp/2b5/2P1p3/4P3/r2B2P1/3K3P/8 b - - 14 42",
+      "moves": []
+    },
+    {
+      "fen": "5R2/2k3pp/2b5/2P1p3/4P3/3BK1P1/r6P/8 b - - 16 43",
+      "moves": []
+    },
+    {
+      "fen": "5R2/2k3pp/2b5/2P1p3/4P3/r2B2P1/4K2P/8 b - - 18 44",
+      "moves": []
+    },
+    {
+      "fen": "5R2/2k3pp/2b5/2P1p3/4P3/3B1KP1/r6P/8 b - - 20 45",
+      "moves": []
+    },
+    {
+      "fen": "8/2k2Rpp/2b5/2P1p3/4P3/r2B1KP1/7P/8 b - - 22 46",
+      "moves": []
+    },
+    {
+      "fen": "3k4/5Rpp/2b5/2P1p3/4P3/r2B2P1/4K2P/8 b - - 24 47",
+      "moves": []
+    },
+    {
+      "fen": "3k4/5Rpp/2b5/2P1p3/4P3/3B1KP1/r6P/8 b - - 26 48",
+      "moves": []
+    },
+    {
+      "fen": "3k4/5Rpp/2b5/2P1p3/4P3/r2B2P1/4K2P/8 b - - 28 49",
+      "moves": []
+    },
+    {
+      "fen": "3k4/5Rpp/2b5/2P1p3/4P3/3BK1P1/r6P/8 b - - 30 50",
+      "moves": []
+    },
+    {
+      "fen": "3k4/5Rpp/2b5/2P1p3/4P3/r2B2P1/3K3P/8 b - - 32 51",
+      "moves": []
+    },
+    {
+      "fen": "3k4/5Rpp/2b5/2P1p3/4P3/2KB2P1/r6P/8 b - - 34 52",
+      "moves": []
+    },
+    {
+      "fen": "3k4/5Rpp/2b5/2P1p3/4P3/r2B2P1/2K4P/8 b - - 36 53",
+      "moves": []
+    },
+    {
+      "fen": "3k4/5Rpp/2b5/2P1p3/4P3/1K1B2P1/r6P/8 b - - 38 54",
+      "moves": []
+    },
+    {
+      "fen": "3k4/6Rp/2b5/2P1p3/4P3/1K1B2P1/7r/8 b - - 0 55",
+      "moves": []
+    },
+    {
+      "fen": "3k4/8/2b3Rp/2P1p3/4P3/1K1B2P1/7r/8 b - - 1 56",
+      "moves": []
+    },
+    {
+      "fen": "8/2k3R1/2b4p/2P1p3/4P3/1K1B2P1/7r/8 b - - 3 57",
+      "moves": []
+    },
+    {
+      "fen": "3k4/8/2b3Rp/2P1p3/4P3/1K1B2P1/7r/8 b - - 5 58",
+      "moves": []
+    },
+    {
+      "fen": "8/2k5/2b3Rp/2P1p3/1K2P3/3B2P1/7r/8 b - - 7 59",
+      "moves": []
+    },
+    {
+      "fen": "8/2k5/2b3Rp/2P1p3/4P3/2KB2P1/3r4/8 b - - 9 60",
+      "moves": []
+    },
+    {
+      "fen": "8/2k5/2b3Rp/2P1p3/1K2P3/3B2P1/6r1/8 b - - 11 61",
+      "moves": []
+    },
+    {
+      "fen": "8/2k5/2b3Rp/2P1p3/4P3/2KB2P1/3r4/8 b - - 13 62",
+      "moves": []
+    },
+    {
+      "fen": "8/2k5/2b3Rp/2P1p3/2K1P3/3B2P1/6r1/8 b - - 15 63",
+      "moves": []
+    },
+    {
+      "fen": "4b3/2k3R1/7p/2P1p3/2K1P3/3B2P1/6r1/8 b - - 17 64",
+      "moves": []
+    }
+  ]
+}

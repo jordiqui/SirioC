@@ -1,0 +1,936 @@
+{
+  "generated_at": "2025-11-01T06:54:43",
+  "engine": "build/bin/sirio",
+  "results": [
+    {
+      "suite": {
+        "name": "Stockfish Reference Bench",
+        "source": "https://github.com/official-stockfish/Stockfish/blob/master/src/benchmark.cpp",
+        "limit": {
+          "type": "depth",
+          "value": 13
+        },
+        "threads": 1
+      },
+      "positions": [
+        {
+          "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+          "moves": [],
+          "bestmove": "c2c4",
+          "info": "info depth 8 seldepth 14 multipv 1 score cp 4 nodes 20000 nps 123512 knps_before 123 knps_after 123 hashfull 0 tbhits 0 time 161 pv c2c4 b8c6 g1f3",
+          "telemetry": {
+            "main_nodes": 3900,
+            "quiescence_nodes": 16100,
+            "timeline": [
+              {
+                "label": "iter/1/start",
+                "elapsed_ms": 91,
+                "delta_ms": 91,
+                "nodes": 0
+              },
+              {
+                "label": "iter/1/finish",
+                "elapsed_ms": 91,
+                "delta_ms": 0,
+                "nodes": 21
+              },
+              {
+                "label": "bestmove/depth-1",
+                "elapsed_ms": 91,
+                "delta_ms": 0,
+                "nodes": 21
+              },
+              {
+                "label": "iter/2/start",
+                "elapsed_ms": 91,
+                "delta_ms": 0,
+                "nodes": 21
+              },
+              {
+                "label": "iter/2/finish",
+                "elapsed_ms": 91,
+                "delta_ms": 0,
+                "nodes": 141
+              },
+              {
+                "label": "bestmove/depth-2",
+                "elapsed_ms": 91,
+                "delta_ms": 0,
+                "nodes": 141
+              },
+              {
+                "label": "iter/3/start",
+                "elapsed_ms": 91,
+                "delta_ms": 0,
+                "nodes": 141
+              },
+              {
+                "label": "iter/3/finish",
+                "elapsed_ms": 92,
+                "delta_ms": 0,
+                "nodes": 302
+              },
+              {
+                "label": "bestmove/depth-3",
+                "elapsed_ms": 92,
+                "delta_ms": 0,
+                "nodes": 302
+              },
+              {
+                "label": "iter/4/start",
+                "elapsed_ms": 92,
+                "delta_ms": 0,
+                "nodes": 302
+              },
+              {
+                "label": "iter/4/finish",
+                "elapsed_ms": 93,
+                "delta_ms": 0,
+                "nodes": 508
+              },
+              {
+                "label": "bestmove/depth-4",
+                "elapsed_ms": 93,
+                "delta_ms": 0,
+                "nodes": 508
+              },
+              {
+                "label": "iter/5/start",
+                "elapsed_ms": 93,
+                "delta_ms": 0,
+                "nodes": 508
+              },
+              {
+                "label": "iter/5/finish",
+                "elapsed_ms": 94,
+                "delta_ms": 1,
+                "nodes": 763
+              },
+              {
+                "label": "bestmove/depth-5",
+                "elapsed_ms": 94,
+                "delta_ms": 0,
+                "nodes": 763
+              },
+              {
+                "label": "iter/6/start",
+                "elapsed_ms": 94,
+                "delta_ms": 0,
+                "nodes": 763
+              },
+              {
+                "label": "iter/6/finish",
+                "elapsed_ms": 96,
+                "delta_ms": 2,
+                "nodes": 1245
+              },
+              {
+                "label": "bestmove/depth-6",
+                "elapsed_ms": 96,
+                "delta_ms": 0,
+                "nodes": 1245
+              },
+              {
+                "label": "iter/7/start",
+                "elapsed_ms": 96,
+                "delta_ms": 0,
+                "nodes": 1245
+              },
+              {
+                "label": "iter/7/finish",
+                "elapsed_ms": 101,
+                "delta_ms": 5,
+                "nodes": 2504
+              },
+              {
+                "label": "bestmove/depth-7",
+                "elapsed_ms": 101,
+                "delta_ms": 0,
+                "nodes": 2504
+              },
+              {
+                "label": "iter/8/start",
+                "elapsed_ms": 101,
+                "delta_ms": 0,
+                "nodes": 2504
+              },
+              {
+                "label": "iter/8/finish",
+                "elapsed_ms": 108,
+                "delta_ms": 6,
+                "nodes": 4203
+              },
+              {
+                "label": "bestmove/depth-8",
+                "elapsed_ms": 108,
+                "delta_ms": 0,
+                "nodes": 4203
+              },
+              {
+                "label": "iter/9/start",
+                "elapsed_ms": 108,
+                "delta_ms": 0,
+                "nodes": 4203
+              },
+              {
+                "label": "limit/node",
+                "elapsed_ms": 161,
+                "delta_ms": 53,
+                "nodes": 20000
+              },
+              {
+                "label": "iter/9/cancelled",
+                "elapsed_ms": 161,
+                "delta_ms": 0,
+                "nodes": 20000
+              },
+              {
+                "label": "iter/9/finish",
+                "elapsed_ms": 161,
+                "delta_ms": 0,
+                "nodes": 20000
+              }
+            ],
+            "nodes_total": 20000
+          },
+          "elapsed_s": 0.16272496800002045
+        },
+        {
+          "fen": "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 10",
+          "moves": [],
+          "bestmove": "e2a6",
+          "info": "info depth 1 seldepth 15 multipv 1 score cp 195 nodes 20000 nps 375914 knps_before 375 knps_after 375 hashfull 0 tbhits 0 time 53 pv e2a6",
+          "telemetry": {
+            "main_nodes": 3631,
+            "quiescence_nodes": 16369,
+            "timeline": [
+              {
+                "label": "iter/1/start",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 0
+              },
+              {
+                "label": "iter/1/finish",
+                "elapsed_ms": 2,
+                "delta_ms": 2,
+                "nodes": 512
+              },
+              {
+                "label": "bestmove/depth-1",
+                "elapsed_ms": 2,
+                "delta_ms": 0,
+                "nodes": 512
+              },
+              {
+                "label": "iter/2/start",
+                "elapsed_ms": 2,
+                "delta_ms": 0,
+                "nodes": 512
+              },
+              {
+                "label": "limit/node",
+                "elapsed_ms": 53,
+                "delta_ms": 50,
+                "nodes": 20000
+              },
+              {
+                "label": "iter/2/cancelled",
+                "elapsed_ms": 53,
+                "delta_ms": 0,
+                "nodes": 20000
+              },
+              {
+                "label": "iter/2/finish",
+                "elapsed_ms": 53,
+                "delta_ms": 0,
+                "nodes": 20000
+              }
+            ],
+            "nodes_total": 20000
+          },
+          "elapsed_s": 0.05348361799997292
+        },
+        {
+          "fen": "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 11",
+          "moves": [],
+          "bestmove": "b4f4",
+          "info": "info depth 1 seldepth 11 multipv 1 score cp 122 nodes 20000 nps 381003 knps_before 381 knps_after 381 hashfull 0 tbhits 0 time 52 pv b4f4",
+          "telemetry": {
+            "main_nodes": 6304,
+            "quiescence_nodes": 13696,
+            "timeline": [
+              {
+                "label": "iter/1/start",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 0
+              },
+              {
+                "label": "iter/1/finish",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 232
+              },
+              {
+                "label": "bestmove/depth-1",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 232
+              },
+              {
+                "label": "iter/2/start",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 232
+              },
+              {
+                "label": "limit/node",
+                "elapsed_ms": 52,
+                "delta_ms": 51,
+                "nodes": 20000
+              },
+              {
+                "label": "iter/2/cancelled",
+                "elapsed_ms": 52,
+                "delta_ms": 0,
+                "nodes": 20000
+              },
+              {
+                "label": "iter/2/finish",
+                "elapsed_ms": 52,
+                "delta_ms": 0,
+                "nodes": 20000
+              }
+            ],
+            "nodes_total": 20000
+          },
+          "elapsed_s": 0.05293722700002945
+        }
+      ],
+      "total_nodes": 60000,
+      "total_time_s": 0.2691458130000228,
+      "nodes_per_second": 222927.48800812633
+    },
+    {
+      "suite": {
+        "name": "Berserk Gauntlet Bench",
+        "source": "Community shared berserk bench suite",
+        "limit": {
+          "type": "depth",
+          "value": 14
+        },
+        "threads": 1
+      },
+      "positions": [
+        {
+          "fen": "rnbq1k1r/ppp1bppp/4pn2/8/2B5/2NP1N2/PPP2PPP/R1BQR1K1 b - - 2 8",
+          "moves": [],
+          "bestmove": "b8c6",
+          "info": "info depth 6 seldepth 18 multipv 1 score cp -54 nodes 20000 nps 296948 knps_before 296 knps_after 296 hashfull 0 tbhits 0 time 67 pv b8c6 d3d4 e7d6 f3e5 d6e5 d4e5",
+          "telemetry": {
+            "main_nodes": 2646,
+            "quiescence_nodes": 17354,
+            "timeline": [
+              {
+                "label": "iter/1/start",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 0
+              },
+              {
+                "label": "iter/1/finish",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 86
+              },
+              {
+                "label": "bestmove/depth-1",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 86
+              },
+              {
+                "label": "iter/2/start",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 86
+              },
+              {
+                "label": "iter/2/finish",
+                "elapsed_ms": 4,
+                "delta_ms": 4,
+                "nodes": 1032
+              },
+              {
+                "label": "bestmove/depth-2",
+                "elapsed_ms": 4,
+                "delta_ms": 0,
+                "nodes": 1032
+              },
+              {
+                "label": "iter/3/start",
+                "elapsed_ms": 4,
+                "delta_ms": 0,
+                "nodes": 1032
+              },
+              {
+                "label": "iter/3/finish",
+                "elapsed_ms": 12,
+                "delta_ms": 7,
+                "nodes": 3419
+              },
+              {
+                "label": "bestmove/depth-3",
+                "elapsed_ms": 12,
+                "delta_ms": 0,
+                "nodes": 3419
+              },
+              {
+                "label": "iter/4/start",
+                "elapsed_ms": 12,
+                "delta_ms": 0,
+                "nodes": 3419
+              },
+              {
+                "label": "iter/4/finish",
+                "elapsed_ms": 21,
+                "delta_ms": 8,
+                "nodes": 5860
+              },
+              {
+                "label": "bestmove/depth-4",
+                "elapsed_ms": 21,
+                "delta_ms": 0,
+                "nodes": 5860
+              },
+              {
+                "label": "iter/5/start",
+                "elapsed_ms": 21,
+                "delta_ms": 0,
+                "nodes": 5860
+              },
+              {
+                "label": "iter/5/finish",
+                "elapsed_ms": 41,
+                "delta_ms": 20,
+                "nodes": 12489
+              },
+              {
+                "label": "bestmove/depth-5",
+                "elapsed_ms": 41,
+                "delta_ms": 0,
+                "nodes": 12489
+              },
+              {
+                "label": "iter/6/start",
+                "elapsed_ms": 41,
+                "delta_ms": 0,
+                "nodes": 12489
+              },
+              {
+                "label": "iter/6/finish",
+                "elapsed_ms": 58,
+                "delta_ms": 16,
+                "nodes": 17337
+              },
+              {
+                "label": "bestmove/depth-6",
+                "elapsed_ms": 58,
+                "delta_ms": 0,
+                "nodes": 17337
+              },
+              {
+                "label": "iter/7/start",
+                "elapsed_ms": 58,
+                "delta_ms": 0,
+                "nodes": 17337
+              },
+              {
+                "label": "limit/node",
+                "elapsed_ms": 67,
+                "delta_ms": 8,
+                "nodes": 20000
+              },
+              {
+                "label": "iter/7/cancelled",
+                "elapsed_ms": 67,
+                "delta_ms": 0,
+                "nodes": 20000
+              },
+              {
+                "label": "iter/7/finish",
+                "elapsed_ms": 67,
+                "delta_ms": 0,
+                "nodes": 20000
+              }
+            ],
+            "nodes_total": 20000
+          },
+          "elapsed_s": 0.06789811699991333
+        },
+        {
+          "fen": "rnbq1k1r/pp2bppp/4pn2/2p5/2B2B2/2NP1N2/PPP2PPP/R2QR1K1 b - - 1 9",
+          "moves": [],
+          "bestmove": "b8c6",
+          "info": "info depth 3 seldepth 15 multipv 1 score cp -125 nodes 20000 nps 270565 knps_before 270 knps_after 270 hashfull 0 tbhits 0 time 73 pv b8c6 f3e5 d8d4",
+          "telemetry": {
+            "main_nodes": 3986,
+            "quiescence_nodes": 16014,
+            "timeline": [
+              {
+                "label": "iter/1/start",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 0
+              },
+              {
+                "label": "iter/1/finish",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 135
+              },
+              {
+                "label": "bestmove/depth-1",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 135
+              },
+              {
+                "label": "iter/2/start",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 135
+              },
+              {
+                "label": "iter/2/finish",
+                "elapsed_ms": 11,
+                "delta_ms": 10,
+                "nodes": 2730
+              },
+              {
+                "label": "bestmove/depth-2",
+                "elapsed_ms": 11,
+                "delta_ms": 0,
+                "nodes": 2730
+              },
+              {
+                "label": "iter/3/start",
+                "elapsed_ms": 11,
+                "delta_ms": 0,
+                "nodes": 2730
+              },
+              {
+                "label": "iter/3/finish",
+                "elapsed_ms": 29,
+                "delta_ms": 18,
+                "nodes": 6584
+              },
+              {
+                "label": "bestmove/depth-3",
+                "elapsed_ms": 29,
+                "delta_ms": 0,
+                "nodes": 6584
+              },
+              {
+                "label": "iter/4/start",
+                "elapsed_ms": 29,
+                "delta_ms": 0,
+                "nodes": 6584
+              },
+              {
+                "label": "limit/node",
+                "elapsed_ms": 73,
+                "delta_ms": 43,
+                "nodes": 20000
+              },
+              {
+                "label": "iter/4/cancelled",
+                "elapsed_ms": 73,
+                "delta_ms": 0,
+                "nodes": 20000
+              },
+              {
+                "label": "iter/4/finish",
+                "elapsed_ms": 73,
+                "delta_ms": 0,
+                "nodes": 20000
+              }
+            ],
+            "nodes_total": 20000
+          },
+          "elapsed_s": 0.07447441000022081
+        },
+        {
+          "fen": "r1bq1k1r/pp2bppp/2n1pn2/2p5/2B1NB2/3P1N2/PPP2PPP/R2QR1K1 b - - 3 10",
+          "moves": [],
+          "bestmove": "c6d4",
+          "info": "info depth 4 seldepth 18 multipv 1 score cp -119 nodes 20000 nps 300247 knps_before 300 knps_after 300 hashfull 0 tbhits 0 time 66 pv c6d4 f4e5 f8g8 f3d4",
+          "telemetry": {
+            "main_nodes": 1248,
+            "quiescence_nodes": 18752,
+            "timeline": [
+              {
+                "label": "iter/1/start",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 0
+              },
+              {
+                "label": "iter/1/finish",
+                "elapsed_ms": 1,
+                "delta_ms": 1,
+                "nodes": 192
+              },
+              {
+                "label": "bestmove/depth-1",
+                "elapsed_ms": 1,
+                "delta_ms": 0,
+                "nodes": 192
+              },
+              {
+                "label": "iter/2/start",
+                "elapsed_ms": 1,
+                "delta_ms": 0,
+                "nodes": 192
+              },
+              {
+                "label": "iter/2/finish",
+                "elapsed_ms": 11,
+                "delta_ms": 10,
+                "nodes": 3293
+              },
+              {
+                "label": "bestmove/depth-2",
+                "elapsed_ms": 11,
+                "delta_ms": 0,
+                "nodes": 3293
+              },
+              {
+                "label": "iter/3/start",
+                "elapsed_ms": 11,
+                "delta_ms": 0,
+                "nodes": 3293
+              },
+              {
+                "label": "iter/3/finish",
+                "elapsed_ms": 31,
+                "delta_ms": 20,
+                "nodes": 9335
+              },
+              {
+                "label": "bestmove/depth-3",
+                "elapsed_ms": 31,
+                "delta_ms": 0,
+                "nodes": 9335
+              },
+              {
+                "label": "iter/4/start",
+                "elapsed_ms": 31,
+                "delta_ms": 0,
+                "nodes": 9335
+              },
+              {
+                "label": "iter/4/finish",
+                "elapsed_ms": 54,
+                "delta_ms": 22,
+                "nodes": 16131
+              },
+              {
+                "label": "bestmove/depth-4",
+                "elapsed_ms": 54,
+                "delta_ms": 0,
+                "nodes": 16131
+              },
+              {
+                "label": "iter/5/start",
+                "elapsed_ms": 54,
+                "delta_ms": 0,
+                "nodes": 16131
+              },
+              {
+                "label": "limit/node",
+                "elapsed_ms": 66,
+                "delta_ms": 12,
+                "nodes": 20000
+              },
+              {
+                "label": "iter/5/cancelled",
+                "elapsed_ms": 66,
+                "delta_ms": 0,
+                "nodes": 20000
+              },
+              {
+                "label": "iter/5/finish",
+                "elapsed_ms": 66,
+                "delta_ms": 0,
+                "nodes": 20000
+              }
+            ],
+            "nodes_total": 20000
+          },
+          "elapsed_s": 0.06691776499997104
+        }
+      ],
+      "total_nodes": 60000,
+      "total_time_s": 0.20929029200010518,
+      "nodes_per_second": 286683.14916379325
+    },
+    {
+      "suite": {
+        "name": "Obsidian Stress Bench",
+        "source": "Community shared obsidian bench suite",
+        "limit": {
+          "type": "nodes",
+          "value": 400000
+        },
+        "threads": 1
+      },
+      "positions": [
+        {
+          "fen": "r1bqkbnr/npp1pppp/p7/3P4/4pB2/2N5/PPP2PPP/R2QKBNR w KQkq - 1 6",
+          "moves": [],
+          "bestmove": "c3e4",
+          "info": "info depth 1 seldepth 4 multipv 1 score cp 162 nodes 20000 nps 327830 knps_before 327 knps_after 327 hashfull 0 tbhits 0 time 61 pv c3e4",
+          "telemetry": {
+            "main_nodes": 6153,
+            "quiescence_nodes": 13847,
+            "timeline": [
+              {
+                "label": "iter/1/start",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 0
+              },
+              {
+                "label": "iter/1/finish",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 95
+              },
+              {
+                "label": "bestmove/depth-1",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 95
+              },
+              {
+                "label": "iter/2/start",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 95
+              },
+              {
+                "label": "limit/node",
+                "elapsed_ms": 60,
+                "delta_ms": 60,
+                "nodes": 20000
+              },
+              {
+                "label": "iter/2/cancelled",
+                "elapsed_ms": 60,
+                "delta_ms": 0,
+                "nodes": 20000
+              },
+              {
+                "label": "iter/2/finish",
+                "elapsed_ms": 60,
+                "delta_ms": 0,
+                "nodes": 20000
+              }
+            ],
+            "nodes_total": 20000
+          },
+          "elapsed_s": 0.061368273999960365
+        },
+        {
+          "fen": "r1bqkb1r/npp1pppp/p4n2/3P4/4pB2/2N5/PPP1QPPP/R3KBNR w KQkq - 3 7",
+          "moves": [],
+          "bestmove": "e1c1",
+          "info": "info depth 4 seldepth 19 multipv 1 score cp 13 nodes 20000 nps 290124 knps_before 290 knps_after 290 hashfull 0 tbhits 0 time 68 pv e1c1 c8f5 e2e3 f5g4",
+          "telemetry": {
+            "main_nodes": 3470,
+            "quiescence_nodes": 16530,
+            "timeline": [
+              {
+                "label": "iter/1/start",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 0
+              },
+              {
+                "label": "iter/1/finish",
+                "elapsed_ms": 1,
+                "delta_ms": 1,
+                "nodes": 441
+              },
+              {
+                "label": "bestmove/depth-1",
+                "elapsed_ms": 1,
+                "delta_ms": 0,
+                "nodes": 441
+              },
+              {
+                "label": "iter/2/start",
+                "elapsed_ms": 1,
+                "delta_ms": 0,
+                "nodes": 441
+              },
+              {
+                "label": "iter/2/finish",
+                "elapsed_ms": 10,
+                "delta_ms": 8,
+                "nodes": 2706
+              },
+              {
+                "label": "bestmove/depth-2",
+                "elapsed_ms": 10,
+                "delta_ms": 0,
+                "nodes": 2706
+              },
+              {
+                "label": "iter/3/start",
+                "elapsed_ms": 10,
+                "delta_ms": 0,
+                "nodes": 2706
+              },
+              {
+                "label": "iter/3/finish",
+                "elapsed_ms": 27,
+                "delta_ms": 17,
+                "nodes": 7886
+              },
+              {
+                "label": "bestmove/depth-3",
+                "elapsed_ms": 28,
+                "delta_ms": 0,
+                "nodes": 7886
+              },
+              {
+                "label": "iter/4/start",
+                "elapsed_ms": 28,
+                "delta_ms": 0,
+                "nodes": 7886
+              },
+              {
+                "label": "iter/4/finish",
+                "elapsed_ms": 59,
+                "delta_ms": 30,
+                "nodes": 17068
+              },
+              {
+                "label": "bestmove/depth-4",
+                "elapsed_ms": 59,
+                "delta_ms": 0,
+                "nodes": 17068
+              },
+              {
+                "label": "iter/5/start",
+                "elapsed_ms": 59,
+                "delta_ms": 0,
+                "nodes": 17068
+              },
+              {
+                "label": "limit/node",
+                "elapsed_ms": 68,
+                "delta_ms": 9,
+                "nodes": 20000
+              },
+              {
+                "label": "iter/5/cancelled",
+                "elapsed_ms": 68,
+                "delta_ms": 0,
+                "nodes": 20000
+              },
+              {
+                "label": "iter/5/finish",
+                "elapsed_ms": 68,
+                "delta_ms": 0,
+                "nodes": 20000
+              }
+            ],
+            "nodes_total": 20000
+          },
+          "elapsed_s": 0.06968030400003045
+        },
+        {
+          "fen": "r2qkb1r/npp1pppp/p4n2/3P1b2/4pB2/2N5/PPP1QPPP/2KR1BNR w kq - 5 8",
+          "moves": [],
+          "bestmove": "e2c4",
+          "info": "info depth 2 seldepth 13 multipv 1 score cp -1 nodes 20000 nps 307356 knps_before 307 knps_after 307 hashfull 0 tbhits 0 time 65 pv e2c4 a8c8",
+          "telemetry": {
+            "main_nodes": 3987,
+            "quiescence_nodes": 16013,
+            "timeline": [
+              {
+                "label": "iter/1/start",
+                "elapsed_ms": 0,
+                "delta_ms": 0,
+                "nodes": 0
+              },
+              {
+                "label": "iter/1/finish",
+                "elapsed_ms": 1,
+                "delta_ms": 1,
+                "nodes": 309
+              },
+              {
+                "label": "bestmove/depth-1",
+                "elapsed_ms": 1,
+                "delta_ms": 0,
+                "nodes": 309
+              },
+              {
+                "label": "iter/2/start",
+                "elapsed_ms": 1,
+                "delta_ms": 0,
+                "nodes": 309
+              },
+              {
+                "label": "iter/2/finish",
+                "elapsed_ms": 15,
+                "delta_ms": 14,
+                "nodes": 4239
+              },
+              {
+                "label": "bestmove/depth-2",
+                "elapsed_ms": 15,
+                "delta_ms": 0,
+                "nodes": 4239
+              },
+              {
+                "label": "iter/3/start",
+                "elapsed_ms": 15,
+                "delta_ms": 0,
+                "nodes": 4239
+              },
+              {
+                "label": "limit/node",
+                "elapsed_ms": 65,
+                "delta_ms": 49,
+                "nodes": 20000
+              },
+              {
+                "label": "iter/3/cancelled",
+                "elapsed_ms": 65,
+                "delta_ms": 0,
+                "nodes": 20000
+              },
+              {
+                "label": "iter/3/finish",
+                "elapsed_ms": 65,
+                "delta_ms": 0,
+                "nodes": 20000
+              }
+            ],
+            "nodes_total": 20000
+          },
+          "elapsed_s": 0.06573878999984117
+        }
+      ],
+      "total_nodes": 60000,
+      "total_time_s": 0.19678736799983199,
+      "nodes_per_second": 304897.6192417555
+    }
+  ]
+}

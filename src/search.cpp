@@ -36,6 +36,11 @@ namespace {
 
 struct SearchSharedState;
 
+enum class SearchNodeKind {
+    Main,
+    Quiescence,
+};
+
 constexpr int mate_score = 100000;
 constexpr int max_search_depth = 128;
 constexpr int mate_threshold = mate_score - max_search_depth;
@@ -56,6 +61,8 @@ struct SearchSharedState {
     std::atomic<bool> soft_limit_reached{false};
     std::atomic<bool> timed_out{false};
     std::atomic<std::uint64_t> node_counter{0};
+    std::atomic<std::uint64_t> main_nodes{0};
+    std::atomic<std::uint64_t> quiescence_nodes{0};
     std::atomic<int> background_tasks{0};
     bool has_time_limit = false;
     bool has_node_limit = false;
@@ -65,6 +72,10 @@ struct SearchSharedState {
     std::uint64_t node_limit = 0;
     std::mutex background_mutex;
     std::condition_variable background_cv;
+    std::mutex event_mutex;
+    std::vector<SearchEventRecord> event_log;
+    bool has_last_event = false;
+    std::chrono::steady_clock::time_point last_event_timestamp{};
 
     void start_background_tasks(int count) {
         {
@@ -89,6 +100,30 @@ struct SearchSharedState {
             return background_tasks.load(std::memory_order_acquire) == 0;
         });
     }
+
+    void log_event(std::string_view label, std::uint64_t nodes_snapshot) {
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time);
+        if (elapsed.count() < 0) {
+            elapsed = std::chrono::milliseconds{0};
+        }
+        std::uint64_t elapsed_ms = static_cast<std::uint64_t>(elapsed.count());
+        std::uint64_t delta_ms = elapsed_ms;
+        {
+            std::lock_guard<std::mutex> lock(event_mutex);
+            if (has_last_event) {
+                auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    now - last_event_timestamp);
+                if (delta.count() >= 0) {
+                    delta_ms = static_cast<std::uint64_t>(delta.count());
+                }
+            }
+            event_log.push_back(SearchEventRecord{std::string(label), elapsed_ms, delta_ms,
+                                                  nodes_snapshot});
+            last_event_timestamp = now;
+            has_last_event = true;
+        }
+    }
 };
 
 struct SearchContext {
@@ -99,6 +134,8 @@ struct SearchContext {
     std::chrono::milliseconds last_iteration_time{0};
     int selective_depth = 0;
     std::uint64_t local_node_accumulator = 0;
+    std::uint64_t main_node_accumulator = 0;
+    std::uint64_t quiescence_node_accumulator = 0;
     std::uint64_t total_nodes = 0;
     bool is_primary_thread = false;
 };
@@ -181,6 +218,15 @@ void flush_thread_node_counter(SearchContext &context) {
     }
     SearchSharedState &shared = *context.shared;
     shared.node_counter.fetch_add(context.local_node_accumulator, std::memory_order_relaxed);
+    if (context.main_node_accumulator > 0) {
+        shared.main_nodes.fetch_add(context.main_node_accumulator, std::memory_order_relaxed);
+        context.main_node_accumulator = 0;
+    }
+    if (context.quiescence_node_accumulator > 0) {
+        shared.quiescence_nodes.fetch_add(context.quiescence_node_accumulator,
+                                          std::memory_order_relaxed);
+        context.quiescence_node_accumulator = 0;
+    }
     context.local_node_accumulator = 0;
 }
 
@@ -546,9 +592,14 @@ int score_move(const Move &move, const SearchContext &context, int ply,
     return killer_score(move, context, ply);
 }
 
-bool should_stop(SearchContext &context) {
+bool should_stop(SearchContext &context, SearchNodeKind kind) {
     SearchSharedState &shared = *context.shared;
     ++context.local_node_accumulator;
+    if (kind == SearchNodeKind::Main) {
+        ++context.main_node_accumulator;
+    } else {
+        ++context.quiescence_node_accumulator;
+    }
     ++context.total_nodes;
 
     if (context.local_node_accumulator >= node_flush_interval) {
@@ -564,7 +615,10 @@ bool should_stop(SearchContext &context) {
         shared.node_counter.load(std::memory_order_relaxed) + context.local_node_accumulator;
     if (shared.has_node_limit && aggregated_nodes >= shared.node_limit) {
         flush_thread_node_counter(context);
-        shared.stop.store(true, std::memory_order_relaxed);
+        bool was_running = !shared.stop.exchange(true, std::memory_order_relaxed);
+        if (was_running) {
+            shared.log_event("limit/node", aggregated_nodes);
+        }
         return true;
     }
 
@@ -581,11 +635,15 @@ bool should_stop(SearchContext &context) {
     if (!shared.soft_limit_reached.load(std::memory_order_relaxed) &&
         elapsed >= shared.soft_time_limit) {
         shared.soft_limit_reached.store(true, std::memory_order_relaxed);
+        shared.log_event("limit/soft", aggregated_nodes);
     }
     if (elapsed >= shared.hard_time_limit) {
-        shared.stop.store(true, std::memory_order_relaxed);
+        bool was_running = !shared.stop.exchange(true, std::memory_order_relaxed);
         shared.timed_out.store(true, std::memory_order_relaxed);
         flush_thread_node_counter(context);
+        if (was_running) {
+            shared.log_event("limit/hard", aggregated_nodes);
+        }
         return true;
     }
     return shared.stop.load(std::memory_order_relaxed);
@@ -649,7 +707,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
             bool *found_best, SearchContext &context, int parent_static_eval,
             bool allow_null_move) {
     context.selective_depth = std::max(context.selective_depth, ply + 1);
-    if (should_stop(context)) {
+    if (should_stop(context, SearchNodeKind::Main)) {
         return evaluate_for_current_player(board);
     }
     if (!sufficient_material_to_force_checkmate(board)) {
@@ -901,7 +959,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
 
 int quiescence(Board &board, int alpha, int beta, int ply, SearchContext &context) {
     context.selective_depth = std::max(context.selective_depth, ply + 1);
-    if (should_stop(context)) {
+    if (should_stop(context, SearchNodeKind::Quiescence)) {
         return alpha;
     }
     if (syzygy::available() && syzygy::max_pieces() >= total_piece_count(board)) {
@@ -1254,6 +1312,12 @@ bool publish_best_result(const SearchResult &candidate, SharedBestResult &shared
         announce_search_update(board, enriched, shared_state);
     }
 
+    if (announce_update) {
+        auto nodes_snapshot = shared_state.node_counter.load(std::memory_order_relaxed);
+        shared_state.log_event("bestmove/depth-" + std::to_string(enriched.depth_reached),
+                               nodes_snapshot);
+    }
+
     return true;
 }
 
@@ -1296,10 +1360,23 @@ SearchResult run_search_thread(Board board, int max_depth_limit, SearchSharedSta
         int score = 0;
         auto iteration_start = std::chrono::steady_clock::now();
         context.selective_depth = 0;
+        if (is_primary) {
+            std::uint64_t nodes_snapshot =
+                shared.node_counter.load(std::memory_order_relaxed) +
+                context.local_node_accumulator;
+            shared.log_event("iter/" + std::to_string(depth) + "/start", nodes_snapshot);
+        }
 
         while (true) {
             score = negamax(board, depth, alpha, beta, 0, &current_best, &found, context, 0, true);
             if (shared.stop.load(std::memory_order_relaxed)) {
+                if (is_primary) {
+                    std::uint64_t nodes_snapshot =
+                        shared.node_counter.load(std::memory_order_relaxed) +
+                        context.local_node_accumulator;
+                    shared.log_event("iter/" + std::to_string(depth) + "/cancelled",
+                                     nodes_snapshot);
+                }
                 local.timed_out = shared.timed_out.load(std::memory_order_relaxed);
                 break;
             }
@@ -1321,6 +1398,12 @@ SearchResult run_search_thread(Board board, int max_depth_limit, SearchSharedSta
         auto iteration_end = std::chrono::steady_clock::now();
         context.last_iteration_time = std::chrono::duration_cast<std::chrono::milliseconds>(
             iteration_end - iteration_start);
+        if (is_primary) {
+            std::uint64_t nodes_snapshot =
+                shared.node_counter.load(std::memory_order_relaxed) +
+                context.local_node_accumulator;
+            shared.log_event("iter/" + std::to_string(depth) + "/finish", nodes_snapshot);
+        }
 
         if (shared.stop.load(std::memory_order_relaxed)) {
             break;
@@ -1536,6 +1619,15 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     best.knps_after = metrics.knps_after;
     if (shared.timed_out.load(std::memory_order_relaxed)) {
         best.timed_out = true;
+    }
+
+    best.instrumentation.main_nodes =
+        shared.main_nodes.load(std::memory_order_relaxed);
+    best.instrumentation.quiescence_nodes =
+        shared.quiescence_nodes.load(std::memory_order_relaxed);
+    {
+        std::lock_guard<std::mutex> lock(shared.event_mutex);
+        best.instrumentation.timeline = shared.event_log;
     }
 
     return best;
