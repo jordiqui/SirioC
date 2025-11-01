@@ -113,9 +113,31 @@ int GlobalTranspositionTable::replacement_score(const PackedTTEntry &entry,
     if (!entry.occupied()) {
         return std::numeric_limits<int>::min();
     }
-    const std::uint8_t age = static_cast<std::uint8_t>((kGenerationCycle + current_generation -
-                                                        entry.stored_generation()) & kGenerationMask);
-    return static_cast<int>(entry.packed_depth()) - static_cast<int>(age);
+    const std::uint8_t raw_age = static_cast<std::uint8_t>((kGenerationCycle + current_generation -
+                                                            entry.stored_generation()) & kGenerationMask);
+    const int age = static_cast<int>(raw_age >> 2);
+    const int depth = std::max(unpack_depth(entry.depth8), 0);
+
+    int score = depth * 16;
+    switch (static_cast<TTNodeType>(entry.stored_type())) {
+        case TTNodeType::Exact:
+            score += 48;
+            break;
+        case TTNodeType::LowerBound:
+            score += 16;
+            break;
+        case TTNodeType::UpperBound:
+            score += 8;
+            break;
+    }
+    if (entry.packed_move != 0) {
+        score += 4;
+    }
+    if (entry.static_eval != 0) {
+        score += 1;
+    }
+    score -= age * 6;
+    return score;
 }
 
 std::uint8_t GlobalTranspositionTable::prepare_for_search() {
