@@ -707,8 +707,6 @@ void announce_search_update(const Board &board, const SearchResult &result,
     std::uint64_t nodes = shared_state.node_counter.load(std::memory_order_relaxed);
     NodeThroughputMetrics metrics = compute_node_metrics(shared_state, nodes, elapsed_ns);
     std::uint64_t nps = result.nodes_per_second > 0 ? result.nodes_per_second : metrics.nps;
-    std::uint64_t knps_before = result.knps_before > 0 ? result.knps_before : metrics.knps_before;
-    std::uint64_t knps_after = result.knps_after > 0 ? result.knps_after : metrics.knps_after;
     int depth = result.depth_reached;
     int seldepth = result.seldepth > 0 ? result.seldepth : depth;
     std::string pv_string = principal_variation_to_uci(board, result.principal_variation);
@@ -718,7 +716,6 @@ void announce_search_update(const Board &board, const SearchResult &result,
     }
     std::cout << "info depth " << depth << " seldepth " << seldepth << " multipv 1 score "
               << format_uci_score(result.score) << " nodes " << nodes << " nps " << nps
-              << " knps_before " << knps_before << " knps_after " << knps_after
               << " hashfull 0 tbhits 0 time " << elapsed_ms;
     if (!pv_string.empty()) {
         std::cout << " pv " << pv_string;
