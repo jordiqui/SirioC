@@ -30,6 +30,7 @@ public:
     std::uint8_t prepare_for_search();
     void store(std::uint64_t key, const TTEntry &entry, std::uint8_t generation);
     std::optional<TTEntry> probe(std::uint64_t key) const;
+    void prefetch(std::uint64_t key) const;
     bool save(const std::string &path, std::string *error) const;
     bool load(const std::string &path, std::string *error);
 

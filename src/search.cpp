@@ -56,6 +56,10 @@ constexpr std::array<int, static_cast<std::size_t>(PieceType::Count)> see_piece_
 constexpr int max_lmr_depth = 64;
 constexpr int max_lmr_moves = 64;
 
+constexpr std::size_t color_to_index(Color color) {
+    return color == Color::White ? 0u : 1u;
+}
+
 int late_move_reduction_base(int depth, int move_index) {
     depth = std::clamp(depth, 0, max_lmr_depth - 1);
     move_index = std::clamp(move_index, 0, max_lmr_moves - 1);
@@ -169,6 +173,7 @@ struct SearchContext {
     std::uint64_t quiescence_node_accumulator = 0;
     std::uint64_t total_nodes = 0;
     bool is_primary_thread = false;
+    std::array<std::array<std::array<int, 64>, 64>, 2> history{};
 };
 
 constexpr std::uint64_t node_flush_interval = 512;
@@ -777,15 +782,50 @@ int killer_score(const Move &move, const SearchContext &context, int ply) {
     return 0;
 }
 
+constexpr int history_bonus_limit = 8192;
+constexpr int history_max = 16384;
+constexpr int history_min = -history_max;
+
+int history_score(const Move &move, const SearchContext &context, Color mover) {
+    if (!is_quiet(move)) {
+        return 0;
+    }
+    const auto idx = color_to_index(mover);
+    return context.history[idx][move.from][move.to];
+}
+
+void update_history(SearchContext &context, Color mover, const Move &move, int depth,
+                    bool success) {
+    if (!is_quiet(move)) {
+        return;
+    }
+    depth = std::max(depth, 1);
+    int bonus = depth * depth;
+    bonus = std::min(bonus, history_bonus_limit);
+    auto &entry = context.history[color_to_index(mover)][move.from][move.to];
+    if (success) {
+        entry = std::min(entry + bonus, history_max);
+    } else {
+        entry = std::max(entry - bonus, history_min);
+    }
+}
+
+thread_local std::vector<std::pair<int, Move>> move_order_buffer;
+
 int score_move(const Move &move, const SearchContext &context, int ply,
-               const std::optional<Move> &tt_move) {
+               const std::optional<Move> &tt_move, Color mover) {
     if (tt_move.has_value() && same_move(*tt_move, move)) {
         return 1'000'000;
     }
     if (move.captured.has_value()) {
         return 900000 + mvv_lva_score(move);
     }
-    return killer_score(move, context, ply);
+    int killer = killer_score(move, context, ply);
+    if (killer > 0) {
+        return killer;
+    }
+    int history = history_score(move, context, mover);
+    return 400000 + history;
 }
 
 bool should_stop(SearchContext &context, SearchNodeKind kind) {
@@ -871,18 +911,19 @@ int from_tt_score(int score, int ply) {
 }
 
 void order_moves(std::vector<Move> &moves, const SearchContext &context, int ply,
-                 const std::optional<Move> &tt_move) {
-    std::vector<std::pair<int, Move>> scored;
-    scored.reserve(moves.size());
-    for (const Move &move : moves) {
-        scored.emplace_back(score_move(move, context, ply, tt_move), move);
+                 const std::optional<Move> &tt_move, Color mover) {
+    if (moves.size() <= 1) {
+        return;
     }
-    std::stable_sort(scored.begin(), scored.end(),
+    move_order_buffer.clear();
+    move_order_buffer.reserve(moves.size());
+    for (const Move &move : moves) {
+        move_order_buffer.emplace_back(score_move(move, context, ply, tt_move, mover), move);
+    }
+    std::stable_sort(move_order_buffer.begin(), move_order_buffer.end(),
                      [](const auto &lhs, const auto &rhs) { return lhs.first > rhs.first; });
-    moves.clear();
-    moves.reserve(scored.size());
-    for (auto &entry : scored) {
-        moves.push_back(entry.second);
+    for (std::size_t index = 0; index < move_order_buffer.size(); ++index) {
+        moves[index] = move_order_buffer[index].second;
     }
 }
 
@@ -916,7 +957,11 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
     }
 
     const std::uint64_t hash = board.zobrist_hash();
-    bool in_check = board.in_check(board.side_to_move());
+    if (context.tt != nullptr) {
+        context.tt->prefetch(hash);
+    }
+    Color side_to_move = board.side_to_move();
+    bool in_check = board.in_check(side_to_move);
     int static_eval = 0;
     if (!in_check) {
         static_eval = evaluate_for_current_player(board);
@@ -1033,7 +1078,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         return 0;
     }
 
-    order_moves(moves, context, ply, tt_move);
+    order_moves(moves, context, ply, tt_move, side_to_move);
 
     int alpha_original = alpha;
     int best_score = std::numeric_limits<int>::min();
@@ -1063,6 +1108,9 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         }
         Board::UndoState undo;
         board.make_move(move, undo);
+        if (context.tt != nullptr) {
+            context.tt->prefetch(board.zobrist_hash());
+        }
         EvaluationScope eval_scope(mover, &move, board);
         bool gives_check = board.in_check(board.side_to_move());
 
@@ -1098,6 +1146,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         }
 
         int new_depth = std::max(0, child_depth - reduction);
+        int history_depth = std::max(new_depth + 1, 1);
         int score;
         if (new_depth <= 0) {
             score = -quiescence(board, -beta, -alpha, ply + 1, context);
@@ -1117,6 +1166,15 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         }
         if (score > alpha) {
             alpha = score;
+        }
+        if (quiet_move) {
+            if (score >= beta) {
+                update_history(context, mover, move, history_depth, true);
+            } else if (score > alpha_original) {
+                update_history(context, mover, move, history_depth, true);
+            } else {
+                update_history(context, mover, move, history_depth, false);
+            }
         }
         if (alpha >= beta) {
             if (is_quiet(move)) {
@@ -1181,7 +1239,7 @@ int quiescence(Board &board, int alpha, int beta, int ply, SearchContext &contex
         return alpha;
     }
 
-    order_moves(tactical_moves, context, ply, std::nullopt);
+    order_moves(tactical_moves, context, ply, std::nullopt, board.side_to_move());
 
     bool found_legal = false;
     for (const Move &move : tactical_moves) {
