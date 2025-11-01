@@ -21,8 +21,7 @@ constexpr int max_feature_value = 64;
 int color_index(Color color) { return color == Color::White ? 0 : 1; }
 
 int feature_offset(Color color, PieceType type) {
-    return color_index(color) * static_cast<int>(kPieceTypeCount) +
-           static_cast<int>(type);
+    return color_index(color) * static_cast<int>(kPieceTypeCount) + static_cast<int>(type);
 }
 
 void clamp_non_negative(int &value) {
@@ -41,6 +40,91 @@ int total_piece_count(const Board &board) {
     }
     return total;
 }
+
+#if defined(SIRIO_USE_AVX512)
+struct WeightRegisters {
+    __m512d main;
+    __m256d tail;
+};
+
+WeightRegisters load_weight_registers(const double *weights) {
+    WeightRegisters regs{};
+    regs.main = _mm512_loadu_pd(weights);
+    regs.tail = _mm256_loadu_pd(weights + 8);
+    return regs;
+}
+
+double dot_product(const WeightRegisters &regs, const int *counts) {
+    __m256i count_lo = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(counts));
+    __m512d count_lo_pd = _mm512_cvtepi32_pd(count_lo);
+    __m512d prod_lo = _mm512_mul_pd(regs.main, count_lo_pd);
+
+    __m128i count_hi = _mm_loadu_si128(reinterpret_cast<const __m128i *>(counts + 8));
+    __m256d count_hi_pd = _mm256_cvtepi32_pd(count_hi);
+    __m256d prod_hi = _mm256_mul_pd(regs.tail, count_hi_pd);
+
+    alignas(64) double accum_buffer[8];
+    alignas(32) double tail_buffer[4];
+    _mm512_storeu_pd(accum_buffer, prod_lo);
+    _mm256_storeu_pd(tail_buffer, prod_hi);
+
+    double sum = 0.0;
+    for (double entry : accum_buffer) {
+        sum += entry;
+    }
+    for (double entry : tail_buffer) {
+        sum += entry;
+    }
+    return sum;
+}
+#elif defined(SIRIO_USE_AVX2)
+struct WeightRegisters {
+    __m256d first;
+    __m256d second;
+    __m256d third;
+};
+
+WeightRegisters load_weight_registers(const double *weights) {
+    WeightRegisters regs{};
+    regs.first = _mm256_loadu_pd(weights);
+    regs.second = _mm256_loadu_pd(weights + 4);
+    regs.third = _mm256_loadu_pd(weights + 8);
+    return regs;
+}
+
+double dot_product(const WeightRegisters &regs, const int *counts) {
+    __m128i counts0_i = _mm_loadu_si128(reinterpret_cast<const __m128i *>(counts));
+    __m256d counts0 = _mm256_cvtepi32_pd(counts0_i);
+    __m128i counts1_i = _mm_loadu_si128(reinterpret_cast<const __m128i *>(counts + 4));
+    __m256d counts1 = _mm256_cvtepi32_pd(counts1_i);
+    __m128i counts2_i = _mm_loadu_si128(reinterpret_cast<const __m128i *>(counts + 8));
+    __m256d counts2 = _mm256_cvtepi32_pd(counts2_i);
+
+    __m256d accum = _mm256_mul_pd(regs.first, counts0);
+    accum = _mm256_fmadd_pd(regs.second, counts1, accum);
+    accum = _mm256_fmadd_pd(regs.third, counts2, accum);
+
+    alignas(32) double buffer[4];
+    _mm256_storeu_pd(buffer, accum);
+    return buffer[0] + buffer[1] + buffer[2] + buffer[3];
+}
+#else
+struct WeightRegisters {
+    const double *weights = nullptr;
+};
+
+WeightRegisters load_weight_registers(const double *weights) {
+    return WeightRegisters{weights};
+}
+
+double dot_product(const WeightRegisters &regs, const int *counts) {
+    double sum = 0.0;
+    for (std::size_t idx = 0; idx < kFeatureCount; ++idx) {
+        sum += regs.weights[idx] * static_cast<double>(counts[idx]);
+    }
+    return sum;
+}
+#endif
 
 }  // namespace
 
@@ -104,6 +188,53 @@ void SingleNetworkBackend::set_thread_accumulator(ThreadAccumulator *accumulator
     thread_accumulator_ = accumulator;
     if (thread_accumulator_) {
         thread_accumulator_->reset();
+    }
+}
+
+FeatureState SingleNetworkBackend::extract_features(const Board &board) const {
+    return compute_state(board);
+}
+
+int SingleNetworkBackend::evaluate_state(const FeatureState &state) const {
+    if (!loaded_) {
+        return 0;
+    }
+
+#if defined(__GNUC__) || defined(__clang__)
+    __builtin_prefetch(state.piece_counts.data(), 0, 3);
+    __builtin_prefetch(params_.piece_weights.data(), 0, 3);
+#elif defined(_MSC_VER)
+    _mm_prefetch(reinterpret_cast<const char *>(state.piece_counts.data()), _MM_HINT_T0);
+    _mm_prefetch(reinterpret_cast<const char *>(params_.piece_weights.data()), _MM_HINT_T0);
+#endif
+
+    const WeightRegisters regs = load_weight_registers(params_.piece_weights.data());
+    double value = params_.bias + dot_product(regs, state.piece_counts.data());
+    value *= params_.scale;
+    return static_cast<int>(std::lround(value));
+}
+
+void SingleNetworkBackend::evaluate_batch(std::span<const FeatureState> states, std::span<int> out) const {
+    if (states.size() != out.size()) {
+        throw std::invalid_argument("evaluate_batch requires matching state/output spans");
+    }
+
+    if (!loaded_) {
+        std::fill(out.begin(), out.end(), 0);
+        return;
+    }
+
+    const WeightRegisters regs = load_weight_registers(params_.piece_weights.data());
+    for (std::size_t index = 0; index < states.size(); ++index) {
+        const FeatureState &state = states[index];
+#if defined(__GNUC__) || defined(__clang__)
+        __builtin_prefetch(state.piece_counts.data(), 0, 2);
+#elif defined(_MSC_VER)
+        _mm_prefetch(reinterpret_cast<const char *>(state.piece_counts.data()), _MM_HINT_T0);
+#endif
+        double value = params_.bias + dot_product(regs, state.piece_counts.data());
+        value *= params_.scale;
+        out[index] = static_cast<int>(std::lround(value));
     }
 }
 
@@ -214,60 +345,7 @@ int SingleNetworkBackend::evaluate(const Board &board) {
         storage.push_back(compute_state(board));
     }
     const FeatureState &state = storage.back();
-#if defined(__GNUC__) || defined(__clang__)
-    __builtin_prefetch(state.piece_counts.data(), 0, 3);
-    __builtin_prefetch(params_.piece_weights.data(), 0, 3);
-#elif defined(_MSC_VER)
-    _mm_prefetch(reinterpret_cast<const char *>(state.piece_counts.data()), _MM_HINT_T0);
-    _mm_prefetch(reinterpret_cast<const char *>(params_.piece_weights.data()), _MM_HINT_T0);
-#endif
-
-    double value = params_.bias;
-#if defined(SIRIO_USE_AVX512)
-    alignas(64) double accum_buffer[8];
-    alignas(32) double tail_buffer[4];
-
-    const double *weights = params_.piece_weights.data();
-    const int *counts = state.piece_counts.data();
-
-    __m256i count_lo = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(counts));
-    __m512d count_lo_pd = _mm512_cvtepi32_pd(count_lo);
-    __m512d weight_lo = _mm512_loadu_pd(weights);
-    __m512d prod_lo = _mm512_mul_pd(weight_lo, count_lo_pd);
-    _mm512_storeu_pd(accum_buffer, prod_lo);
-
-    __m128i count_hi = _mm_loadu_si128(reinterpret_cast<const __m128i *>(counts + 8));
-    __m256d count_hi_pd = _mm256_cvtepi32_pd(count_hi);
-    __m256d weight_hi = _mm256_loadu_pd(weights + 8);
-    __m256d prod_hi = _mm256_mul_pd(weight_hi, count_hi_pd);
-    _mm256_storeu_pd(tail_buffer, prod_hi);
-
-    for (double entry : accum_buffer) {
-        value += entry;
-    }
-    for (double entry : tail_buffer) {
-        value += entry;
-    }
-#elif defined(SIRIO_USE_AVX2)
-    const double *weights = params_.piece_weights.data();
-    const int *counts = state.piece_counts.data();
-    __m256d accum = _mm256_setzero_pd();
-    for (std::size_t index = 0; index < state.piece_counts.size(); index += 4) {
-        __m128i count_vec = _mm_loadu_si128(reinterpret_cast<const __m128i *>(counts + index));
-        __m256d count_pd = _mm256_cvtepi32_pd(count_vec);
-        __m256d weight_vec = _mm256_loadu_pd(weights + index);
-        accum = _mm256_fmadd_pd(weight_vec, count_pd, accum);
-    }
-    alignas(32) double buffer[4];
-    _mm256_storeu_pd(buffer, accum);
-    value += buffer[0] + buffer[1] + buffer[2] + buffer[3];
-#else
-    for (std::size_t index = 0; index < state.piece_counts.size(); ++index) {
-        value += params_.piece_weights[index] * static_cast<double>(state.piece_counts[index]);
-    }
-#endif
-    value *= params_.scale;
-    return static_cast<int>(std::lround(value));
+    return evaluate_state(state);
 }
 
 MultiNetworkBackend::MultiNetworkBackend(std::unique_ptr<SingleNetworkBackend> primary,

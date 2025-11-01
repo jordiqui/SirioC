@@ -2,6 +2,7 @@
 
 #include <array>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -50,6 +51,10 @@ public:
     [[nodiscard]] std::unique_ptr<EvaluationBackend> clone() const override;
 
     void set_thread_accumulator(ThreadAccumulator *accumulator);
+
+    [[nodiscard]] FeatureState extract_features(const Board &board) const;
+    [[nodiscard]] int evaluate_state(const FeatureState &state) const;
+    void evaluate_batch(std::span<const FeatureState> states, std::span<int> out) const;
 
     void initialize(const Board &board) override;
     void reset(const Board &board) override;

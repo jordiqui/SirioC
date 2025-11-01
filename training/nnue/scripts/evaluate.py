@@ -31,14 +31,17 @@ def evaluate_checkpoint(checkpoint_path: str, dataset_path: str, batch_size: int
 
     preds: list[torch.Tensor] = []
     tgts: list[torch.Tensor] = []
+    plies: list[torch.Tensor] = []
     with torch.no_grad():
-        for features, targets in loader:
+        for features, targets, ply in loader:
             preds.append(model(features))
             tgts.append(targets)
+            plies.append(ply)
 
     predictions = torch.cat(preds)
     targets = torch.cat(tgts)
-    return compute_metrics(predictions, targets)
+    ply_tensor = torch.cat(plies) if plies else None
+    return compute_metrics(predictions, targets, ply_tensor)
 
 
 def main() -> None:
