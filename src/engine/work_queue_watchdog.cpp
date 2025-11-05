@@ -26,6 +26,7 @@ WorkQueueRegistration::WorkQueueRegistration(std::function<void()> restart_callb
 void WorkQueueRegistration::pulse() {
     last_heartbeat_ns_.store(steady_clock_now_ns(), std::memory_order_relaxed);
     active_.store(true, std::memory_order_relaxed);
+    restart_in_progress_.store(false, std::memory_order_relaxed);
 }
 
 void WorkQueueRegistration::mark_inactive() {
