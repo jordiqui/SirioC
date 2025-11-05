@@ -167,6 +167,7 @@ void initialize_engine_options() {
     options.threads = sirio::recommended_search_threads();
     sirio::set_search_threads(options.threads);
     sirio::set_transposition_table_size(options.hash_size_mb);
+    sirio::shared_transposition_table().prepare_for_search();
     mark_persistent_analysis_unloaded();
     apply_time_management_options();
     if (options.syzygy_path.empty()) {
@@ -1117,6 +1118,9 @@ void send_uci_id() {
     sync_options_from_state();
     std::cout << "id name SirioC" << std::endl;
     std::cout << "id author Jorge Ruiz Centelles" << std::endl;
+    const char* large_page_status =
+        sirio::transposition_table_large_pages_enabled() ? "available" : "not available";
+    std::cout << "info string Large Memory Pages    : " << large_page_status << std::endl;
     print_uci_options(std::cout, g_options);
     std::cout << "uciok" << std::endl;
 }

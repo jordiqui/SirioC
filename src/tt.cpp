@@ -9,6 +9,13 @@
 #include <mutex>
 #include <string_view>
 
+#if defined(__linux__)
+#    include <sys/mman.h>
+#    if !defined(MADV_HUGEPAGE)
+#        define MADV_HUGEPAGE 14
+#    endif
+#endif
+
 namespace sirio {
 namespace {
 
@@ -16,6 +23,29 @@ constexpr std::size_t kDefaultTranspositionTableSizeMb = 16;
 
 std::atomic<std::size_t> transposition_table_size_mb{kDefaultTranspositionTableSizeMb};
 std::atomic<std::uint64_t> transposition_table_epoch{1};
+std::atomic<bool> large_pages_enabled{false};
+
+bool try_enable_large_pages(void *address, std::size_t length) {
+#if defined(__linux__)
+    if (address == nullptr || length == 0) {
+        return false;
+    }
+    return ::madvise(address, length, MADV_HUGEPAGE) == 0;
+#else
+    (void)address;
+    (void)length;
+    return false;
+#endif
+}
+
+void update_large_pages_status(void *address, std::size_t length) {
+    if (address == nullptr || length == 0) {
+        large_pages_enabled.store(false, std::memory_order_relaxed);
+        return;
+    }
+    bool enabled = try_enable_large_pages(address, length);
+    large_pages_enabled.store(enabled, std::memory_order_relaxed);
+}
 
 std::uint64_t high_product(std::uint64_t lhs, std::uint64_t rhs) {
     const std::uint64_t lhs_hi = lhs >> 32U;
@@ -307,6 +337,8 @@ bool GlobalTranspositionTable::load(const std::string &path, std::string *error)
 
     std::unique_lock lock(global_mutex_);
     clusters_ = std::move(new_clusters);
+    update_large_pages_status(clusters_.empty() ? nullptr : static_cast<void *>(clusters_.data()),
+                              clusters_.size() * sizeof(Cluster));
     configured_size_mb_ = size_mb;
     generation_counter_ = saved_generation_counter == 0 ? 1 : saved_generation_counter;
     generation_tag_ = pack_generation(generation_counter_);
@@ -333,12 +365,15 @@ void GlobalTranspositionTable::rebuild_locked(std::size_t size_mb) {
         clusters_.clear();
         generation_counter_ = 1;
         generation_tag_ = kGenerationDelta;
+        update_large_pages_status(nullptr, 0);
         return;
     }
     std::size_t bytes = size_mb * 1024ULL * 1024ULL;
     std::size_t bucket_count = std::max<std::size_t>(1, bytes / sizeof(Cluster));
     bucket_count = std::bit_ceil(bucket_count);
     clusters_.assign(bucket_count, Cluster{});
+    update_large_pages_status(clusters_.empty() ? nullptr : static_cast<void *>(clusters_.data()),
+                              clusters_.size() * sizeof(Cluster));
     generation_counter_ = 1;
     generation_tag_ = kGenerationDelta;
 }
@@ -421,6 +456,18 @@ bool save_transposition_table(const std::string &path, std::string *error) {
 
 bool load_transposition_table(const std::string &path, std::string *error) {
     return shared_transposition_table().load(path, error);
+}
+
+bool transposition_table_large_pages_supported() {
+#if defined(__linux__)
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool transposition_table_large_pages_enabled() {
+    return large_pages_enabled.load(std::memory_order_relaxed);
 }
 
 }  // namespace sirio
