@@ -2,9 +2,13 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <numeric>
+#include <optional>
+#include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "sirio/board.hpp"
@@ -21,7 +25,30 @@ struct TacticalPosition {
 };
 }
 
-int main() {
+namespace {
+
+#if defined(SIRIO_USE_AVX2) || defined(SIRIO_USE_AVX512)
+constexpr bool kHasNnueAcceleration = true;
+#else
+constexpr bool kHasNnueAcceleration = false;
+#endif
+
+std::optional<std::size_t> parse_iteration_value(const char *text) {
+    if (!text) {
+        return std::nullopt;
+    }
+
+    char *end = nullptr;
+    unsigned long long value = std::strtoull(text, &end, 10);
+    if (end == text || (end && *end != '\0') || value == 0ULL) {
+        return std::nullopt;
+    }
+    return static_cast<std::size_t>(value);
+}
+
+}  // namespace
+
+int main(int argc, char **argv) {
     if (auto detected = sirio::syzygy::detect_default_tablebase_path(); detected.has_value()) {
         sirio::syzygy::set_tablebase_path(detected->string());
     }
@@ -133,12 +160,67 @@ int main() {
         }
 
         std::vector<int> outputs(states.size());
-        constexpr std::size_t iterations = 200000;
+
+        constexpr std::size_t kAcceleratedIterations = 200000;
+        constexpr std::size_t kScalarIterations = 50000;
+
+        std::size_t iterations = kHasNnueAcceleration ? kAcceleratedIterations : kScalarIterations;
+
+        if (const char *env_override = std::getenv("SIRIO_NNUE_ITERATIONS")) {
+            if (auto parsed = parse_iteration_value(env_override)) {
+                iterations = *parsed;
+            } else {
+                std::cerr << "Valor inválido para SIRIO_NNUE_ITERATIONS: '" << env_override
+                          << "' (se espera un entero positivo).\n";
+            }
+        }
+
+        const std::string_view iterations_prefix = "--nnue-iterations=";
+        for (int i = 1; i < argc; ++i) {
+            std::string_view arg(argv[i]);
+            if (arg == "--nnue-iterations" && i + 1 < argc) {
+                const char *value = argv[++i];
+                if (auto parsed = parse_iteration_value(value)) {
+                    iterations = *parsed;
+                } else {
+                    std::cerr << "Valor inválido para --nnue-iterations: '" << value
+                              << "'.\n";
+                    return 1;
+                }
+            } else if (arg.rfind(iterations_prefix, 0) == 0) {
+                std::string value(arg.substr(iterations_prefix.size()));
+                if (auto parsed = parse_iteration_value(value.c_str())) {
+                    iterations = *parsed;
+                } else {
+                    std::cerr << "Valor inválido para --nnue-iterations: '" << value
+                              << "'.\n";
+                    return 1;
+                }
+            }
+        }
+
         std::int64_t checksum = 0;
         auto nnue_start = std::chrono::steady_clock::now();
+        auto last_log = nnue_start;
+        constexpr std::size_t log_interval = 10'000;
         for (std::size_t i = 0; i < iterations; ++i) {
             nnue_backend.evaluate_batch(states, outputs);
             checksum = std::accumulate(outputs.begin(), outputs.end(), checksum);
+
+            std::size_t completed = i + 1;
+            if ((completed % log_interval == 0) || completed == iterations) {
+                auto now = std::chrono::steady_clock::now();
+                auto total_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - nnue_start);
+                auto delta_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log);
+                double progress = static_cast<double>(completed) / static_cast<double>(iterations) * 100.0;
+                std::ostringstream progress_stream;
+                progress_stream << std::fixed << std::setprecision(1) << progress;
+                std::cout << "    Progreso NNUE: " << progress_stream.str() << "% ("
+                          << completed << "/" << iterations << " iteraciones, +"
+                          << delta_elapsed.count() << " ms desde el último registro, total "
+                          << total_elapsed.count() << " ms)\n";
+                last_log = now;
+            }
         }
         auto nnue_end = std::chrono::steady_clock::now();
 
@@ -169,9 +251,10 @@ int main() {
                   << " (wdl=" << probe->wdl << ", dtz=" << probe->dtz << ")\n";
     } else {
         std::string reason;
+        bool syzygy_available = sirio::syzygy::available();
         if (tb_path.empty()) {
             reason = "no se ha detectado ninguna ruta";
-        } else if (!sirio::syzygy::available()) {
+        } else if (!syzygy_available) {
             reason = "la ruta '" + tb_path + "' no contiene tablebases válidas";
         } else {
             reason = "no hay datos disponibles para la posición de prueba";
@@ -181,8 +264,16 @@ int main() {
                   << "). Ejecuto una búsqueda auxiliar...\n";
 
         sirio::SearchLimits fallback_limits;
-        fallback_limits.max_depth = 18;
-        fallback_limits.move_time = 1000;
+        if (!syzygy_available) {
+            fallback_limits.max_depth = 12;
+            fallback_limits.max_nodes = 200'000;
+            std::cout << "  Syzygy no disponible: limite de profundidad reducido a "
+                      << fallback_limits.max_depth << " y límite de nodos fijado en "
+                      << fallback_limits.max_nodes << ".\n";
+        } else {
+            fallback_limits.max_depth = 18;
+            fallback_limits.move_time = 1000;
+        }
 
         auto fallback = sirio::search_best_move(tb_board, fallback_limits);
         if (fallback.has_move) {
