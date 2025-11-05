@@ -1,20 +1,108 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <limits>
+#include <new>
 #include <optional>
 #include <shared_mutex>
 #include <string>
 #include <type_traits>
 #include <vector>
 
+#if defined(_WIN32)
+#    include <malloc.h>
+#endif
+
 #include "sirio/move.hpp"
 
 namespace sirio {
 
 enum class TTNodeType { Exact, LowerBound, UpperBound };
+
+inline constexpr std::size_t kTranspositionTableLargePageAlignment = 2ULL * 1024ULL * 1024ULL;
+
+template <typename T, std::size_t Alignment>
+class AlignedAllocator {
+public:
+    using value_type = T;
+
+    AlignedAllocator() noexcept = default;
+
+    template <typename U>
+    AlignedAllocator(const AlignedAllocator<U, Alignment>&) noexcept {}
+
+    [[nodiscard]] T* allocate(std::size_t n) {
+        if (n > (std::numeric_limits<std::size_t>::max)() / sizeof(T)) {
+            throw std::bad_alloc{};
+        }
+
+        const std::size_t alignment = std::max<std::size_t>(Alignment, alignof(T));
+        const auto align_up_size = [&](std::size_t value) {
+            if (alignment == 0) {
+                return value;
+            }
+            const std::size_t remainder = value % alignment;
+            if (remainder == 0) {
+                return value;
+            }
+            const std::size_t increment = alignment - remainder;
+            if (value > (std::numeric_limits<std::size_t>::max)() - increment) {
+                throw std::bad_alloc{};
+            }
+            return value + increment;
+        };
+
+        std::size_t size = align_up_size(n * sizeof(T));
+
+#if defined(_WIN32)
+        void* ptr = _aligned_malloc(size, alignment);
+        if (ptr == nullptr) {
+            throw std::bad_alloc{};
+        }
+        return static_cast<T*>(ptr);
+#elif defined(__linux__)
+        void* ptr = nullptr;
+        if (::posix_memalign(&ptr, alignment, size) != 0 || ptr == nullptr) {
+            throw std::bad_alloc{};
+        }
+        return static_cast<T*>(ptr);
+#else
+        void* ptr = std::aligned_alloc(alignment, size);
+        if (ptr == nullptr) {
+            throw std::bad_alloc{};
+        }
+        return static_cast<T*>(ptr);
+#endif
+    }
+
+    void deallocate(T* ptr, std::size_t) noexcept {
+#if defined(_WIN32)
+        _aligned_free(ptr);
+#else
+        std::free(ptr);
+#endif
+    }
+
+    template <typename U>
+    struct rebind {
+        using other = AlignedAllocator<U, Alignment>;
+    };
+};
+
+template <typename T1, std::size_t A1, typename T2, std::size_t A2>
+bool operator==(const AlignedAllocator<T1, A1>&, const AlignedAllocator<T2, A2>&) noexcept {
+    return A1 == A2;
+}
+
+template <typename T1, std::size_t A1, typename T2, std::size_t A2>
+bool operator!=(const AlignedAllocator<T1, A1>& lhs, const AlignedAllocator<T2, A2>& rhs) noexcept {
+    return !(lhs == rhs);
+}
 
 struct TTEntry {
     Move best_move{};
@@ -124,7 +212,8 @@ private:
     static int replacement_score(const PackedTTEntry &entry, std::uint8_t current_generation);
 
     mutable std::shared_mutex global_mutex_;
-    std::vector<Cluster> clusters_;
+    static constexpr std::size_t kClusterAlignment = kTranspositionTableLargePageAlignment;
+    std::vector<Cluster, AlignedAllocator<Cluster, kClusterAlignment>> clusters_;
     std::uint8_t generation_counter_ = 1;
     std::uint8_t generation_tag_ = kGenerationDelta;
     std::size_t configured_size_mb_ = 0;

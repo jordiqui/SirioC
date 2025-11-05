@@ -11,6 +11,7 @@
 
 #if defined(__linux__)
 #    include <sys/mman.h>
+#    include <unistd.h>
 #    if !defined(MADV_HUGEPAGE)
 #        define MADV_HUGEPAGE 14
 #    endif
@@ -30,7 +31,30 @@ bool try_enable_large_pages(void *address, std::size_t length) {
     if (address == nullptr || length == 0) {
         return false;
     }
-    return ::madvise(address, length, MADV_HUGEPAGE) == 0;
+
+    const long page_size_sys = ::sysconf(_SC_PAGESIZE);
+    if (page_size_sys <= 0) {
+        return false;
+    }
+
+    const std::size_t page_size = static_cast<std::size_t>(page_size_sys);
+    const std::size_t alignment =
+        std::max<std::size_t>(page_size, kTranspositionTableLargePageAlignment);
+    const std::uintptr_t address_value = reinterpret_cast<std::uintptr_t>(address);
+    if ((address_value % alignment) != 0) {
+        return false;
+    }
+
+    std::size_t adjusted_length = length;
+    const std::size_t remainder = adjusted_length % alignment;
+    if (remainder != 0) {
+        if (adjusted_length > (std::numeric_limits<std::size_t>::max)() - (alignment - remainder)) {
+            return false;
+        }
+        adjusted_length += alignment - remainder;
+    }
+
+    return ::madvise(address, adjusted_length, MADV_HUGEPAGE) == 0;
 #else
     (void)address;
     (void)length;
@@ -315,7 +339,8 @@ bool GlobalTranspositionTable::load(const std::string &path, std::string *error)
         return false;
     }
 
-    std::vector<Cluster> new_clusters(static_cast<std::size_t>(bucket_count));
+    std::vector<Cluster, AlignedAllocator<Cluster, kClusterAlignment>> new_clusters(
+        static_cast<std::size_t>(bucket_count));
     for (auto &cluster : new_clusters) {
         for (auto &entry_atomic : cluster.entries) {
             PackedTTEntry entry;
@@ -467,7 +492,10 @@ bool transposition_table_large_pages_supported() {
 }
 
 bool transposition_table_large_pages_enabled() {
-    return large_pages_enabled.load(std::memory_order_relaxed);
+    if (large_pages_enabled.load(std::memory_order_relaxed)) {
+        return true;
+    }
+    return transposition_table_large_pages_supported();
 }
 
 }  // namespace sirio
