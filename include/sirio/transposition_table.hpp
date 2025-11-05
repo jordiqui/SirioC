@@ -139,5 +139,8 @@ void clear_transposition_tables();
 bool save_transposition_table(const std::string &path, std::string *error = nullptr);
 bool load_transposition_table(const std::string &path, std::string *error = nullptr);
 
+bool transposition_table_large_pages_supported();
+bool transposition_table_large_pages_enabled();
+
 }  // namespace sirio
 
