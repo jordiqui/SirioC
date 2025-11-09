@@ -102,11 +102,19 @@ struct SearchSharedState {
     bool has_time_limit = false;
     bool has_node_limit = false;
     std::chrono::steady_clock::time_point start_time{};
-    std::chrono::milliseconds soft_time_limit{0};
-    std::chrono::milliseconds hard_time_limit{0};
+    std::atomic<long long> soft_time_limit_ms{0};
+    std::atomic<long long> hard_time_limit_ms{0};
     std::uint64_t node_limit = 0;
     std::mutex background_mutex;
     std::condition_variable background_cv;
+    std::mutex iteration_mutex;
+    std::condition_variable iteration_cv;
+    int thread_count = 1;
+    std::atomic<int> active_threads{1};
+    int active_iteration = 0;
+    int completed_in_iteration = 0;
+    int expected_in_iteration = 1;
+    bool iteration_in_progress = false;
     std::mutex event_mutex;
     std::vector<SearchEventRecord> event_log;
     bool has_last_event = false;
@@ -134,6 +142,119 @@ struct SearchSharedState {
         background_cv.wait(lock, [&]() {
             return background_tasks.load(std::memory_order_acquire) == 0;
         });
+    }
+
+    void set_soft_limit(std::chrono::milliseconds value) {
+        long long clamped = value.count();
+        if (clamped < 0) {
+            clamped = 0;
+        }
+        soft_time_limit_ms.store(clamped, std::memory_order_relaxed);
+    }
+
+    void set_hard_limit(std::chrono::milliseconds value) {
+        long long clamped = value.count();
+        if (clamped < 0) {
+            clamped = 0;
+        }
+        hard_time_limit_ms.store(clamped, std::memory_order_relaxed);
+    }
+
+    std::chrono::milliseconds get_soft_limit() const {
+        return std::chrono::milliseconds{
+            soft_time_limit_ms.load(std::memory_order_relaxed)};
+    }
+
+    std::chrono::milliseconds get_hard_limit() const {
+        return std::chrono::milliseconds{
+            hard_time_limit_ms.load(std::memory_order_relaxed)};
+    }
+
+    void configure_thread_count(int count) {
+        if (count <= 0) {
+            count = 1;
+        }
+        std::lock_guard<std::mutex> lock(iteration_mutex);
+        thread_count = count;
+        active_threads.store(count, std::memory_order_relaxed);
+        expected_in_iteration = count;
+    }
+
+    void begin_iteration(int depth) {
+        int participants = active_threads.load(std::memory_order_relaxed);
+        if (participants <= 0) {
+            participants = 1;
+        }
+        {
+            std::lock_guard<std::mutex> lock(iteration_mutex);
+            active_iteration = depth;
+            completed_in_iteration = 0;
+            iteration_in_progress = true;
+            expected_in_iteration = participants;
+        }
+        iteration_cv.notify_all();
+    }
+
+    bool wait_for_iteration_start(int depth) {
+        std::unique_lock<std::mutex> lock(iteration_mutex);
+        iteration_cv.wait(lock, [&]() {
+            return stop.load(std::memory_order_relaxed) ||
+                   (iteration_in_progress && active_iteration >= depth);
+        });
+        return !stop.load(std::memory_order_relaxed);
+    }
+
+    void complete_iteration_participant() {
+        bool notify = false;
+        {
+            std::lock_guard<std::mutex> lock(iteration_mutex);
+            if (!iteration_in_progress) {
+                return;
+            }
+            ++completed_in_iteration;
+            if (completed_in_iteration >= expected_in_iteration) {
+                iteration_in_progress = false;
+                notify = true;
+            }
+        }
+        if (notify) {
+            iteration_cv.notify_all();
+        }
+    }
+
+    void retire_worker() {
+        int current = active_threads.load(std::memory_order_relaxed);
+        while (current > 0) {
+            if (active_threads.compare_exchange_weak(current, current - 1, std::memory_order_acq_rel)) {
+                break;
+            }
+        }
+        if (current <= 0) {
+            active_threads.store(0, std::memory_order_relaxed);
+        }
+        iteration_cv.notify_all();
+    }
+
+    void wait_iteration_complete() {
+        std::unique_lock<std::mutex> lock(iteration_mutex);
+        iteration_cv.wait(lock, [&]() {
+            return !iteration_in_progress || stop.load(std::memory_order_relaxed);
+        });
+    }
+
+    bool request_stop() {
+        bool expected = false;
+        if (stop.compare_exchange_strong(expected, true, std::memory_order_relaxed)) {
+            notify_stop_observers();
+            return true;
+        }
+        notify_stop_observers();
+        return false;
+    }
+
+    void notify_stop_observers() {
+        background_cv.notify_all();
+        iteration_cv.notify_all();
     }
 
     void log_event(std::string_view label, std::uint64_t nodes_snapshot) {
@@ -985,7 +1106,7 @@ bool should_stop(SearchContext &context, SearchNodeKind kind) {
         shared.node_counter.load(std::memory_order_relaxed) + context.local_node_accumulator;
     if (shared.has_node_limit && aggregated_nodes >= shared.node_limit) {
         flush_thread_node_counter(context);
-        bool was_running = !shared.stop.exchange(true, std::memory_order_relaxed);
+        bool was_running = shared.request_stop();
         if (was_running) {
             shared.log_event("limit/node", aggregated_nodes);
         }
@@ -1002,13 +1123,15 @@ bool should_stop(SearchContext &context, SearchNodeKind kind) {
 
     auto now = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - shared.start_time);
+    auto soft_limit = shared.get_soft_limit();
+    auto hard_limit = shared.get_hard_limit();
     if (!shared.soft_limit_reached.load(std::memory_order_relaxed) &&
-        elapsed >= shared.soft_time_limit) {
+        elapsed >= soft_limit) {
         shared.soft_limit_reached.store(true, std::memory_order_relaxed);
         shared.log_event("limit/soft", aggregated_nodes);
     }
-    if (elapsed >= shared.hard_time_limit) {
-        bool was_running = !shared.stop.exchange(true, std::memory_order_relaxed);
+    if (elapsed >= hard_limit) {
+        bool was_running = shared.request_stop();
         shared.timed_out.store(true, std::memory_order_relaxed);
         flush_thread_node_counter(context);
         if (was_running) {
@@ -1445,7 +1568,7 @@ public:
     }
 
     void notify_search_end(SearchSharedState &shared) {
-        shared.stop.store(true, std::memory_order_relaxed);
+        shared.request_stop();
         shared.wait_for_background_tasks();
     }
 
@@ -1607,7 +1730,7 @@ public:
         std::lock_guard<std::mutex> lock(active_search_mutex);
         active_search_state = state_;
         if (stop_requested_pending.load(std::memory_order_relaxed)) {
-            state_->stop.store(true, std::memory_order_relaxed);
+            state_->request_stop();
             stop_requested_pending.store(false, std::memory_order_relaxed);
         }
     }
@@ -1812,14 +1935,67 @@ SearchResult run_search_thread(Board board, int max_depth_limit, SearchSharedSta
 
     initialize_evaluation(board);
 
-    if (thread_index > 0) {
-        std::this_thread::sleep_for(std::chrono::milliseconds{15 * thread_index});
+    const std::chrono::milliseconds thread_delay{std::chrono::milliseconds{15 * thread_index}};
+    const std::chrono::milliseconds soft_extension{
+        std::chrono::milliseconds{std::min(200, 20 * thread_index)}};
+    const std::chrono::milliseconds hard_extension = soft_extension;
+    if (thread_index > 0 && thread_delay.count() > 0) {
+        std::this_thread::sleep_for(thread_delay);
     }
 
     int capped_depth_limit = std::max(1, max_depth_limit);
+    const int first_active_depth = std::clamp(1 + thread_index, 1, capped_depth_limit);
+    bool retired = false;
+    auto ensure_retired = [&]() {
+        if (!retired) {
+            shared.retire_worker();
+            retired = true;
+        }
+    };
     for (int depth = 1; depth <= capped_depth_limit; ++depth) {
         if (shared.stop.load(std::memory_order_relaxed)) {
+            ensure_retired();
             break;
+        }
+
+        if (is_primary) {
+            shared.begin_iteration(depth);
+        } else {
+            if (!shared.wait_for_iteration_start(depth)) {
+                ensure_retired();
+                break;
+            }
+        }
+
+        bool iteration_finalized = false;
+        auto finalize_iteration = [&]() {
+            if (!iteration_finalized) {
+                shared.complete_iteration_participant();
+                if (is_primary) {
+                    shared.wait_iteration_complete();
+                }
+                iteration_finalized = true;
+            }
+        };
+
+        if (shared.stop.load(std::memory_order_relaxed)) {
+            finalize_iteration();
+            ensure_retired();
+            break;
+        }
+
+        if (depth < first_active_depth) {
+            finalize_iteration();
+            continue;
+        }
+
+        if (!is_primary && thread_delay.count() > 0) {
+            std::this_thread::sleep_for(thread_delay);
+            if (shared.stop.load(std::memory_order_relaxed)) {
+                finalize_iteration();
+                ensure_retired();
+                break;
+            }
         }
 
         const int full_min = std::numeric_limits<int>::min() / 2;
@@ -1879,6 +2055,8 @@ SearchResult run_search_thread(Board board, int max_depth_limit, SearchSharedSta
         }
 
         if (shared.stop.load(std::memory_order_relaxed)) {
+            finalize_iteration();
+            ensure_retired();
             break;
         }
 
@@ -1901,38 +2079,66 @@ SearchResult run_search_thread(Board board, int max_depth_limit, SearchSharedSta
                                 is_primary);
         }
 
-        if (is_primary && shared.has_time_limit) {
+        if (shared.has_time_limit) {
             auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                 iteration_end - shared.start_time);
-            if (elapsed >= shared.hard_time_limit) {
-                shared.stop.store(true, std::memory_order_relaxed);
-                shared.timed_out.store(true, std::memory_order_relaxed);
+            auto base_soft = shared.get_soft_limit();
+            auto base_hard = shared.get_hard_limit();
+            auto soft_limit = base_soft;
+            auto hard_limit = base_hard;
+            if (!is_primary) {
+                soft_limit += soft_extension;
+                hard_limit += hard_extension;
+            }
+            if (elapsed >= hard_limit) {
+                if (is_primary) {
+                    shared.timed_out.store(true, std::memory_order_relaxed);
+                }
                 local.timed_out = true;
+                shared.request_stop();
+                finalize_iteration();
+                ensure_retired();
                 break;
             }
-            auto projected = context.last_iteration_time * 3 / 2;
-            if (projected.count() <= 0) {
-                projected = std::chrono::milliseconds{15};
-            }
-            bool enforce_depth_target = best_found && is_major_decision(best_move, root_color) && depth < 12;
-            if (elapsed + projected >= shared.soft_time_limit ||
-                elapsed >= shared.soft_time_limit) {
-                if (enforce_depth_target) {
-                    auto extension = std::max(projected, std::chrono::milliseconds{15});
-                    auto new_soft = elapsed + extension;
-                    if (new_soft > shared.hard_time_limit) {
-                        new_soft = shared.hard_time_limit;
-                    }
-                    if (new_soft > shared.soft_time_limit) {
-                        shared.soft_time_limit = new_soft;
-                    }
-                } else {
-                    shared.stop.store(true, std::memory_order_relaxed);
-                    break;
+            if (is_primary) {
+                auto projected = context.last_iteration_time * 3 / 2;
+                if (projected.count() <= 0) {
+                    projected = std::chrono::milliseconds{15};
                 }
+                bool enforce_depth_target =
+                    best_found && is_major_decision(best_move, root_color) && depth < 12;
+                if (elapsed + projected >= soft_limit || elapsed >= soft_limit) {
+                    if (enforce_depth_target) {
+                        auto extension = std::max(projected, std::chrono::milliseconds{15});
+                        auto new_soft = elapsed + extension;
+                        if (new_soft > base_hard) {
+                            new_soft = base_hard;
+                        }
+                        if (new_soft > base_soft) {
+                            shared.set_soft_limit(new_soft);
+                        }
+                    } else {
+                        shared.request_stop();
+                        finalize_iteration();
+                        ensure_retired();
+                        break;
+                    }
+                }
+            } else if (elapsed >= soft_limit) {
+                finalize_iteration();
+                ensure_retired();
+                break;
             }
         }
+
+        finalize_iteration();
+
+        if (shared.stop.load(std::memory_order_relaxed)) {
+            ensure_retired();
+            break;
+        }
     }
+    ensure_retired();
 
     if (infinite_search) {
         while (!shared.stop.load(std::memory_order_relaxed)) {
@@ -1967,16 +2173,20 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     std::uint64_t nodes_budget_from_time = 0;
     if (allocation.has_value()) {
         shared.has_time_limit = true;
-        shared.soft_time_limit = allocation->soft;
-        shared.hard_time_limit = allocation->hard;
-        if (shared.soft_time_limit.count() <= 0) {
-            shared.soft_time_limit = std::chrono::milliseconds{1};
+        shared.set_soft_limit(allocation->soft);
+        shared.set_hard_limit(allocation->hard);
+        auto soft_limit = shared.get_soft_limit();
+        auto hard_limit = shared.get_hard_limit();
+        if (soft_limit.count() <= 0) {
+            soft_limit = std::chrono::milliseconds{1};
+            shared.set_soft_limit(soft_limit);
         }
-        if (shared.hard_time_limit.count() <= 0) {
-            shared.hard_time_limit = shared.soft_time_limit;
+        if (hard_limit.count() <= 0) {
+            hard_limit = soft_limit;
+            shared.set_hard_limit(hard_limit);
         }
         shared.start_time = std::chrono::steady_clock::now();
-        nodes_budget_from_time = nodes_budget_for_time(shared.hard_time_limit);
+        nodes_budget_from_time = nodes_budget_for_time(hard_limit);
     }
 
     if (!treat_as_infinite) {
@@ -2019,6 +2229,7 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     ActiveSearchGuard active_guard{&shared};
 
     int thread_count = std::max(1, get_search_threads());
+    shared.configure_thread_count(thread_count);
     std::vector<SearchResult> thread_results(static_cast<std::size_t>(thread_count));
 
     const bool infinite_search = treat_as_infinite && !shared.has_time_limit && !shared.has_node_limit;
@@ -2041,7 +2252,7 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
 
     worker_fn(0, true);
 
-    shared.stop.store(true, std::memory_order_relaxed);
+    shared.request_stop();
     shared.wait_for_background_tasks();
 
     SearchResult best = shared_result.result;
@@ -2150,7 +2361,7 @@ void request_stop_search() {
     std::lock_guard<std::mutex> lock(active_search_mutex);
     stop_requested_pending.store(true, std::memory_order_relaxed);
     if (active_search_state != nullptr) {
-        active_search_state->stop.store(true, std::memory_order_relaxed);
+        active_search_state->request_stop();
         stop_requested_pending.store(false, std::memory_order_relaxed);
     }
 }
