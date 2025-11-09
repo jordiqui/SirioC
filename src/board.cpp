@@ -288,13 +288,18 @@ int Board::square_from_string(std::string_view square) {
     if (square.size() != 2) {
         return -1;
     }
-    char file = square[0];
-    char rank = square[1];
+
+    const unsigned char raw_file = static_cast<unsigned char>(square[0]);
+    const unsigned char raw_rank = static_cast<unsigned char>(square[1]);
+    const char file = static_cast<char>(std::tolower(raw_file));
+    const char rank = static_cast<char>(raw_rank);
+
     if (file < 'a' || file > 'h' || rank < '1' || rank > '8') {
         return -1;
     }
-    int file_index = file - 'a';
-    int rank_index = rank - '1';
+
+    const int file_index = file - 'a';
+    const int rank_index = rank - '1';
     return rank_index * 8 + file_index;
 }
 
