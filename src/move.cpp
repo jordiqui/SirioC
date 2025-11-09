@@ -45,8 +45,12 @@ int square_from_uci(const std::string &text, std::size_t offset) {
     if (offset + 1 >= text.size()) {
         throw std::invalid_argument("Invalid UCI move format");
     }
-    char file = text[offset];
-    char rank = text[offset + 1];
+
+    const unsigned char raw_file = static_cast<unsigned char>(text[offset]);
+    const unsigned char raw_rank = static_cast<unsigned char>(text[offset + 1]);
+    const char file = static_cast<char>(std::tolower(raw_file));
+    const char rank = static_cast<char>(raw_rank);
+
     if (file < 'a' || file > 'h' || rank < '1' || rank > '8') {
         throw std::invalid_argument("Invalid square in UCI move");
     }

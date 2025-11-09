@@ -196,6 +196,11 @@ void test_apply_uci_move_handles_null_and_invalid_tokens() {
     const std::string before_invalid = board.to_fen();
     assert(!sirio::apply_uci_move(board, "zzzz"));
     assert(board.to_fen() == before_invalid);
+
+    // Uppercase coordinates should be treated the same as lowercase tokens.
+    sirio::Board uppercase_board;
+    assert(sirio::apply_uci_move(uppercase_board, "E2E4"));
+    assert(uppercase_board.side_to_move() == sirio::Color::Black);
 }
 
 void test_null_move() {
