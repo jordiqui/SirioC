@@ -103,23 +103,15 @@ inline Bitboard ray_attacks(int square, int file_step, int rank_step, Bitboard o
     return attacks;
 }
 
-inline Bitboard bishop_attacks(int square, Bitboard occupancy) {
-    return ray_attacks(square, 1, 1, occupancy) |
-           ray_attacks(square, -1, 1, occupancy) |
-           ray_attacks(square, 1, -1, occupancy) |
-           ray_attacks(square, -1, -1, occupancy);
-}
+Bitboard bishop_attacks(int square, Bitboard occupancy);
 
-inline Bitboard rook_attacks(int square, Bitboard occupancy) {
-    return ray_attacks(square, 1, 0, occupancy) |
-           ray_attacks(square, -1, 0, occupancy) |
-           ray_attacks(square, 0, 1, occupancy) |
-           ray_attacks(square, 0, -1, occupancy);
-}
+Bitboard rook_attacks(int square, Bitboard occupancy);
 
 inline Bitboard queen_attacks(int square, Bitboard occupancy) {
     return bishop_attacks(square, occupancy) | rook_attacks(square, occupancy);
 }
+
+void initialize_sliding_attack_tables();
 
 }  // namespace sirio
 

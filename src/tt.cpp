@@ -20,7 +20,7 @@
 namespace sirio {
 namespace {
 
-constexpr std::size_t kDefaultTranspositionTableSizeMb = 16;
+constexpr std::size_t kDefaultTranspositionTableSizeMb = 256;
 
 std::atomic<std::size_t> transposition_table_size_mb{kDefaultTranspositionTableSizeMb};
 std::atomic<std::uint64_t> transposition_table_epoch{1};
@@ -90,6 +90,14 @@ std::uint64_t high_product(std::uint64_t lhs, std::uint64_t rhs) {
     const std::uint64_t carry = low < lo_lo ? 1ULL : 0ULL;
 
     return hi_hi + mid_high + carry;
+}
+
+std::uint64_t secondary_hash(std::uint64_t key) {
+    constexpr std::uint64_t golden_ratio = 0x9E3779B97F4A7C15ULL;
+    key ^= key >> 33U;
+    key ^= key << 11U;
+    key ^= key >> 7U;
+    return key ^ golden_ratio;
 }
 
 }  // namespace
@@ -209,13 +217,37 @@ void GlobalTranspositionTable::store(std::uint64_t key, const TTEntry &entry, st
         return;
     }
 
-    const std::size_t index = cluster_index(key);
-    Cluster &cluster = clusters_[index];
-    const std::size_t slot_index = select_entry_index(cluster, static_cast<std::uint16_t>(key));
+    const std::uint16_t key16 = static_cast<std::uint16_t>(key);
+    const std::size_t primary_index = cluster_index(key);
+    Cluster *target_cluster = &clusters_[primary_index];
+    std::size_t target_slot = select_entry_index(*target_cluster, key16);
+    PackedTTEntry primary_entry =
+        target_cluster->entries[target_slot].load(std::memory_order_relaxed);
+
+    const std::size_t secondary_index = cluster_index(secondary_hash(key));
+    if (secondary_index != primary_index) {
+        Cluster &secondary_cluster = clusters_[secondary_index];
+        std::size_t secondary_slot = select_entry_index(secondary_cluster, key16);
+        PackedTTEntry secondary_entry =
+            secondary_cluster.entries[secondary_slot].load(std::memory_order_relaxed);
+
+        bool primary_match = primary_entry.occupied() && primary_entry.key16 == key16;
+        bool secondary_match = secondary_entry.occupied() && secondary_entry.key16 == key16;
+
+        if (!primary_match) {
+            int primary_score = replacement_score(primary_entry, generation_tag_);
+            int secondary_score = replacement_score(secondary_entry, generation_tag_);
+            if (!secondary_entry.occupied() || secondary_match || secondary_score < primary_score) {
+                target_cluster = &secondary_cluster;
+                target_slot = secondary_slot;
+                primary_entry = secondary_entry;
+            }
+        }
+    }
 
     const std::uint8_t generation_bits = pack_generation(generation);
     PackedTTEntry packed{};
-    packed.key16 = static_cast<std::uint16_t>(key);
+    packed.key16 = key16;
     packed.depth8 = pack_depth(entry.depth);
     packed.gen_and_type = static_cast<std::uint8_t>((generation_bits & kGenerationMask) |
                                                    (static_cast<std::uint8_t>(entry.type) & kNodeTypeMask));
@@ -223,7 +255,7 @@ void GlobalTranspositionTable::store(std::uint64_t key, const TTEntry &entry, st
     packed.score = entry.score;
     packed.static_eval = entry.static_eval;
 
-    cluster.entries[slot_index].store(packed, std::memory_order_relaxed);
+    target_cluster->entries[target_slot].store(packed, std::memory_order_relaxed);
 }
 
 std::optional<TTEntry> GlobalTranspositionTable::probe(std::uint64_t key) const {
@@ -232,11 +264,19 @@ std::optional<TTEntry> GlobalTranspositionTable::probe(std::uint64_t key) const 
         return std::nullopt;
     }
 
-    const std::size_t index = cluster_index(key);
-    const Cluster &cluster = clusters_[index];
-    auto slot = find_entry(cluster, static_cast<std::uint16_t>(key));
+    const std::uint16_t key16 = static_cast<std::uint16_t>(key);
+    const std::size_t primary_index = cluster_index(key);
+    const Cluster &primary_cluster = clusters_[primary_index];
+    auto slot = find_entry(primary_cluster, key16);
     if (!slot.has_value()) {
-        return std::nullopt;
+        const std::size_t secondary_index = cluster_index(secondary_hash(key));
+        if (secondary_index != primary_index) {
+            const Cluster &secondary_cluster = clusters_[secondary_index];
+            slot = find_entry(secondary_cluster, key16);
+        }
+        if (!slot.has_value()) {
+            return std::nullopt;
+        }
     }
 
     TTEntry result;
@@ -258,10 +298,17 @@ void GlobalTranspositionTable::prefetch(std::uint64_t key) const {
     if (clusters_.empty()) {
         return;
     }
-    const std::size_t index = cluster_index(key);
-    const Cluster &cluster = clusters_[index];
-    for (const auto &entry : cluster.entries) {
+    const std::size_t primary_index = cluster_index(key);
+    const Cluster &primary_cluster = clusters_[primary_index];
+    for (const auto &entry : primary_cluster.entries) {
         __builtin_prefetch(static_cast<const void *>(&entry), 0, 1);
+    }
+    const std::size_t secondary_index = cluster_index(secondary_hash(key));
+    if (secondary_index != primary_index) {
+        const Cluster &secondary_cluster = clusters_[secondary_index];
+        for (const auto &entry : secondary_cluster.entries) {
+            __builtin_prefetch(static_cast<const void *>(&entry), 0, 1);
+        }
     }
 #else
     (void)key;

@@ -10,6 +10,7 @@ option(SIRIO_ENABLE_AVX512 "Enable AVX-512 optimizations" OFF)
 
 add_library(sirio_core
     src/board.cpp
+    src/bitboard_tables.cpp
     src/draws.cpp
     src/endgame.cpp
     src/evaluation.cpp

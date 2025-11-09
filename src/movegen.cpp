@@ -20,150 +20,177 @@ void append_move(std::vector<Move> &moves, Move move) {
     moves.push_back(move);
 }
 
-void generate_pawn_moves(const Board &board, Color us, Color them, Bitboard occupancy_all,
-                         std::vector<Move> &moves) {
+void generate_pawn_moves_impl(const Board &board, Color us, Color them, Bitboard occupancy_all,
+                              std::vector<Move> &moves, bool tactical_only) {
     Bitboard pawns = board.pieces(us, PieceType::Pawn);
+    Bitboard enemy_occ = board.occupancy(them);
+    Bitboard empty = ~occupancy_all;
     auto en_passant = board.en_passant_square();
+    Bitboard en_passant_mask = en_passant ? one_bit(*en_passant) : 0ULL;
 
-    while (pawns) {
-        int from = pop_lsb(pawns);
-        int from_file = file_of(from);
-        int from_rank = rank_of(from);
+    auto emit_promotion = [&](int from, int to, std::optional<PieceType> captured_piece) {
+        for (PieceType promo : {PieceType::Queen, PieceType::Rook, PieceType::Bishop, PieceType::Knight}) {
+            Move move{from, to, PieceType::Pawn};
+            move.promotion = promo;
+            if (captured_piece.has_value()) {
+                move.captured = captured_piece;
+            }
+            append_move(moves, move);
+        }
+    };
 
-        if (us == Color::White) {
-            int forward = from + 8;
-            if (forward < 64 && (occupancy_all & one_bit(forward)) == 0) {
-                if (from_rank == 6) {
-                    for (PieceType promo : {PieceType::Queen, PieceType::Rook, PieceType::Bishop, PieceType::Knight}) {
-                        Move move{from, forward, PieceType::Pawn};
-                        move.promotion = promo;
-                        append_move(moves, move);
-                    }
-                } else {
-                    append_move(moves, Move{from, forward, PieceType::Pawn});
-                    if (from_rank == 1) {
-                        int double_forward = from + 16;
-                        if ((occupancy_all & one_bit(double_forward)) == 0) {
-                            Move move{from, double_forward, PieceType::Pawn};
-                            append_move(moves, move);
-                        }
-                    }
-                }
+    if (us == Color::White) {
+        Bitboard promotion_pushes = ((pawns & rank_7_mask) << 8) & empty;
+        while (promotion_pushes) {
+            int to = pop_lsb(promotion_pushes);
+            int from = to - 8;
+            emit_promotion(from, to, std::nullopt);
+        }
+
+        if (!tactical_only) {
+            Bitboard single_pushes = ((pawns & ~rank_7_mask) << 8) & empty;
+            while (single_pushes) {
+                int to = pop_lsb(single_pushes);
+                int from = to - 8;
+                append_move(moves, Move{from, to, PieceType::Pawn});
             }
 
-            if (from_file > 0) {
-                int target = from + 7;
-                if (target < 64) {
-                    Move move{from, target, PieceType::Pawn};
-                    if (auto capture = captured_piece_on(board, target, them)) {
-                        move.captured = capture;
-                        if (from_rank == 6) {
-                            for (PieceType promo : {PieceType::Queen, PieceType::Rook, PieceType::Bishop, PieceType::Knight}) {
-                                Move promo_move = move;
-                                promo_move.promotion = promo;
-                                append_move(moves, promo_move);
-                            }
-                        } else {
-                            append_move(moves, move);
-                        }
-                    } else if (en_passant && *en_passant == target) {
-                        move.is_en_passant = true;
-                        move.captured = PieceType::Pawn;
-                        append_move(moves, move);
-                    }
-                }
+            Bitboard double_pushes = (((pawns & rank_2_mask) << 8) & empty);
+            double_pushes = (double_pushes << 8) & empty;
+            while (double_pushes) {
+                int to = pop_lsb(double_pushes);
+                int from = to - 16;
+                append_move(moves, Move{from, to, PieceType::Pawn});
+            }
+        }
+
+        Bitboard left_captures = ((pawns & not_file_a_mask) << 7) & enemy_occ;
+        while (left_captures) {
+            int to = pop_lsb(left_captures);
+            int from = to - 7;
+            auto captured = captured_piece_on(board, to, them);
+            if (to >= 56) {
+                emit_promotion(from, to, captured);
+            } else {
+                Move move{from, to, PieceType::Pawn};
+                move.captured = captured;
+                append_move(moves, move);
+            }
+        }
+
+        Bitboard right_captures = ((pawns & not_file_h_mask) << 9) & enemy_occ;
+        while (right_captures) {
+            int to = pop_lsb(right_captures);
+            int from = to - 9;
+            auto captured = captured_piece_on(board, to, them);
+            if (to >= 56) {
+                emit_promotion(from, to, captured);
+            } else {
+                Move move{from, to, PieceType::Pawn};
+                move.captured = captured;
+                append_move(moves, move);
+            }
+        }
+
+        if (en_passant_mask != 0) {
+            Bitboard ep_left = ((pawns & not_file_a_mask) << 7) & en_passant_mask;
+            while (ep_left) {
+                int to = pop_lsb(ep_left);
+                int from = to - 7;
+                Move move{from, to, PieceType::Pawn};
+                move.is_en_passant = true;
+                move.captured = PieceType::Pawn;
+                append_move(moves, move);
+            }
+            Bitboard ep_right = ((pawns & not_file_h_mask) << 9) & en_passant_mask;
+            while (ep_right) {
+                int to = pop_lsb(ep_right);
+                int from = to - 9;
+                Move move{from, to, PieceType::Pawn};
+                move.is_en_passant = true;
+                move.captured = PieceType::Pawn;
+                append_move(moves, move);
+            }
+        }
+    } else {
+        Bitboard promotion_pushes = ((pawns & rank_2_mask) >> 8) & empty;
+        while (promotion_pushes) {
+            int to = pop_lsb(promotion_pushes);
+            int from = to + 8;
+            emit_promotion(from, to, std::nullopt);
+        }
+
+        if (!tactical_only) {
+            Bitboard single_pushes = ((pawns & ~rank_2_mask) >> 8) & empty;
+            while (single_pushes) {
+                int to = pop_lsb(single_pushes);
+                int from = to + 8;
+                append_move(moves, Move{from, to, PieceType::Pawn});
             }
 
-            if (from_file < 7) {
-                int target = from + 9;
-                if (target < 64) {
-                    Move move{from, target, PieceType::Pawn};
-                    if (auto capture = captured_piece_on(board, target, them)) {
-                        move.captured = capture;
-                        if (from_rank == 6) {
-                            for (PieceType promo : {PieceType::Queen, PieceType::Rook, PieceType::Bishop, PieceType::Knight}) {
-                                Move promo_move = move;
-                                promo_move.promotion = promo;
-                                append_move(moves, promo_move);
-                            }
-                        } else {
-                            append_move(moves, move);
-                        }
-                    } else if (en_passant && *en_passant == target) {
-                        move.is_en_passant = true;
-                        move.captured = PieceType::Pawn;
-                        append_move(moves, move);
-                    }
-                }
+            Bitboard double_pushes = (((pawns & rank_7_mask) >> 8) & empty);
+            double_pushes = (double_pushes >> 8) & empty;
+            while (double_pushes) {
+                int to = pop_lsb(double_pushes);
+                int from = to + 16;
+                append_move(moves, Move{from, to, PieceType::Pawn});
             }
-        } else {
-            int forward = from - 8;
-            if (forward >= 0 && (occupancy_all & one_bit(forward)) == 0) {
-                if (from_rank == 1) {
-                    for (PieceType promo : {PieceType::Queen, PieceType::Rook, PieceType::Bishop, PieceType::Knight}) {
-                        Move move{from, forward, PieceType::Pawn};
-                        move.promotion = promo;
-                        append_move(moves, move);
-                    }
-                } else {
-                    append_move(moves, Move{from, forward, PieceType::Pawn});
-                    if (from_rank == 6) {
-                        int double_forward = from - 16;
-                        if ((occupancy_all & one_bit(double_forward)) == 0) {
-                            Move move{from, double_forward, PieceType::Pawn};
-                            append_move(moves, move);
-                        }
-                    }
-                }
-            }
+        }
 
-            if (from_file > 0) {
-                int target = from - 9;
-                if (target >= 0) {
-                    Move move{from, target, PieceType::Pawn};
-                    if (auto capture = captured_piece_on(board, target, them)) {
-                        move.captured = capture;
-                        if (from_rank == 1) {
-                            for (PieceType promo : {PieceType::Queen, PieceType::Rook, PieceType::Bishop, PieceType::Knight}) {
-                                Move promo_move = move;
-                                promo_move.promotion = promo;
-                                append_move(moves, promo_move);
-                            }
-                        } else {
-                            append_move(moves, move);
-                        }
-                    } else if (en_passant && *en_passant == target) {
-                        move.is_en_passant = true;
-                        move.captured = PieceType::Pawn;
-                        append_move(moves, move);
-                    }
-                }
+        Bitboard left_captures = ((pawns & not_file_a_mask) >> 9) & enemy_occ;
+        while (left_captures) {
+            int to = pop_lsb(left_captures);
+            int from = to + 9;
+            auto captured = captured_piece_on(board, to, them);
+            if (to <= 7) {
+                emit_promotion(from, to, captured);
+            } else {
+                Move move{from, to, PieceType::Pawn};
+                move.captured = captured;
+                append_move(moves, move);
             }
+        }
 
-            if (from_file < 7) {
-                int target = from - 7;
-                if (target >= 0) {
-                    Move move{from, target, PieceType::Pawn};
-                    if (auto capture = captured_piece_on(board, target, them)) {
-                        move.captured = capture;
-                        if (from_rank == 1) {
-                            for (PieceType promo : {PieceType::Queen, PieceType::Rook, PieceType::Bishop, PieceType::Knight}) {
-                                Move promo_move = move;
-                                promo_move.promotion = promo;
-                                append_move(moves, promo_move);
-                            }
-                        } else {
-                            append_move(moves, move);
-                        }
-                    } else if (en_passant && *en_passant == target) {
-                        move.is_en_passant = true;
-                        move.captured = PieceType::Pawn;
-                        append_move(moves, move);
-                    }
-                }
+        Bitboard right_captures = ((pawns & not_file_h_mask) >> 7) & enemy_occ;
+        while (right_captures) {
+            int to = pop_lsb(right_captures);
+            int from = to + 7;
+            auto captured = captured_piece_on(board, to, them);
+            if (to <= 7) {
+                emit_promotion(from, to, captured);
+            } else {
+                Move move{from, to, PieceType::Pawn};
+                move.captured = captured;
+                append_move(moves, move);
+            }
+        }
+
+        if (en_passant_mask != 0) {
+            Bitboard ep_left = ((pawns & not_file_a_mask) >> 9) & en_passant_mask;
+            while (ep_left) {
+                int to = pop_lsb(ep_left);
+                int from = to + 9;
+                Move move{from, to, PieceType::Pawn};
+                move.is_en_passant = true;
+                move.captured = PieceType::Pawn;
+                append_move(moves, move);
+            }
+            Bitboard ep_right = ((pawns & not_file_h_mask) >> 7) & en_passant_mask;
+            while (ep_right) {
+                int to = pop_lsb(ep_right);
+                int from = to + 7;
+                Move move{from, to, PieceType::Pawn};
+                move.is_en_passant = true;
+                move.captured = PieceType::Pawn;
+                append_move(moves, move);
             }
         }
     }
+}
+
+void generate_pawn_moves(const Board &board, Color us, Color them, Bitboard occupancy_all,
+                         std::vector<Move> &moves) {
+    generate_pawn_moves_impl(board, us, them, occupancy_all, moves, false);
 }
 
 void generate_leaper_moves(const Board &board, Color us, Color them, Bitboard occupancy_us,
@@ -295,131 +322,7 @@ void generate_castling_moves(const Board &board, Color us, Color them, std::vect
 
 void generate_pawn_tactical_moves(const Board &board, Color us, Color them,
                                   Bitboard occupancy_all, std::vector<Move> &moves) {
-    Bitboard pawns = board.pieces(us, PieceType::Pawn);
-    auto en_passant = board.en_passant_square();
-    while (pawns) {
-        int from = pop_lsb(pawns);
-        int from_file = file_of(from);
-        int from_rank = rank_of(from);
-
-        if (us == Color::White) {
-            int forward = from + 8;
-            if (from_rank == 6 && forward < 64 && (occupancy_all & one_bit(forward)) == 0) {
-                for (PieceType promo : {PieceType::Queen, PieceType::Rook, PieceType::Bishop,
-                                        PieceType::Knight}) {
-                    Move move{from, forward, PieceType::Pawn};
-                    move.promotion = promo;
-                    append_move(moves, move);
-                }
-            }
-
-            if (from_file > 0) {
-                int target = from + 7;
-                if (target < 64) {
-                    Move move{from, target, PieceType::Pawn};
-                    if (auto capture = captured_piece_on(board, target, them)) {
-                        move.captured = capture;
-                        if (from_rank == 6) {
-                            for (PieceType promo : {PieceType::Queen, PieceType::Rook,
-                                                    PieceType::Bishop, PieceType::Knight}) {
-                                Move promo_move = move;
-                                promo_move.promotion = promo;
-                                append_move(moves, promo_move);
-                            }
-                        } else {
-                            append_move(moves, move);
-                        }
-                    } else if (en_passant && *en_passant == target) {
-                        move.is_en_passant = true;
-                        move.captured = PieceType::Pawn;
-                        append_move(moves, move);
-                    }
-                }
-            }
-
-            if (from_file < 7) {
-                int target = from + 9;
-                if (target < 64) {
-                    Move move{from, target, PieceType::Pawn};
-                    if (auto capture = captured_piece_on(board, target, them)) {
-                        move.captured = capture;
-                        if (from_rank == 6) {
-                            for (PieceType promo : {PieceType::Queen, PieceType::Rook,
-                                                    PieceType::Bishop, PieceType::Knight}) {
-                                Move promo_move = move;
-                                promo_move.promotion = promo;
-                                append_move(moves, promo_move);
-                            }
-                        } else {
-                            append_move(moves, move);
-                        }
-                    } else if (en_passant && *en_passant == target) {
-                        move.is_en_passant = true;
-                        move.captured = PieceType::Pawn;
-                        append_move(moves, move);
-                    }
-                }
-            }
-        } else {
-            int forward = from - 8;
-            if (from_rank == 1 && forward >= 0 && (occupancy_all & one_bit(forward)) == 0) {
-                for (PieceType promo : {PieceType::Queen, PieceType::Rook, PieceType::Bishop,
-                                        PieceType::Knight}) {
-                    Move move{from, forward, PieceType::Pawn};
-                    move.promotion = promo;
-                    append_move(moves, move);
-                }
-            }
-
-            if (from_file > 0) {
-                int target = from - 9;
-                if (target >= 0) {
-                    Move move{from, target, PieceType::Pawn};
-                    if (auto capture = captured_piece_on(board, target, them)) {
-                        move.captured = capture;
-                        if (from_rank == 1) {
-                            for (PieceType promo : {PieceType::Queen, PieceType::Rook,
-                                                    PieceType::Bishop, PieceType::Knight}) {
-                                Move promo_move = move;
-                                promo_move.promotion = promo;
-                                append_move(moves, promo_move);
-                            }
-                        } else {
-                            append_move(moves, move);
-                        }
-                    } else if (en_passant && *en_passant == target) {
-                        move.is_en_passant = true;
-                        move.captured = PieceType::Pawn;
-                        append_move(moves, move);
-                    }
-                }
-            }
-
-            if (from_file < 7) {
-                int target = from - 7;
-                if (target >= 0) {
-                    Move move{from, target, PieceType::Pawn};
-                    if (auto capture = captured_piece_on(board, target, them)) {
-                        move.captured = capture;
-                        if (from_rank == 1) {
-                            for (PieceType promo : {PieceType::Queen, PieceType::Rook,
-                                                    PieceType::Bishop, PieceType::Knight}) {
-                                Move promo_move = move;
-                                promo_move.promotion = promo;
-                                append_move(moves, promo_move);
-                            }
-                        } else {
-                            append_move(moves, move);
-                        }
-                    } else if (en_passant && *en_passant == target) {
-                        move.is_en_passant = true;
-                        move.captured = PieceType::Pawn;
-                        append_move(moves, move);
-                    }
-                }
-            }
-        }
-    }
+    generate_pawn_moves_impl(board, us, them, occupancy_all, moves, true);
 }
 
 }  // namespace

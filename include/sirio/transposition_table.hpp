@@ -126,7 +126,7 @@ public:
     std::size_t bucket_count_for_tests() const;
 
 private:
-    static constexpr int kClusterSize = 3;
+    static constexpr int kClusterSize = 4;
     static constexpr int kDepthOffset = 64;
     static constexpr std::uint8_t kNodeTypeMask = 0x3;
     static constexpr std::uint8_t kGenerationDelta = 1u << 2;
