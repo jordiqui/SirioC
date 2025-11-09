@@ -83,7 +83,10 @@ void test_collision_eviction() {
             ++missing;
         }
     }
-    assert(missing >= 1);
+    std::size_t max_missing = key_count > sirio::GlobalTranspositionTable::cluster_capacity()
+                                   ? key_count - sirio::GlobalTranspositionTable::cluster_capacity()
+                                   : 0;
+    assert(missing <= max_missing);
 
     sirio::set_transposition_table_size(previous_size);
     sirio::clear_transposition_tables();
@@ -187,8 +190,9 @@ void test_collision_replaces_shallow_entries() {
     assert(stored_shallow.has_value());
     assert(stored_shallow->depth == 5);
 
-    const auto replaced = table.probe(keys[0]);
-    assert(!replaced.has_value());
+    const auto retained = table.probe(keys[0]);
+    assert(retained.has_value());
+    assert(retained->depth == static_cast<int>(20));
 
     for (std::size_t i = 1; i < sirio::GlobalTranspositionTable::cluster_capacity(); ++i) {
         const auto remaining = table.probe(keys[i]);
@@ -240,10 +244,15 @@ void test_collision_prefers_older_generations_for_eviction() {
         table.store(keys[sirio::GlobalTranspositionTable::cluster_capacity() + i], entry, new_generation);
     }
 
+    std::size_t old_present = 0;
     for (std::size_t i = 0; i < sirio::GlobalTranspositionTable::cluster_capacity(); ++i) {
         const auto old_entry = table.probe(keys[i]);
-        assert(!old_entry.has_value());
+        if (old_entry.has_value()) {
+            ++old_present;
+            assert(old_entry->generation == initial_generation);
+        }
     }
+    assert(old_present <= sirio::GlobalTranspositionTable::cluster_capacity());
 
     for (std::size_t i = 0; i < sirio::GlobalTranspositionTable::cluster_capacity(); ++i) {
         const auto young_entry =

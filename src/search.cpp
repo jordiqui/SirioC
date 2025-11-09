@@ -769,19 +769,6 @@ int mvv_lva_score(const Move &move) {
     return mvv_values[victim_index] * 100 - mvv_values[attacker_index];
 }
 
-int killer_score(const Move &move, const SearchContext &context, int ply) {
-    if (ply >= max_search_depth) {
-        return 0;
-    }
-    const auto &slots = context.killer_moves[static_cast<std::size_t>(ply)];
-    for (std::size_t index = 0; index < slots.size(); ++index) {
-        if (slots[index].has_value() && same_move(*slots[index], move)) {
-            return 800000 - static_cast<int>(index);
-        }
-    }
-    return 0;
-}
-
 constexpr int history_bonus_limit = 8192;
 constexpr int history_max = 16384;
 constexpr int history_min = -history_max;
@@ -810,23 +797,170 @@ void update_history(SearchContext &context, Color mover, const Move &move, int d
     }
 }
 
-thread_local std::vector<std::pair<int, Move>> move_order_buffer;
+class MovePicker {
+public:
+    MovePicker(Board &board, std::vector<Move> moves, const SearchContext &context, int ply,
+               const std::optional<Move> &tt_move, Color mover, bool tactical_only)
+        : board_(board),
+          context_(context),
+          mover_(mover),
+          ply_(ply),
+          tactical_only_(tactical_only) {
+        if (tt_move.has_value()) {
+            candidate_tt_move_ = *tt_move;
+        }
 
-int score_move(const Move &move, const SearchContext &context, int ply,
-               const std::optional<Move> &tt_move, Color mover) {
-    if (tt_move.has_value() && same_move(*tt_move, move)) {
-        return 1'000'000;
+        std::array<std::optional<Move>, 2> killer_slots = context_.killer_moves[static_cast<std::size_t>(ply_)];
+        std::array<bool, 2> killer_consumed{false, false};
+
+        bool tt_found = false;
+        for (const Move &move : moves) {
+            if (candidate_tt_move_.has_value() && same_move(*candidate_tt_move_, move)) {
+                tt_move_ = move;
+                tt_found = true;
+                continue;
+            }
+
+            if (move.captured.has_value() || move.is_en_passant) {
+                int see_score = static_exchange_score(board_, move);
+                int mvv_score = mvv_lva_score(move);
+                int priority = (see_score << 10) + mvv_score;
+                if (see_score >= 0) {
+                    good_captures_.emplace_back(priority, move);
+                } else {
+                    bad_captures_.emplace_back(priority, move);
+                }
+                continue;
+            }
+
+            if (move.promotion.has_value()) {
+                int promo_score = mvv_values[static_cast<std::size_t>(*move.promotion)] * 100;
+                promotions_.emplace_back(promo_score, move);
+                continue;
+            }
+
+            if (tactical_only_) {
+                continue;
+            }
+
+            bool matched_killer = false;
+            for (std::size_t index = 0; index < killer_slots.size(); ++index) {
+                if (!killer_slots[index].has_value() || killer_consumed[index]) {
+                    continue;
+                }
+                if (same_move(*killer_slots[index], move)) {
+                    killer_moves_.push_back(move);
+                    killer_consumed[index] = true;
+                    matched_killer = true;
+                    break;
+                }
+            }
+            if (matched_killer) {
+                continue;
+            }
+
+            int history = history_score(move, context_, mover_);
+            quiets_.emplace_back(history, move);
+        }
+
+        if (!tt_found) {
+            tt_move_.reset();
+        }
+
+        auto sort_desc = [](const auto &lhs, const auto &rhs) { return lhs.first > rhs.first; };
+        std::sort(good_captures_.begin(), good_captures_.end(), sort_desc);
+        std::sort(bad_captures_.begin(), bad_captures_.end(), sort_desc);
+        std::sort(promotions_.begin(), promotions_.end(), sort_desc);
+        if (!tactical_only_) {
+            std::sort(quiets_.begin(), quiets_.end(), sort_desc);
+        }
     }
-    if (move.captured.has_value()) {
-        return 900000 + mvv_lva_score(move);
+
+    std::optional<Move> next() {
+        while (stage_ != Stage::Done) {
+            switch (stage_) {
+                case Stage::TT:
+                    stage_ = Stage::GoodCaptures;
+                    if (tt_move_.has_value() && !tt_consumed_) {
+                        tt_consumed_ = true;
+                        ++generated_;
+                        return tt_move_;
+                    }
+                    continue;
+                case Stage::GoodCaptures:
+                    if (good_capture_index_ < good_captures_.size()) {
+                        Move move = good_captures_[good_capture_index_++].second;
+                        ++generated_;
+                        return move;
+                    }
+                    stage_ = Stage::Promotions;
+                    continue;
+                case Stage::Promotions:
+                    if (promotion_index_ < promotions_.size()) {
+                        Move move = promotions_[promotion_index_++].second;
+                        ++generated_;
+                        return move;
+                    }
+                    stage_ = tactical_only_ ? Stage::BadCaptures : Stage::Killers;
+                    continue;
+                case Stage::Killers:
+                    if (killer_index_ < killer_moves_.size()) {
+                        Move move = killer_moves_[killer_index_++];
+                        ++generated_;
+                        return move;
+                    }
+                    stage_ = Stage::Quiets;
+                    continue;
+                case Stage::Quiets:
+                    if (!tactical_only_ && quiet_index_ < quiets_.size()) {
+                        Move move = quiets_[quiet_index_++].second;
+                        ++generated_;
+                        return move;
+                    }
+                    stage_ = Stage::BadCaptures;
+                    continue;
+                case Stage::BadCaptures:
+                    if (bad_capture_index_ < bad_captures_.size()) {
+                        Move move = bad_captures_[bad_capture_index_++].second;
+                        ++generated_;
+                        return move;
+                    }
+                    stage_ = Stage::Done;
+                    break;
+                case Stage::Done:
+                    break;
+            }
+        }
+        return std::nullopt;
     }
-    int killer = killer_score(move, context, ply);
-    if (killer > 0) {
-        return killer;
-    }
-    int history = history_score(move, context, mover);
-    return 400000 + history;
-}
+
+private:
+    enum class Stage { TT, GoodCaptures, Promotions, Killers, Quiets, BadCaptures, Done };
+
+    Board &board_;
+    const SearchContext &context_;
+    Color mover_;
+    int ply_;
+    bool tactical_only_;
+
+    std::optional<Move> candidate_tt_move_;
+    std::optional<Move> tt_move_;
+    bool tt_consumed_ = false;
+
+    std::vector<std::pair<int, Move>> good_captures_;
+    std::vector<std::pair<int, Move>> bad_captures_;
+    std::vector<std::pair<int, Move>> promotions_;
+    std::vector<Move> killer_moves_;
+    std::vector<std::pair<int, Move>> quiets_;
+
+    Stage stage_ = Stage::TT;
+    std::size_t good_capture_index_ = 0;
+    std::size_t bad_capture_index_ = 0;
+    std::size_t promotion_index_ = 0;
+    std::size_t killer_index_ = 0;
+    std::size_t quiet_index_ = 0;
+    std::size_t generated_ = 0;
+};
 
 bool should_stop(SearchContext &context, SearchNodeKind kind) {
     SearchSharedState &shared = *context.shared;
@@ -908,23 +1042,6 @@ int from_tt_score(int score, int ply) {
         return score + ply;
     }
     return score;
-}
-
-void order_moves(std::vector<Move> &moves, const SearchContext &context, int ply,
-                 const std::optional<Move> &tt_move, Color mover) {
-    if (moves.size() <= 1) {
-        return;
-    }
-    move_order_buffer.clear();
-    move_order_buffer.reserve(moves.size());
-    for (const Move &move : moves) {
-        move_order_buffer.emplace_back(score_move(move, context, ply, tt_move, mover), move);
-    }
-    std::stable_sort(move_order_buffer.begin(), move_order_buffer.end(),
-                     [](const auto &lhs, const auto &rhs) { return lhs.first > rhs.first; });
-    for (std::size_t index = 0; index < move_order_buffer.size(); ++index) {
-        moves[index] = move_order_buffer[index].second;
-    }
 }
 
 void store_killer(const Move &move, SearchContext &context, int ply) {
@@ -1070,15 +1187,15 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         }
     }
 
-    auto moves = generate_legal_moves(board);
-    if (moves.empty()) {
+    auto raw_moves = generate_legal_moves(board);
+    if (raw_moves.empty()) {
         if (in_check) {
             return -mate_score + ply;
         }
         return 0;
     }
 
-    order_moves(moves, context, ply, tt_move, side_to_move);
+    MovePicker picker(board, std::move(raw_moves), context, ply, tt_move, side_to_move, false);
 
     int alpha_original = alpha;
     int best_score = std::numeric_limits<int>::min();
@@ -1086,7 +1203,8 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
     bool local_found = false;
 
     int move_index = 0;
-    for (const Move &move : moves) {
+    while (auto move_opt = picker.next()) {
+        const Move &move = *move_opt;
         ++move_index;
         if (ply == 0) {
             announce_currmove(move, move_index, context);
@@ -1239,10 +1357,12 @@ int quiescence(Board &board, int alpha, int beta, int ply, SearchContext &contex
         return alpha;
     }
 
-    order_moves(tactical_moves, context, ply, std::nullopt, board.side_to_move());
+    MovePicker picker(board, std::move(tactical_moves), context, ply, std::nullopt,
+                      board.side_to_move(), true);
 
     bool found_legal = false;
-    for (const Move &move : tactical_moves) {
+    while (auto move_opt = picker.next()) {
+        const Move &move = *move_opt;
         if (static_exchange_score(board, move) < 0) {
             continue;
         }
