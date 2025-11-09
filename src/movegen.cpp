@@ -20,9 +20,44 @@ void append_move(std::vector<Move> &moves, Move move) {
     moves.push_back(move);
 }
 
-void generate_pawn_moves_impl(const Board &board, Color us, Color them, Bitboard occupancy_all,
-                              std::vector<Move> &moves, bool tactical_only) {
-    Bitboard pawns = board.pieces(us, PieceType::Pawn);
+template <Color Us>
+Bitboard pawn_push(Bitboard pawns) {
+    if constexpr (Us == Color::White) {
+        return pawns << 8;
+    } else {
+        return pawns >> 8;
+    }
+}
+
+template <Color Us>
+Bitboard pawn_left_attacks(Bitboard pawns) {
+    if constexpr (Us == Color::White) {
+        return (pawns & not_file_a_mask) << 7;
+    } else {
+        return (pawns & not_file_a_mask) >> 9;
+    }
+}
+
+template <Color Us>
+Bitboard pawn_right_attacks(Bitboard pawns) {
+    if constexpr (Us == Color::White) {
+        return (pawns & not_file_h_mask) << 9;
+    } else {
+        return (pawns & not_file_h_mask) >> 7;
+    }
+}
+
+template <Color Us>
+void generate_pawn_moves_color(const Board &board, Color them, Bitboard occupancy_all,
+                               std::vector<Move> &moves, bool tactical_only) {
+    constexpr Bitboard promotion_rank = Us == Color::White ? rank_8_mask : rank_1_mask;
+    constexpr Bitboard start_rank = Us == Color::White ? rank_2_mask : rank_7_mask;
+    constexpr int forward_offset = Us == Color::White ? 8 : -8;
+    constexpr int double_offset = forward_offset * 2;
+    constexpr int left_offset = Us == Color::White ? 7 : -9;
+    constexpr int right_offset = Us == Color::White ? 9 : -7;
+
+    Bitboard pawns = board.pieces(Us, PieceType::Pawn);
     Bitboard enemy_occ = board.occupancy(them);
     Bitboard empty = ~occupancy_all;
     auto en_passant = board.en_passant_square();
@@ -39,152 +74,84 @@ void generate_pawn_moves_impl(const Board &board, Color us, Color them, Bitboard
         }
     };
 
+    Bitboard single_pushes = pawn_push<Us>(pawns) & empty;
+    Bitboard promotion_pushes = single_pushes & promotion_rank;
+    Bitboard quiet_pushes = single_pushes & ~promotion_rank;
+    while (promotion_pushes) {
+        int to = pop_lsb(promotion_pushes);
+        int from = to - forward_offset;
+        emit_promotion(from, to, std::nullopt);
+    }
+
+    if (!tactical_only) {
+        Bitboard non_promo = quiet_pushes;
+        while (non_promo) {
+            int to = pop_lsb(non_promo);
+            int from = to - forward_offset;
+            append_move(moves, Move{from, to, PieceType::Pawn});
+        }
+
+        Bitboard double_sources = pawns & start_rank;
+        Bitboard first_step = pawn_push<Us>(double_sources) & empty;
+        Bitboard double_pushes = pawn_push<Us>(first_step) & empty;
+        while (double_pushes) {
+            int to = pop_lsb(double_pushes);
+            int from = to - double_offset;
+            append_move(moves, Move{from, to, PieceType::Pawn});
+        }
+    }
+
+    auto process_captures = [&](Bitboard capture_mask, int offset) {
+        Bitboard promo = capture_mask & promotion_rank;
+        Bitboard normal = capture_mask & ~promotion_rank;
+        while (promo) {
+            int to = pop_lsb(promo);
+            int from = to - offset;
+            auto captured = captured_piece_on(board, to, them);
+            emit_promotion(from, to, captured);
+        }
+        while (normal) {
+            int to = pop_lsb(normal);
+            int from = to - offset;
+            Move move{from, to, PieceType::Pawn};
+            move.captured = captured_piece_on(board, to, them);
+            append_move(moves, move);
+        }
+    };
+
+    Bitboard left_captures = pawn_left_attacks<Us>(pawns) & enemy_occ;
+    Bitboard right_captures = pawn_right_attacks<Us>(pawns) & enemy_occ;
+    process_captures(left_captures, left_offset);
+    process_captures(right_captures, right_offset);
+
+    if (en_passant_mask != 0) {
+        Bitboard ep_left = pawn_left_attacks<Us>(pawns) & en_passant_mask;
+        while (ep_left) {
+            int to = pop_lsb(ep_left);
+            int from = to - left_offset;
+            Move move{from, to, PieceType::Pawn};
+            move.is_en_passant = true;
+            move.captured = PieceType::Pawn;
+            append_move(moves, move);
+        }
+        Bitboard ep_right = pawn_right_attacks<Us>(pawns) & en_passant_mask;
+        while (ep_right) {
+            int to = pop_lsb(ep_right);
+            int from = to - right_offset;
+            Move move{from, to, PieceType::Pawn};
+            move.is_en_passant = true;
+            move.captured = PieceType::Pawn;
+            append_move(moves, move);
+        }
+    }
+}
+
+void generate_pawn_moves_impl(const Board &board, Color us, Color them, Bitboard occupancy_all,
+                              std::vector<Move> &moves, bool tactical_only) {
     if (us == Color::White) {
-        Bitboard promotion_pushes = ((pawns & rank_7_mask) << 8) & empty;
-        while (promotion_pushes) {
-            int to = pop_lsb(promotion_pushes);
-            int from = to - 8;
-            emit_promotion(from, to, std::nullopt);
-        }
-
-        if (!tactical_only) {
-            Bitboard single_pushes = ((pawns & ~rank_7_mask) << 8) & empty;
-            while (single_pushes) {
-                int to = pop_lsb(single_pushes);
-                int from = to - 8;
-                append_move(moves, Move{from, to, PieceType::Pawn});
-            }
-
-            Bitboard double_pushes = (((pawns & rank_2_mask) << 8) & empty);
-            double_pushes = (double_pushes << 8) & empty;
-            while (double_pushes) {
-                int to = pop_lsb(double_pushes);
-                int from = to - 16;
-                append_move(moves, Move{from, to, PieceType::Pawn});
-            }
-        }
-
-        Bitboard left_captures = ((pawns & not_file_a_mask) << 7) & enemy_occ;
-        while (left_captures) {
-            int to = pop_lsb(left_captures);
-            int from = to - 7;
-            auto captured = captured_piece_on(board, to, them);
-            if (to >= 56) {
-                emit_promotion(from, to, captured);
-            } else {
-                Move move{from, to, PieceType::Pawn};
-                move.captured = captured;
-                append_move(moves, move);
-            }
-        }
-
-        Bitboard right_captures = ((pawns & not_file_h_mask) << 9) & enemy_occ;
-        while (right_captures) {
-            int to = pop_lsb(right_captures);
-            int from = to - 9;
-            auto captured = captured_piece_on(board, to, them);
-            if (to >= 56) {
-                emit_promotion(from, to, captured);
-            } else {
-                Move move{from, to, PieceType::Pawn};
-                move.captured = captured;
-                append_move(moves, move);
-            }
-        }
-
-        if (en_passant_mask != 0) {
-            Bitboard ep_left = ((pawns & not_file_a_mask) << 7) & en_passant_mask;
-            while (ep_left) {
-                int to = pop_lsb(ep_left);
-                int from = to - 7;
-                Move move{from, to, PieceType::Pawn};
-                move.is_en_passant = true;
-                move.captured = PieceType::Pawn;
-                append_move(moves, move);
-            }
-            Bitboard ep_right = ((pawns & not_file_h_mask) << 9) & en_passant_mask;
-            while (ep_right) {
-                int to = pop_lsb(ep_right);
-                int from = to - 9;
-                Move move{from, to, PieceType::Pawn};
-                move.is_en_passant = true;
-                move.captured = PieceType::Pawn;
-                append_move(moves, move);
-            }
-        }
+        generate_pawn_moves_color<Color::White>(board, them, occupancy_all, moves, tactical_only);
     } else {
-        Bitboard promotion_pushes = ((pawns & rank_2_mask) >> 8) & empty;
-        while (promotion_pushes) {
-            int to = pop_lsb(promotion_pushes);
-            int from = to + 8;
-            emit_promotion(from, to, std::nullopt);
-        }
-
-        if (!tactical_only) {
-            Bitboard single_pushes = ((pawns & ~rank_2_mask) >> 8) & empty;
-            while (single_pushes) {
-                int to = pop_lsb(single_pushes);
-                int from = to + 8;
-                append_move(moves, Move{from, to, PieceType::Pawn});
-            }
-
-            Bitboard double_pushes = (((pawns & rank_7_mask) >> 8) & empty);
-            double_pushes = (double_pushes >> 8) & empty;
-            while (double_pushes) {
-                int to = pop_lsb(double_pushes);
-                int from = to + 16;
-                append_move(moves, Move{from, to, PieceType::Pawn});
-            }
-        }
-
-        Bitboard left_captures = ((pawns & not_file_a_mask) >> 9) & enemy_occ;
-        while (left_captures) {
-            int to = pop_lsb(left_captures);
-            int from = to + 9;
-            auto captured = captured_piece_on(board, to, them);
-            if (to <= 7) {
-                emit_promotion(from, to, captured);
-            } else {
-                Move move{from, to, PieceType::Pawn};
-                move.captured = captured;
-                append_move(moves, move);
-            }
-        }
-
-        Bitboard right_captures = ((pawns & not_file_h_mask) >> 7) & enemy_occ;
-        while (right_captures) {
-            int to = pop_lsb(right_captures);
-            int from = to + 7;
-            auto captured = captured_piece_on(board, to, them);
-            if (to <= 7) {
-                emit_promotion(from, to, captured);
-            } else {
-                Move move{from, to, PieceType::Pawn};
-                move.captured = captured;
-                append_move(moves, move);
-            }
-        }
-
-        if (en_passant_mask != 0) {
-            Bitboard ep_left = ((pawns & not_file_a_mask) >> 9) & en_passant_mask;
-            while (ep_left) {
-                int to = pop_lsb(ep_left);
-                int from = to + 9;
-                Move move{from, to, PieceType::Pawn};
-                move.is_en_passant = true;
-                move.captured = PieceType::Pawn;
-                append_move(moves, move);
-            }
-            Bitboard ep_right = ((pawns & not_file_h_mask) >> 7) & en_passant_mask;
-            while (ep_right) {
-                int to = pop_lsb(ep_right);
-                int from = to + 7;
-                Move move{from, to, PieceType::Pawn};
-                move.is_en_passant = true;
-                move.captured = PieceType::Pawn;
-                append_move(moves, move);
-            }
-        }
+        generate_pawn_moves_color<Color::Black>(board, them, occupancy_all, moves, tactical_only);
     }
 }
 
