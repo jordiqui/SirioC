@@ -82,12 +82,20 @@ add_executable(sirio_bench
 
 target_link_libraries(sirio_bench PRIVATE sirio_core)
 
-if (WIN32)
+if (WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "MSYS")
     if (MSVC)
         set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     else()
+        set(_sirio_static_link_opts
+            -static
+            -static-libstdc++
+            -static-libgcc
+            -Wl,-Bstatic
+            -lwinpthread
+            -Wl,-Bdynamic
+        )
         foreach(target_name IN ITEMS sirio sirio_tests sirio_bench)
-            target_link_options(${target_name} PRIVATE -static -static-libstdc++ -static-libgcc)
+            target_link_options(${target_name} PRIVATE ${_sirio_static_link_opts})
         endforeach()
     endif()
 endif()

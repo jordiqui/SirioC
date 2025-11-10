@@ -6,7 +6,12 @@ CXXFLAGS ?= -std=c++20 -Wall -Wextra -Wpedantic -O2
 CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -O2
 CPPFLAGS ?=
 LDFLAGS ?=
+
+ifeq ($(OS),Windows_NT)
+LDFLAGS += -static -static-libstdc++ -static-libgcc -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic
+else
 LDFLAGS += -latomic
+endif
 INCLUDES := -Iinclude -Ithird_party/fathom
 
 SRCDIR := src
