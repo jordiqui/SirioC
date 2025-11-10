@@ -36,7 +36,7 @@ target_include_directories(sirio_core
 
 target_compile_features(sirio_core PUBLIC cxx_std_20)
 
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND NOT MINGW)
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND NOT MSVC)
     target_link_libraries(sirio_core PUBLIC atomic)
 endif()
 
