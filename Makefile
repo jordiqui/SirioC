@@ -9,7 +9,10 @@ LDFLAGS ?=
 
 ifeq ($(OS),Windows_NT)
 LDFLAGS += -static -static-libstdc++ -static-libgcc -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic
-else
+endif
+
+CXX_BASENAME := $(notdir $(CXX))
+ifneq (,$(filter %g++ %clang++,$(CXX_BASENAME)))
 LDFLAGS += -latomic
 endif
 INCLUDES := -Iinclude -Ithird_party/fathom
