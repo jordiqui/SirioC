@@ -36,7 +36,7 @@ target_include_directories(sirio_core
 
 target_compile_features(sirio_core PUBLIC cxx_std_20)
 
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND NOT MINGW)
     target_link_libraries(sirio_core PUBLIC atomic)
 endif()
 
@@ -86,7 +86,7 @@ if (WIN32)
     if (MSVC)
         set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     else()
-        foreach(target_name IN ITEMS sirio sirio_tests)
+        foreach(target_name IN ITEMS sirio sirio_tests sirio_bench)
             target_link_options(${target_name} PRIVATE -static -static-libstdc++ -static-libgcc)
         endforeach()
     endif()
