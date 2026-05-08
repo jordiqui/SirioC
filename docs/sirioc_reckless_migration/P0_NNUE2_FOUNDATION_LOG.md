@@ -233,3 +233,78 @@ This task introduces a deterministic SirioNNUE2 binary contract, a Python v2 exp
 
 ## Originality/provenance note
 - Implementation is original SirioC code and does not import third-party engine/trainer source.
+
+# P0-07 SirioNNUE2 Dataset v2 Scaffold
+
+This task adds a deterministic dataset-v2 scaffold for SirioNNUE2 training preparation. It converts FEN-based records into sparse SirioHalfKAv1 feature records and split JSONL datasets, without changing engine runtime behavior.
+
+## New script path
+- `training/nnue/scripts/prepare_dataset_v2.py`
+
+## Input format
+- Supported deterministic text format: TSV/whitespace records with six-field FEN + `score_cp` + `result`, optional `source`.
+- Supported optional JSONL format with `fen`, `score_cp`, `result`, optional `source`.
+- `--format auto|tsv|jsonl` controls parsing mode.
+
+## Output format
+- Deterministic output directory containing:
+  - `train.jsonl`
+  - `val.jsonl`
+  - `test.jsonl`
+  - `MANIFEST.json`
+- Each record includes: `fen`, `features.white`, `features.black`, `score_cp`, `result`, `wdl`, `phase`, `source`, `feature_set`.
+
+## Label contract
+- `score_cp` is stored and preserved as **White POV**.
+- `result` is kept verbatim and mapped to deterministic `wdl`:
+  - `1-0 -> 1.0`
+  - `1/2-1/2 -> 0.5`
+  - `0-1 -> 0.0`
+  - `* -> null`
+- This scaffold does not switch score POV by side-to-move.
+
+## Feature contract
+- Uses `training/nnue/scripts/features_v2.py` SirioHalfKAv1 sparse encoder.
+- Encodes both white and black perspectives.
+- Enforces deterministic ordering.
+- Rejects invalid FENs, invalid king counts, out-of-range feature indices, and non-unit feature values.
+
+## Phase/material bucket rule
+- Deterministic non-king material bucket from FEN piece placement:
+  - `opening` for material >= 40
+  - `middlegame` for material >= 15 and < 40
+  - `endgame` for material < 15
+- Bucket is a simple scaffold stratification signal and is not competitively tuned.
+
+## Split method
+- Accepted records are sorted by deterministic SHA-256 key of `seed|fen`.
+- Split sizes are ratio-based (`--val-ratio`, `--test-ratio`) and deterministic for fixed seed/input.
+- `MANIFEST.json` records counts, ratios, seed, accepted/rejected totals, and rejection summary.
+
+## Tests added
+- `tests/nnue_dataset_v2_test.py` covers:
+  - end-to-end dataset/manifest generation
+  - start-position 30/30 sparse feature counts
+  - kings-only 0/0 sparse feature counts
+  - invalid FEN rejection accounting
+  - missing king rejection accounting
+  - White-POV `score_cp` preservation
+  - deterministic WDL mapping
+  - deterministic split stability for same seed
+  - feature index range and unit value checks
+  - required manifest metadata presence
+
+## Continuity confirmations
+- No teacher engine execution is added.
+- No self-play generation is added.
+- No full trainer implementation is added.
+- SirioNNUE2 is still **not** default.
+- No C++ evaluation/search/UCI/runtime routing behavior is changed.
+
+## Known limitations
+- Input schema is intentionally minimal and strict.
+- `*` result maps to `null` WDL and is not imputed.
+- No QAT/trainer loop/teacher distillation is part of this patch.
+
+## Originality/provenance note
+- Implementation and tests are original SirioC repository work and do not import third-party engine/trainer source.
