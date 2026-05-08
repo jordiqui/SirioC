@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <cstring>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -12,6 +13,7 @@
 #endif
 
 #include "sirio/move.hpp"
+#include "sirio/nnue/features.hpp"
 
 namespace sirio::nnue {
 
@@ -162,20 +164,88 @@ void Nnue2NetworkParameters::clear() {
 bool is_valid_nnue2_header(const Nnue2BinaryHeader &header) {
     constexpr std::array<char, 12> expected_magic = {'S', 'i', 'r', 'i', 'o', 'N', 'N',
                                                      'U', 'E', '2', '\0', '\0'};
-    return header.magic == expected_magic && header.version >= 1 && header.input_dimensions > 0 &&
-           header.hidden_dimensions > 0 && header.output_dimensions == 1;
+    return header.magic == expected_magic && header.version == 2 &&
+           header.feature_set_id == 1 &&
+           header.features_per_perspective == kSirioHalfKAv1FeaturesPerPerspective &&
+           header.perspective_count == kNnue2PerspectiveCount &&
+           header.accumulator_size == kNnue2AccumulatorSize && header.hidden_dimensions > 0 &&
+           header.output_dimensions == 1 &&
+           header.payload_bytes ==
+               header.input_weights_bytes + header.hidden_bias_bytes + header.output_weights_bytes +
+                   header.output_bias_bytes;
 }
 
 Nnue2BinaryHeader make_default_nnue2_header() {
     Nnue2BinaryHeader header{};
     header.magic = {'S', 'i', 'r', 'i', 'o', 'N', 'N', 'U', 'E', '2', '\0', '\0'};
-    header.version = 1;
+    header.version = 2;
+    header.feature_set_id = 1;
     header.flags = 0;
-    header.input_dimensions = static_cast<std::uint32_t>(kNnue2MaxActiveFeatures *
-                                                         kNnue2PerspectiveCount);
+    header.features_per_perspective = kSirioHalfKAv1FeaturesPerPerspective;
+    header.perspective_count = kNnue2PerspectiveCount;
+    header.accumulator_size = kNnue2AccumulatorSize;
     header.hidden_dimensions = static_cast<std::uint32_t>(kNnue2AccumulatorSize);
     header.output_dimensions = 1;
+    header.quant_input_scale = 256;
+    header.quant_output_scale = 256;
+    header.input_weights_bytes = kSirioHalfKAv1FeaturesPerPerspective * kNnue2AccumulatorSize *
+                                 sizeof(std::int16_t);
+    header.hidden_bias_bytes = kNnue2AccumulatorSize * sizeof(std::int16_t);
+    header.output_weights_bytes = kNnue2AccumulatorSize * sizeof(std::int16_t);
+    header.output_bias_bytes = sizeof(std::int32_t);
+    header.payload_bytes = header.input_weights_bytes + header.hidden_bias_bytes +
+                           header.output_weights_bytes + header.output_bias_bytes;
     return header;
+}
+
+bool load_nnue2_network_file(const std::string &path, Nnue2NetworkParameters &out_network,
+                             std::string &error_message) {
+    out_network.clear();
+    std::ifstream input(path, std::ios::binary);
+    if (!input) {
+        error_message = "Unable to open SirioNNUE2 file: " + path;
+        return false;
+    }
+
+    Nnue2BinaryHeader header{};
+    input.read(reinterpret_cast<char *>(&header), static_cast<std::streamsize>(sizeof(header)));
+    if (input.gcount() != static_cast<std::streamsize>(sizeof(header))) {
+        error_message = "Truncated SirioNNUE2 header";
+        return false;
+    }
+    if (!is_valid_nnue2_header(header)) {
+        error_message = "Invalid SirioNNUE2 header contract";
+        return false;
+    }
+
+    const std::size_t input_elems = header.input_weights_bytes / sizeof(std::int16_t);
+    const std::size_t hidden_elems = header.hidden_bias_bytes / sizeof(std::int16_t);
+    const std::size_t output_elems = header.output_weights_bytes / sizeof(std::int16_t);
+    out_network.header = header;
+    out_network.input_weights.resize(input_elems);
+    out_network.hidden_bias.resize(hidden_elems);
+    out_network.output_weights.resize(output_elems);
+
+    input.read(reinterpret_cast<char *>(out_network.input_weights.data()),
+               static_cast<std::streamsize>(header.input_weights_bytes));
+    input.read(reinterpret_cast<char *>(out_network.hidden_bias.data()),
+               static_cast<std::streamsize>(header.hidden_bias_bytes));
+    input.read(reinterpret_cast<char *>(out_network.output_weights.data()),
+               static_cast<std::streamsize>(header.output_weights_bytes));
+    input.read(reinterpret_cast<char *>(&out_network.output_bias),
+               static_cast<std::streamsize>(header.output_bias_bytes));
+    if (!input) {
+        out_network.clear();
+        error_message = "Truncated SirioNNUE2 payload";
+        return false;
+    }
+    char extra = 0;
+    if (input.read(&extra, 1)) {
+        out_network.clear();
+        error_message = "Unexpected trailing bytes in SirioNNUE2 file";
+        return false;
+    }
+    return true;
 }
 
 SparseFeatureState compute_sparse_feature_state(const Board &board) {
@@ -552,4 +622,3 @@ int MultiNetworkBackend::evaluate(const Board &board) {
 }
 
 }  // namespace sirio::nnue
-

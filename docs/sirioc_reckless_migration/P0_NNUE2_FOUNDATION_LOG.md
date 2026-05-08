@@ -159,3 +159,77 @@ This task adds a deterministic Python SirioHalfKAv1 encoder and a parity harness
 
 ## Originality/provenance note
 - Implementation and tests are original SirioC repository work and do not import third-party engine/trainer source.
+
+# P0-06 SirioNNUE2 Binary Format / Exporter / Loader Roundtrip
+
+This task introduces a deterministic SirioNNUE2 binary contract, a Python v2 exporter, and a C++ loader/validator roundtrip harness. It does not enable SirioNNUE2 for runtime evaluation.
+
+## Binary magic/version
+- Magic: `SirioNNUE2\0\0`
+- Version: `2`
+
+## Feature set id
+- `1` = `SirioHalfKAv1`
+
+## Header fields
+- magic (12 bytes)
+- version (uint16)
+- feature_set_id (uint16)
+- flags (uint16)
+- features_per_perspective (uint32)
+- perspective_count (uint32)
+- accumulator_size (uint32)
+- hidden_dimensions (uint32)
+- output_dimensions (uint32)
+- quant_input_scale (uint32)
+- quant_output_scale (uint32)
+- input_weights_bytes (uint32)
+- hidden_bias_bytes (uint32)
+- output_weights_bytes (uint32)
+- output_bias_bytes (uint32)
+- payload_bytes (uint32)
+- checksum (uint32; reserved)
+
+## Payload layout
+1. input_weights (int16 array)
+2. hidden_bias (int16 array)
+3. output_weights (int16 array)
+4. output_bias (int32)
+
+## Files changed
+- `include/sirio/nnue/backend.hpp`
+- `src/nnue/backend.cpp`
+- `training/nnue/scripts/export_to_engine_v2.py`
+- `tests/nnue_roundtrip_tests.cpp`
+- `tests/board_tests.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Exporter path
+- `training/nnue/scripts/export_to_engine_v2.py`
+
+## Loader path
+- `load_nnue2_network_file(...)` in `src/nnue/backend.cpp`
+
+## Tests added
+- `tests/nnue_roundtrip_tests.cpp` with deterministic export/load and byte-identical re-export checks.
+
+## Rejection cases covered
+- wrong magic
+- truncated file
+- incompatible feature count
+- incompatible version
+
+## Continuity confirmations
+- SirioNNUE2 is still **not** default.
+- Evaluation routing remains unchanged.
+- Search/UCI/TT/movegen/time-management behavior remains unchanged.
+- Trainer work remains deferred.
+
+## Known limitations
+- Exported network is deterministic dummy payload for binary contract validation only.
+- No real training semantics or runtime NNUE2 eval path are introduced in this step.
+- No Stockfish `.nnue` compatibility claim is made.
+
+## Originality/provenance note
+- Implementation is original SirioC code and does not import third-party engine/trainer source.

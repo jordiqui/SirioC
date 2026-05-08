@@ -89,10 +89,20 @@ struct NetworkParameters {
 struct Nnue2BinaryHeader {
     std::array<char, 12> magic{};
     std::uint16_t version = 0;
+    std::uint16_t feature_set_id = 0;
     std::uint16_t flags = 0;
-    std::uint32_t input_dimensions = 0;
+    std::uint32_t features_per_perspective = 0;
+    std::uint32_t perspective_count = 0;
+    std::uint32_t accumulator_size = 0;
     std::uint32_t hidden_dimensions = 0;
     std::uint32_t output_dimensions = 0;
+    std::uint32_t quant_input_scale = 0;
+    std::uint32_t quant_output_scale = 0;
+    std::uint32_t input_weights_bytes = 0;
+    std::uint32_t hidden_bias_bytes = 0;
+    std::uint32_t output_weights_bytes = 0;
+    std::uint32_t output_bias_bytes = 0;
+    std::uint32_t payload_bytes = 0;
     std::uint32_t checksum = 0;
 };
 
@@ -186,6 +196,8 @@ private:
 
 [[nodiscard]] bool is_valid_nnue2_header(const Nnue2BinaryHeader &header);
 [[nodiscard]] Nnue2BinaryHeader make_default_nnue2_header();
+[[nodiscard]] bool load_nnue2_network_file(const std::string &path, Nnue2NetworkParameters &out_network,
+                                           std::string &error_message);
 [[nodiscard]] SparseFeatureState compute_sparse_feature_state(const Board &board);
 void incremental_update_sparse_state(SparseFeatureState &state, const Board &current,
                                      const Move &move, Color mover);
