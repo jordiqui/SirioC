@@ -308,3 +308,80 @@ This task adds a deterministic dataset-v2 scaffold for SirioNNUE2 training prepa
 
 ## Originality/provenance note
 - Implementation and tests are original SirioC repository work and do not import third-party engine/trainer source.
+
+# P0-08 SirioNNUE2 Minimal Trainer v2 / Checkpoint Contract
+
+This task adds an additive trainer-v2 scaffold for SirioNNUE2 dataset-v2 files and deterministic checkpoint generation. It is pipeline-validation work only and is not a competitive network.
+
+## Trainer script path
+- `training/nnue/scripts/train_v2.py`
+- Optional minimal config: `training/nnue/configs/sirio_nnue2_minimal.yaml`
+
+## Dataset input contract
+- Reads `train.jsonl`, `val.jsonl`, `test.jsonl`, and `MANIFEST.json` from a dataset-v2 directory.
+- Validates `feature_set == SirioHalfKAv1` per record.
+- Validates every sparse feature pair as `[index, value]` with `0 <= index < 40960` and `value == 1`.
+- Treats `score_cp` as White-POV target.
+- Loads only the score target into loss; WDL remains in records for future extensions.
+- Fails clearly on malformed records or unsupported feature data.
+
+## Model architecture summary
+- Minimal sparse scaffold:
+  - shared embedding table over `features_per_perspective = 40960`
+  - sum active embedding rows separately for white/black feature lists
+  - concatenate white/black accumulators
+  - small dense head `Linear -> ReLU -> Linear`
+  - scalar output (centipawn-like regression target)
+- Uses accumulator size `256` in line with existing SirioNNUE2 backend contract constants.
+
+## Target contract
+- Training target: `score_cp` interpreted as **White POV**.
+
+## Checkpoint format
+- PyTorch `.pt` checkpoint containing:
+  - `state_dict`
+  - `metadata`
+  - `model_config`
+  - per-epoch loss logs
+
+## Metadata fields
+- `feature_set`
+- `features_per_perspective`
+- `target_contract`
+- `model_architecture`
+- `dataset_manifest_path`
+- `dataset_manifest_sha256`
+- `seed`
+- `epochs`
+- `batch_size`
+- `learning_rate`
+- `script_name`
+- `script_version`
+- deterministic timestamp placeholder keyed by seed
+
+## Tests added
+- `tests/nnue_train_v2_test.py` covering tiny deterministic CPU training and contract checks:
+  1. tiny dataset-v2 fixture training for 2 epochs,
+  2. checkpoint creation,
+  3. metadata `feature_set == SirioHalfKAv1`,
+  4. metadata `features_per_perspective == 40960`,
+  5. malformed feature-set rejection,
+  6. out-of-range feature-index rejection,
+  7. stable metadata for identical seed runs,
+  8. no dependency on legacy `train.py` path,
+  9. no engine binary/evaluation routing invocation in trainer tests.
+
+## Continuity confirmations
+- This is **not** a competitive network implementation and makes no Elo/strength claim.
+- No teacher-engine distillation logic was added or executed.
+- No self-play generation was added or executed.
+- SirioNNUE2 remains non-default in engine runtime.
+- Export-to-engine/runtime evaluation routing remains deferred for trained checkpoints.
+
+## Known limitations
+- Architecture is intentionally minimal and CPU-safe for contract testing only.
+- Loss uses only `score_cp`; WDL/multi-target training is deferred.
+- No quantization-aware training or production tuning is included.
+
+## Originality/provenance note
+- Implementation and tests are original SirioC repository work and do not vendor third-party trainer code.
