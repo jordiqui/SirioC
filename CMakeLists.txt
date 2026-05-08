@@ -80,6 +80,12 @@ add_executable(sirio_tests
 
 target_link_libraries(sirio_tests PRIVATE sirio_core)
 
+add_executable(sirio_feature_dump
+    tests/nnue_feature_dump.cpp
+)
+
+target_link_libraries(sirio_feature_dump PRIVATE sirio_core)
+
 add_executable(sirio_bench
     bench/bench.cpp
 )

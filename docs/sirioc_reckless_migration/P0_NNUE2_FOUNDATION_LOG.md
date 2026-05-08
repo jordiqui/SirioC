@@ -110,3 +110,52 @@ This task adds the first deterministic sparse feature-index contract for SirioNN
 
 ## Originality/provenance note
 - This feature-index contract and implementation are original SirioC code and do not import third-party engine/trainer source.
+
+# P0-05 SirioHalfKAv1 Python Parity Encoder
+
+This task adds a deterministic Python SirioHalfKAv1 encoder and a parity harness against the existing C++ P0-04 contract, with no evaluation/search/UCI routing changes.
+
+## Python module added/changed
+- Added `training/nnue/scripts/features_v2.py` with explicit SirioHalfKAv1 constants, FEN parsing/validation, perspective transform helpers, and sparse active-index encoding for both perspectives.
+
+## C++ helper/test path added/changed
+- Added `tests/nnue_feature_dump.cpp`.
+- Added `sirio_feature_dump` target to `CMakeLists.txt`.
+- Added deterministic parity script `tests/nnue_feature_parity_test.py` that compares Python output with C++ dump output.
+
+## Feature-set constants
+- perspective count: 2
+- relative channel count: 10
+- square count: 64
+- features per perspective: 40960
+
+## Index formula
+- `((perspective_king_square * 10 + relative_piece_channel) * 64 + perspective_piece_square)`
+
+## Perspective transform rule
+- White perspective: identity.
+- Black perspective: vertical rank flip (`rank -> 7 - rank`, same file).
+
+## FEN test cases used
+1. `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
+2. `8/8/8/8/8/8/4k3/4K3 w - - 0 1`
+3. `8/8/8/3k4/8/8/4P3/4K3 w - - 0 1`
+4. `4k3/8/8/3q4/4N3/8/8/4K3 w - - 0 1`
+
+## Parity method
+- Build and run `sirio_feature_dump` for fixed FEN inputs.
+- Parse deterministic `P0/P1` sparse feature index/value lines.
+- Compute Python sparse outputs for the same FENs.
+- Assert exact equality of active counts, index lists, values, and ordering.
+
+## Continuity confirmations
+- SirioNNUE2 is still **not** default.
+- Evaluation routing is unchanged.
+- Trainer/exporter/incremental accumulator work is still deferred.
+
+## Known limitations
+- The parity harness is a deterministic fixed-FEN contract check only.
+- No binary exporter, dataset pipeline rewrite, or trainer integration is introduced in this task.
+
+## Originality/provenance note
+- Implementation and tests are original SirioC repository work and do not import third-party engine/trainer source.
