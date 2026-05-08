@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <memory>
 #include <span>
 #include <string>
@@ -12,9 +13,61 @@ namespace sirio::nnue {
 
 constexpr std::size_t kPieceTypeCount = static_cast<std::size_t>(PieceType::Count);
 constexpr std::size_t kFeatureCount = kPieceTypeCount * 2;
+constexpr std::size_t kNnue2PerspectiveCount = 2;
+constexpr std::size_t kNnue2MaxActiveFeatures = 64;
+constexpr std::size_t kNnue2AccumulatorSize = 256;
 
 struct FeatureState {
     std::array<int, kFeatureCount> piece_counts{};
+};
+
+struct SparseFeature {
+    std::uint32_t index = 0;
+    std::int16_t value = 1;
+};
+
+struct SparsePerspectiveState {
+    std::array<SparseFeature, kNnue2MaxActiveFeatures> active{};
+    std::uint16_t count = 0;
+
+    void clear() {
+        count = 0;
+        active.fill(SparseFeature{});
+    }
+
+    [[nodiscard]] bool push(SparseFeature feature);
+};
+
+struct SparseFeatureState {
+    std::array<SparsePerspectiveState, kNnue2PerspectiveCount> perspectives{};
+
+    void clear() {
+        for (auto &perspective : perspectives) {
+            perspective.clear();
+        }
+    }
+
+    [[nodiscard]] std::size_t total_active_features() const;
+};
+
+struct Nnue2Accumulator {
+    std::array<std::int16_t, kNnue2AccumulatorSize> values{};
+    bool valid = false;
+
+    void clear() {
+        values.fill(0);
+        valid = false;
+    }
+};
+
+struct Nnue2AccumulatorPair {
+    std::array<Nnue2Accumulator, kNnue2PerspectiveCount> perspectives{};
+
+    void clear() {
+        for (auto &perspective : perspectives) {
+            perspective.clear();
+        }
+    }
 };
 
 struct ThreadAccumulator {
@@ -31,6 +84,27 @@ struct NetworkParameters {
     double bias = 0.0;
     double scale = 1.0;
     std::array<double, kFeatureCount> piece_weights{};
+};
+
+struct Nnue2BinaryHeader {
+    std::array<char, 12> magic{};
+    std::uint16_t version = 0;
+    std::uint16_t flags = 0;
+    std::uint32_t input_dimensions = 0;
+    std::uint32_t hidden_dimensions = 0;
+    std::uint32_t output_dimensions = 0;
+    std::uint32_t checksum = 0;
+};
+
+struct Nnue2NetworkParameters {
+    Nnue2BinaryHeader header{};
+    std::vector<std::int16_t> input_weights;
+    std::vector<std::int16_t> hidden_bias;
+    std::vector<std::int16_t> output_weights;
+    std::int32_t output_bias = 0;
+
+    [[nodiscard]] bool is_initialized() const;
+    void clear();
 };
 
 enum class NetworkSelectionPolicy { Material, Depth };
@@ -110,5 +184,12 @@ private:
     int ply_ = 0;
 };
 
-}  // namespace sirio::nnue
+[[nodiscard]] bool is_valid_nnue2_header(const Nnue2BinaryHeader &header);
+[[nodiscard]] Nnue2BinaryHeader make_default_nnue2_header();
+[[nodiscard]] SparseFeatureState compute_sparse_feature_state(const Board &board);
+void incremental_update_sparse_state(SparseFeatureState &state, const Board &current,
+                                     const Move &move, Color mover);
+void refresh_accumulators(const SparseFeatureState &state, Nnue2AccumulatorPair &accumulators,
+                          const Nnue2NetworkParameters &network);
 
+}  // namespace sirio::nnue

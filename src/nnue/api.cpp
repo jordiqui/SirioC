@@ -1,6 +1,7 @@
 #include "sirio/nnue/api.hpp"
 
 #include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <utility>
 
@@ -24,7 +25,13 @@ ApiState &state() {
 NetworkInfo build_info(const std::string &path) {
     NetworkInfo result;
     result.path = path;
-    result.dims = "PieceCounts[2x6]";
+    std::ifstream input(path, std::ios::binary);
+    std::string header;
+    if (input >> header && header == "SirioNNUE1") {
+        result.dims = "SirioNNUE1 PieceCounts[2x6]";
+    } else {
+        result.dims = "SirioNNUE2 SparseContract[2x64]->Acc[256] (experimental)";
+    }
     std::error_code ec;
     auto size = std::filesystem::file_size(path, ec);
     if (!ec) {

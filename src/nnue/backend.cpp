@@ -128,6 +128,105 @@ double dot_product(const WeightRegisters &regs, const int *counts) {
 
 }  // namespace
 
+
+bool SparsePerspectiveState::push(SparseFeature feature) {
+    if (count >= active.size()) {
+        return false;
+    }
+    active[count] = feature;
+    ++count;
+    return true;
+}
+
+std::size_t SparseFeatureState::total_active_features() const {
+    std::size_t total = 0;
+    for (const auto &perspective : perspectives) {
+        total += perspective.count;
+    }
+    return total;
+}
+
+bool Nnue2NetworkParameters::is_initialized() const {
+    return is_valid_nnue2_header(header) && !input_weights.empty() && !hidden_bias.empty() &&
+           !output_weights.empty();
+}
+
+void Nnue2NetworkParameters::clear() {
+    header = Nnue2BinaryHeader{};
+    input_weights.clear();
+    hidden_bias.clear();
+    output_weights.clear();
+    output_bias = 0;
+}
+
+bool is_valid_nnue2_header(const Nnue2BinaryHeader &header) {
+    constexpr std::array<char, 12> expected_magic = {'S', 'i', 'r', 'i', 'o', 'N', 'N',
+                                                     'U', 'E', '2', '\0', '\0'};
+    return header.magic == expected_magic && header.version >= 1 && header.input_dimensions > 0 &&
+           header.hidden_dimensions > 0 && header.output_dimensions == 1;
+}
+
+Nnue2BinaryHeader make_default_nnue2_header() {
+    Nnue2BinaryHeader header{};
+    header.magic = {'S', 'i', 'r', 'i', 'o', 'N', 'N', 'U', 'E', '2', '\0', '\0'};
+    header.version = 1;
+    header.flags = 0;
+    header.input_dimensions = static_cast<std::uint32_t>(kNnue2MaxActiveFeatures *
+                                                         kNnue2PerspectiveCount);
+    header.hidden_dimensions = static_cast<std::uint32_t>(kNnue2AccumulatorSize);
+    header.output_dimensions = 1;
+    return header;
+}
+
+SparseFeatureState compute_sparse_feature_state(const Board &board) {
+    SparseFeatureState state{};
+    for (int perspective = 0; perspective < 2; ++perspective) {
+        const Color self = perspective == 0 ? Color::White : Color::Black;
+        const Color opp = opposite(self);
+        for (int color_idx = 0; color_idx < 2; ++color_idx) {
+            const Color piece_color = color_idx == 0 ? self : opp;
+            for (std::size_t type_idx = 0; type_idx < kPieceTypeCount; ++type_idx) {
+                const PieceType type = static_cast<PieceType>(type_idx);
+                const int count = static_cast<int>(std::popcount(board.pieces(piece_color, type)));
+                const std::uint32_t base = static_cast<std::uint32_t>(color_idx * kPieceTypeCount + type_idx);
+                for (int n = 0; n < count; ++n) {
+                    if (!state.perspectives[perspective].push(SparseFeature{base, 1})) {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    return state;
+}
+
+void incremental_update_sparse_state(SparseFeatureState &state, const Board &, const Move &,
+                                     Color) {
+    // Foundation contract: keep sparse state well-defined and safe by recomputing from board
+    // in later steps. For now this marks state as non-incremental placeholder if saturated.
+    if (state.total_active_features() >
+        kNnue2PerspectiveCount * kNnue2MaxActiveFeatures) {
+        state.clear();
+    }
+}
+
+void refresh_accumulators(const SparseFeatureState &state, Nnue2AccumulatorPair &accumulators,
+                          const Nnue2NetworkParameters &network) {
+    accumulators.clear();
+    if (!network.is_initialized()) {
+        return;
+    }
+    for (std::size_t perspective = 0; perspective < kNnue2PerspectiveCount; ++perspective) {
+        accumulators.perspectives[perspective].valid = true;
+        const auto count = std::min<std::size_t>(state.perspectives[perspective].count,
+                                                 accumulators.perspectives[perspective].values.size());
+        for (std::size_t i = 0; i < count; ++i) {
+            accumulators.perspectives[perspective].values[i] =
+                static_cast<std::int16_t>(state.perspectives[perspective].active[i].index);
+        }
+    }
+}
+
 SingleNetworkBackend::SingleNetworkBackend() = default;
 
 bool SingleNetworkBackend::load(const std::string &path, std::string *error_message) {
