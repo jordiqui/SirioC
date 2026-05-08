@@ -45,3 +45,54 @@ All extracted constants were moved from `src/search.cpp` to `include/sirio/searc
 
 ## Known limitations
 - This task does not attempt full literal extraction of every inline numeric in `src/search.cpp`; deeply embedded literals were left intentionally per behaviour-preserving scope.
+
+
+## Task
+- **Task name:** P0-02 Search History Extraction.
+- **Behaviour-preserving statement:** This patch is a structural modularisation only; history-related state, formulas, limits, and ordering semantics are preserved intentionally.
+
+## History structures/functions extracted
+- Extracted to `include/sirio/history.hpp` and `src/history.cpp`:
+  - `SearchHistory` container owning:
+    - killer move slots (`[max_search_depth][2]`)
+    - quiet-history table (`[2][64][64]`)
+  - `is_quiet_move(const Move&)`
+  - `quiet_history_score(const Move&, Color)`
+  - `update_quiet_history(Color, const Move&, int depth, bool success)`
+  - `store_killer(const Move&, int ply)`
+  - `killer_slots(int ply)` accessor for read-only MovePicker use
+- Preserved formulas and limits:
+  - bonus = `depth * depth`, clamped by `search_params::history_bonus_limit`
+  - success/failure saturation to `search_params::history_max`/`search_params::history_min`
+
+## History-related code intentionally left in `src/search.cpp`
+- MovePicker integration and move-order staging remain in `src/search.cpp`; only data container/operations moved.
+- Call sites within `negamax` remain in place and now delegate to `context.history` methods to preserve lifecycle and threading semantics.
+
+## Files changed
+- `include/sirio/history.hpp` (new)
+- `src/history.cpp` (new)
+- `src/search.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_SEARCH_REFACTOR_LOG.md`
+
+## Confirmation statements
+- No continuation history was added.
+- No noisy history was added.
+- No correction history was added.
+- No new history heuristic was implemented.
+- No search tuning was performed.
+
+## Validation commands run
+- `git status --short`
+- `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`
+- `cmake --build build -j`
+- `ctest --test-dir build --output-on-failure`
+- `./build/sirio_tests`
+- `./build/sirio_bench`
+
+## Test results
+- Recorded after running the validation commands listed above.
+
+## Known limitations
+- No dedicated new history tests were added; validation relies on existing engine tests/bench executable.

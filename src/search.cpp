@@ -27,6 +27,7 @@
 
 #include "sirio/draws.hpp"
 #include "sirio/endgame.hpp"
+#include "sirio/history.hpp"
 #include "sirio/evaluation.hpp"
 #include "sirio/move.hpp"
 #include "sirio/movegen.hpp"
@@ -47,10 +48,6 @@ enum class SearchNodeKind {
 };
 
 
-
-constexpr std::size_t color_to_index(Color color) {
-    return color == Color::White ? 0u : 1u;
-}
 
 int late_move_reduction_base(int depth, int move_index) {
     depth = std::clamp(depth, 0, search_params::max_lmr_depth - 1);
@@ -275,7 +272,6 @@ struct SearchSharedState {
 };
 
 struct SearchContext {
-    std::array<std::array<std::optional<Move>, 2>, search_params::max_search_depth> killer_moves{};
     GlobalTranspositionTable *tt = nullptr;
     std::uint8_t tt_generation = 1;
     SearchSharedState *shared = nullptr;
@@ -286,7 +282,7 @@ struct SearchContext {
     std::uint64_t quiescence_node_accumulator = 0;
     std::uint64_t total_nodes = 0;
     bool is_primary_thread = false;
-    std::array<std::array<std::array<int, 64>, 64>, 2> history{};
+    SearchHistory history{};
 };
 
 
@@ -864,11 +860,6 @@ void announce_currmove(const Move &move, int move_index, const SearchContext &co
     std::cout << " time " << elapsed_ms << std::endl;
 }
 
-bool is_quiet(const Move &move) {
-    return !move.captured.has_value() && !move.promotion.has_value() && !move.is_castling &&
-           !move.is_en_passant;
-}
-
 int mvv_lva_score(const Move &move) {
     if (!move.captured.has_value()) {
         return 0;
@@ -879,29 +870,6 @@ int mvv_lva_score(const Move &move) {
 }
 
 
-int history_score(const Move &move, const SearchContext &context, Color mover) {
-    if (!is_quiet(move)) {
-        return 0;
-    }
-    const auto idx = color_to_index(mover);
-    return context.history[idx][move.from][move.to];
-}
-
-void update_history(SearchContext &context, Color mover, const Move &move, int depth,
-                    bool success) {
-    if (!is_quiet(move)) {
-        return;
-    }
-    depth = std::max(depth, 1);
-    int bonus = depth * depth;
-    bonus = std::min(bonus, search_params::history_bonus_limit);
-    auto &entry = context.history[color_to_index(mover)][move.from][move.to];
-    if (success) {
-        entry = std::min(entry + bonus, search_params::history_max);
-    } else {
-        entry = std::max(entry - bonus, search_params::history_min);
-    }
-}
 
 class MovePicker {
 public:
@@ -916,7 +884,7 @@ public:
             candidate_tt_move_ = *tt_move;
         }
 
-        std::array<std::optional<Move>, 2> killer_slots = context_.killer_moves[static_cast<std::size_t>(ply_)];
+        std::array<std::optional<Move>, 2> killer_slots = context_.history.killer_slots(ply_);
         std::array<bool, 2> killer_consumed{false, false};
 
         bool tt_found = false;
@@ -965,7 +933,7 @@ public:
                 continue;
             }
 
-            int history = history_score(move, context_, mover_);
+            int history = context_.history.quiet_history_score(move, mover_);
             quiets_.emplace_back(history, move);
         }
 
@@ -1152,17 +1120,6 @@ int from_tt_score(int score, int ply) {
     return score;
 }
 
-void store_killer(const Move &move, SearchContext &context, int ply) {
-    if (!is_quiet(move) || ply >= search_params::max_search_depth) {
-        return;
-    }
-    auto &slots = context.killer_moves[static_cast<std::size_t>(ply)];
-    if (!slots[0].has_value() || !same_move(*slots[0], move)) {
-        slots[1] = slots[0];
-        slots[0] = move;
-    }
-}
-
 int quiescence(Board &board, int alpha, int beta, int ply, SearchContext &context);
 
 int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_move,
@@ -1322,7 +1279,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         if (!in_check) {
             piece_under_attack = board.is_square_attacked(move.from, opponent);
         }
-        bool quiet_move = is_quiet(move);
+        bool quiet_move = is_quiet_move(move);
         bool tactical_move = !quiet_move;
         bool is_tt_move = tt_move.has_value() && same_move(*tt_move, move);
         if (!in_check && tactical_move && !is_tt_move) {
@@ -1394,16 +1351,16 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         }
         if (quiet_move) {
             if (score >= beta) {
-                update_history(context, mover, move, history_depth, true);
+                context.history.update_quiet_history(mover, move, history_depth, true);
             } else if (score > alpha_original) {
-                update_history(context, mover, move, history_depth, true);
+                context.history.update_quiet_history(mover, move, history_depth, true);
             } else {
-                update_history(context, mover, move, history_depth, false);
+                context.history.update_quiet_history(mover, move, history_depth, false);
             }
         }
         if (alpha >= beta) {
-            if (is_quiet(move)) {
-                store_killer(move, context, ply);
+            if (is_quiet_move(move)) {
+                context.history.store_killer(move, ply);
             }
             break;
         }
