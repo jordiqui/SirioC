@@ -96,3 +96,49 @@ All extracted constants were moved from `src/search.cpp` to `include/sirio/searc
 
 ## Known limitations
 - No dedicated new history tests were added; validation relies on existing engine tests/bench executable.
+
+## Task
+- **Task name:** P0-02B SearchHistory Dedicated Tests.
+- **Behaviour-preserving statement:** This is a test-only completion of P0-02; no SearchHistory logic, search behaviour, or engine heuristics were changed.
+
+## Test files added/modified
+- Added: `tests/history_tests.cpp`
+- Modified: `tests/board_tests.cpp` (register/invoke `run_history_tests()`)
+- Modified: `CMakeLists.txt` (compile new test translation unit into `sirio_tests`)
+
+## Exact behaviours covered
+- Fresh `SearchHistory` neutral quiet-history score for representative legal quiet move(s).
+- Fresh killer slots default/empty state.
+- `is_quiet_move` quiet detection and non-quiet rejection for a legal capture move.
+- `update_quiet_history` depth-squared bonus semantics.
+- `update_quiet_history` bonus clamping to `search_params::history_bonus_limit`.
+- `update_quiet_history` saturation to `search_params::history_max` / `search_params::history_min` under repeated updates.
+- `store_killer` first-slot store semantics.
+- `store_killer` second distinct quiet move slot-shift semantics.
+- `store_killer` duplicate re-store semantics (no duplicate churn when slot[0] matches).
+- Isolation checks across side/from-to and across distinct plies.
+
+## Behaviours intentionally not tested
+- Non-quiet rejection path in `store_killer` for promotions/en-passant/castling was not separately asserted; this patch keeps coverage minimal and already validates non-quiet classification via legal capture construction and `is_quiet_move`.
+
+## Confirmation statements
+- No new history heuristic was implemented.
+- No search tuning was performed.
+- No continuation/noisy/correction history was added.
+
+## Validation commands run
+- `git status --short`
+- `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`
+- `cmake --build build -j`
+- `ctest --test-dir build --output-on-failure`
+- `./build/sirio_tests`
+- `./build/sirio_bench`
+
+## Test results
+- Build and all requested validation commands completed successfully.
+- `ctest` reported `100% tests passed (1/1)`.
+- `./build/sirio_tests` reported `All tests passed.`
+- `./build/sirio_bench` completed successfully.
+
+## Known limitations
+- Build emits existing upstream warnings from bundled third-party Fathom code (`third_party/fathom/tbprobe.c`/`tbcore.c` stringop-overflow warnings); this task does not modify third-party tablebase sources.

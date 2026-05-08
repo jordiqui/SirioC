@@ -72,6 +72,7 @@ add_executable(sirio_tests
     tests/search_tests.cpp
     tests/nnue_backend_tests.cpp
     tests/tt_tests.cpp
+    tests/history_tests.cpp
     tests/time_manager_tests.cpp
 )
 
