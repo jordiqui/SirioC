@@ -385,3 +385,70 @@ This task adds an additive trainer-v2 scaffold for SirioNNUE2 dataset-v2 files a
 
 ## Originality/provenance note
 - Implementation and tests are original SirioC repository work and do not vendor third-party trainer code.
+
+# P0-09 SirioNNUE2 Checkpoint-to-Binary Export Bridge
+
+This task extends the SirioNNUE2 v2 exporter with a validated checkpoint bridge path while preserving the P0-06 deterministic dummy export path and keeping runtime engine behavior unchanged.
+
+## Exporter path
+- `training/nnue/scripts/export_to_engine_v2.py`
+
+## New CLI options
+- `--checkpoint <path>`: validate a `train_v2.py` checkpoint for SirioNNUE2 binary export compatibility.
+- `--output <path>` remains required.
+- `--describe` remains available.
+
+## Supported modes
+- Mode A: deterministic dummy export (unchanged P0-06 behavior).
+- Mode B: checkpoint validation/export bridge entrypoint via `--checkpoint`.
+
+## Checkpoint metadata requirements
+The bridge now requires all of:
+- top-level `metadata`
+- top-level `model_config`
+- top-level `state_dict`
+- `metadata.feature_set == SirioHalfKAv1`
+- `metadata.features_per_perspective == 40960`
+- `metadata.script_name == training.nnue.scripts.train_v2` (rejects legacy/non-v2 checkpoints)
+- expected model keys present in `state_dict`:
+  - `embedding.weight`
+  - `head.0.weight`
+  - `head.0.bias`
+  - `head.2.weight`
+  - `head.2.bias`
+
+## Mapping decision
+- Actual checkpoint weight mapping is **safely deferred** for now.
+- Reason: current `train_v2.py` minimal architecture (`embedding -> concat(white,black) -> Linear(512->32) -> ReLU -> Linear(32->1)`) does not match P0-06 SirioNNUE2 payload contract sections (`input_weights`, `hidden_bias[256]`, `output_weights[256]`, `output_bias`) without undocumented transformations.
+- Exporter now fails explicitly with clear incompatibility diagnostics rather than emitting partial/unsafe binaries.
+
+## Binary compatibility validation
+- P0-06 dummy export binary contract remains unchanged and loadable through existing C++ loader path `load_nnue2_network_file(...)`.
+- Header contract remains:
+  - magic `SirioNNUE2\0\0`
+  - version `2`
+  - feature_set_id `1`
+  - features_per_perspective `40960`
+
+## Tests added
+- `tests/nnue_export_v2_test.py`.
+
+## Rejection cases covered
+- checkpoint `feature_set` mismatch
+- missing required metadata
+- incompatible/dimension-mismatched tensor layout
+- incompatible architecture mapping to v2 payload sections
+
+## Continuity confirmations
+- SirioNNUE2 remains **non-default**.
+- C++ evaluation routing is unchanged.
+- Search/evaluation/TT/UCI/movegen/time-management are unchanged.
+- No self-play, teacher-engine, OpenBench, or fastchess integration was added.
+
+## Known limitations
+- Checkpoint bridge currently validates and rejects incompatible layouts; it does not yet emit trained-weight SirioNNUE2 binaries.
+- Production quantization/mapping policy for a compatible trainer layout remains future work.
+- No strength/Elo/official-network claims are made.
+
+## Originality/provenance note
+- Changes are original SirioC repository work and do not import third-party engine/trainer source.
