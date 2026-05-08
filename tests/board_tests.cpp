@@ -21,6 +21,7 @@ void run_search_tests();
 void run_nnue_backend_tests();
 void run_history_tests();
 void run_nnue_features_tests();
+void run_nnue_roundtrip_tests();
 
 namespace {
 int square_index(char file, int rank) {
@@ -432,6 +433,7 @@ int main() {
     test_nnue_backend_material_weights();
     run_nnue_backend_tests();
     run_nnue_features_tests();
+    run_nnue_roundtrip_tests();
     run_history_tests();
     run_search_tests();
     run_evaluation_phase_tests();
@@ -440,4 +442,3 @@ int main() {
     std::cout << "All tests passed.\n";
     return 0;
 }
-

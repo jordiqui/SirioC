@@ -73,6 +73,7 @@ add_executable(sirio_tests
     tests/search_tests.cpp
     tests/nnue_backend_tests.cpp
     tests/nnue_features_tests.cpp
+    tests/nnue_roundtrip_tests.cpp
     tests/tt_tests.cpp
     tests/history_tests.cpp
     tests/time_manager_tests.cpp
@@ -112,4 +113,3 @@ endif()
 
 enable_testing()
 add_test(NAME sirio_board_tests COMMAND sirio_tests)
-
