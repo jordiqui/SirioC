@@ -17,6 +17,7 @@ add_library(sirio_core
     src/history.cpp
     src/nnue/backend.cpp
     src/nnue/api.cpp
+    src/nnue/features.cpp
     src/move.cpp
     src/movegen.cpp
     src/opening_book.cpp
@@ -71,6 +72,7 @@ add_executable(sirio_tests
     tests/perft_tests.cpp
     tests/search_tests.cpp
     tests/nnue_backend_tests.cpp
+    tests/nnue_features_tests.cpp
     tests/tt_tests.cpp
     tests/history_tests.cpp
     tests/time_manager_tests.cpp

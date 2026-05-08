@@ -53,3 +53,60 @@ This task introduces the **architectural basis only** for SirioNNUE2 backend wor
 ## Known limitations
 - SirioNNUE2 paths introduced here are contract scaffolding and partial placeholders.
 - Sparse update and accumulator routines are not full production NNUE2 yet.
+
+# P0-04 SirioNNUE2 Sparse Feature Encoder v1
+
+This task adds the first deterministic sparse feature-index contract for SirioNNUE2 and keeps evaluation routing unchanged.
+
+## Feature set
+- Name/id: `SirioHalfKAv1`
+- Perspectives: 2 (white, black)
+- Relative channels per perspective: 10
+- Squares: 64 king squares and 64 piece squares
+- Features per perspective: `64 * 10 * 64 = 40960`
+- Exact index formula: `((perspective_king_square * 10 + relative_piece_channel) * 64 + perspective_piece_square)`
+
+## Perspective transform rule
+- White perspective uses board squares as-is.
+- Black perspective uses a documented vertical flip normalization (`rank -> 7 - rank`, file unchanged).
+
+## Relative channel mapping
+- 0 own pawn
+- 1 own knight
+- 2 own bishop
+- 3 own rook
+- 4 own queen
+- 5 enemy pawn
+- 6 enemy knight
+- 7 enemy bishop
+- 8 enemy rook
+- 9 enemy queen
+
+## Files changed
+- `include/sirio/nnue/features.hpp`
+- `src/nnue/features.cpp`
+- `tests/nnue_features_tests.cpp`
+- `tests/board_tests.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Tests added
+- Added dedicated `nnue_features_tests` coverage for constants, start position active-count contract, kings-only behavior, exact index checks, transform determinism, duplicate-index prevention, and state-clear behavior.
+
+## Continuity confirmations
+- SirioNNUE2 is still **not** default.
+- Evaluation routing is unchanged.
+- Search/UCI/TT/movegen/time-management behavior is unchanged.
+- Training/export pipeline is unchanged.
+
+## Deferred items
+- Python parity encoder.
+- Binary exporter.
+- Real accumulator update math.
+- Threat-side channel.
+- Input buckets.
+- Output buckets.
+- Trainer integration.
+
+## Originality/provenance note
+- This feature-index contract and implementation are original SirioC code and do not import third-party engine/trainer source.
