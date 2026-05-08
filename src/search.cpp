@@ -1,4 +1,5 @@
 #include "sirio/search.hpp"
+#include "sirio/search_params.hpp"
 
 #include <algorithm>
 #include <array>
@@ -45,28 +46,19 @@ enum class SearchNodeKind {
     Quiescence,
 };
 
-constexpr int mate_score = 100000;
-constexpr int max_search_depth = 128;
-constexpr int mate_threshold = mate_score - max_search_depth;
-constexpr std::array<int, static_cast<std::size_t>(PieceType::Count)> mvv_values = {
-    100, 320, 330, 500, 900, 20000};
-constexpr std::array<int, static_cast<std::size_t>(PieceType::Count)> see_piece_values = {
-    100, 320, 330, 500, 900, 20000};
 
-constexpr int max_lmr_depth = 64;
-constexpr int max_lmr_moves = 64;
 
 constexpr std::size_t color_to_index(Color color) {
     return color == Color::White ? 0u : 1u;
 }
 
 int late_move_reduction_base(int depth, int move_index) {
-    depth = std::clamp(depth, 0, max_lmr_depth - 1);
-    move_index = std::clamp(move_index, 0, max_lmr_moves - 1);
-    static const std::array<std::array<int, max_lmr_moves>, max_lmr_depth> table = [] {
-        std::array<std::array<int, max_lmr_moves>, max_lmr_depth> result{};
-        for (int d = 0; d < max_lmr_depth; ++d) {
-            for (int m = 0; m < max_lmr_moves; ++m) {
+    depth = std::clamp(depth, 0, search_params::max_lmr_depth - 1);
+    move_index = std::clamp(move_index, 0, search_params::max_lmr_moves - 1);
+    static const std::array<std::array<int, search_params::max_lmr_moves>, search_params::max_lmr_depth> table = [] {
+        std::array<std::array<int, search_params::max_lmr_moves>, search_params::max_lmr_depth> result{};
+        for (int d = 0; d < search_params::max_lmr_depth; ++d) {
+            for (int m = 0; m < search_params::max_lmr_moves; ++m) {
                 if (d == 0 || m == 0) {
                     result[d][m] = 0;
                     continue;
@@ -283,7 +275,7 @@ struct SearchSharedState {
 };
 
 struct SearchContext {
-    std::array<std::array<std::optional<Move>, 2>, max_search_depth> killer_moves{};
+    std::array<std::array<std::optional<Move>, 2>, search_params::max_search_depth> killer_moves{};
     GlobalTranspositionTable *tt = nullptr;
     std::uint8_t tt_generation = 1;
     SearchSharedState *shared = nullptr;
@@ -297,8 +289,6 @@ struct SearchContext {
     std::array<std::array<std::array<int, 64>, 64>, 2> history{};
 };
 
-constexpr std::uint64_t node_flush_interval = 512;
-constexpr std::chrono::microseconds info_output_lock_timeout{500};
 
 class TimedAtomicFlagLock {
 public:
@@ -387,7 +377,6 @@ void flush_thread_node_counter(SearchContext &context) {
     context.local_node_accumulator = 0;
 }
 
-constexpr std::uint64_t time_check_interval = 2048;
 
 }  // namespace
 
@@ -483,7 +472,7 @@ int static_exchange_score(const Board &board, const Move &move) {
     const Color them = opposite(us);
     auto color_index = [](Color color) { return color == Color::White ? 0 : 1; };
 
-    std::array<int, max_search_depth> gain{};
+    std::array<int, search_params::max_search_depth> gain{};
     int depth = 0;
 
     const Bitboard from_bb = one_bit(move.from);
@@ -496,11 +485,11 @@ int static_exchange_score(const Board &board, const Move &move) {
         const Bitboard captured_bb = one_bit(captured_square);
         pieces[color_index(them)][static_cast<std::size_t>(PieceType::Pawn)] &= ~captured_bb;
         occupancy &= ~captured_bb;
-        captured_value = see_piece_values[static_cast<std::size_t>(PieceType::Pawn)];
+        captured_value = search_params::see_piece_values[static_cast<std::size_t>(PieceType::Pawn)];
     } else if (move.captured.has_value()) {
         pieces[color_index(them)][static_cast<std::size_t>(*move.captured)] &= ~target_bb;
         occupancy &= ~target_bb;
-        captured_value = see_piece_values[static_cast<std::size_t>(*move.captured)];
+        captured_value = search_params::see_piece_values[static_cast<std::size_t>(*move.captured)];
     }
 
     const PieceType placed_piece = move.promotion.has_value() ? *move.promotion : move.piece;
@@ -536,7 +525,7 @@ int static_exchange_score(const Board &board, const Move &move) {
         }
 
         ++depth;
-        gain[depth] = see_piece_values[static_cast<std::size_t>(occupant_piece)] - gain[depth - 1];
+        gain[depth] = search_params::see_piece_values[static_cast<std::size_t>(occupant_piece)] - gain[depth - 1];
 
         const Bitboard attacker_bb = one_bit(attacker_square);
         pieces[idx][static_cast<std::size_t>(attacker_type)] &= ~attacker_bb;
@@ -561,7 +550,6 @@ int static_exchange_score(const Board &board, const Move &move) {
     return gain[0];
 }
 
-constexpr int kMaxSearchThreads = 1024;
 
 class EvaluationScope {
 public:
@@ -590,7 +578,7 @@ private:
 };
 
 int clamp_thread_count(int threads) {
-    return std::clamp(threads, 1, kMaxSearchThreads);
+    return std::clamp(threads, 1, search_params::max_search_threads);
 }
 
 int env_thread_override() {
@@ -744,7 +732,7 @@ bool is_central_pawn_sacrifice(const Board &board, const Move &move, Color mover
 int syzygy_wdl_to_score(int wdl, int ply) {
     switch (wdl) {
         case 2:
-            return mate_score - ply;
+            return search_params::mate_score - ply;
         case 1:
             return 200;
         case 0:
@@ -753,7 +741,7 @@ int syzygy_wdl_to_score(int wdl, int ply) {
             return -200;
         case -2:
         default:
-            return -mate_score + ply;
+            return -search_params::mate_score + ply;
     }
 }
 
@@ -795,7 +783,7 @@ std::vector<Move> extract_principal_variation(const Board &board, GlobalTranspos
     Board current = board;
     std::unordered_set<std::uint64_t> visited;
     visited.insert(current.zobrist_hash());
-    const int limit = std::min(max_length, max_search_depth);
+    const int limit = std::min(max_length, search_params::max_search_depth);
     for (int depth = 0; depth < limit; ++depth) {
         auto entry_opt = probe_transposition(tt, current.zobrist_hash(), generation);
         if (!entry_opt.has_value()) {
@@ -836,7 +824,7 @@ void announce_search_update(const Board &board, const SearchResult &result,
     int depth = result.depth_reached;
     int seldepth = result.seldepth > 0 ? result.seldepth : depth;
     std::string pv_string = principal_variation_to_uci(board, result.principal_variation);
-    TimedAtomicFlagLock lock(info_output_flag, info_output_lock_timeout);
+    TimedAtomicFlagLock lock(info_output_flag, search_params::info_output_lock_timeout);
     if (!lock.owns_lock()) {
         return;
     }
@@ -864,7 +852,7 @@ void announce_currmove(const Move &move, int move_index, const SearchContext &co
         elapsed_ms = 0;
     }
 
-    TimedAtomicFlagLock lock(info_output_flag, info_output_lock_timeout);
+    TimedAtomicFlagLock lock(info_output_flag, search_params::info_output_lock_timeout);
     if (!lock.owns_lock()) {
         return;
     }
@@ -887,12 +875,9 @@ int mvv_lva_score(const Move &move) {
     }
     auto victim_index = static_cast<std::size_t>(*move.captured);
     auto attacker_index = static_cast<std::size_t>(move.piece);
-    return mvv_values[victim_index] * 100 - mvv_values[attacker_index];
+    return search_params::mvv_values[victim_index] * 100 - search_params::mvv_values[attacker_index];
 }
 
-constexpr int history_bonus_limit = 8192;
-constexpr int history_max = 16384;
-constexpr int history_min = -history_max;
 
 int history_score(const Move &move, const SearchContext &context, Color mover) {
     if (!is_quiet(move)) {
@@ -909,12 +894,12 @@ void update_history(SearchContext &context, Color mover, const Move &move, int d
     }
     depth = std::max(depth, 1);
     int bonus = depth * depth;
-    bonus = std::min(bonus, history_bonus_limit);
+    bonus = std::min(bonus, search_params::history_bonus_limit);
     auto &entry = context.history[color_to_index(mover)][move.from][move.to];
     if (success) {
-        entry = std::min(entry + bonus, history_max);
+        entry = std::min(entry + bonus, search_params::history_max);
     } else {
-        entry = std::max(entry - bonus, history_min);
+        entry = std::max(entry - bonus, search_params::history_min);
     }
 }
 
@@ -955,7 +940,7 @@ public:
             }
 
             if (move.promotion.has_value()) {
-                int promo_score = mvv_values[static_cast<std::size_t>(*move.promotion)] * 100;
+                int promo_score = search_params::mvv_values[static_cast<std::size_t>(*move.promotion)] * 100;
                 promotions_.emplace_back(promo_score, move);
                 continue;
             }
@@ -1093,7 +1078,7 @@ bool should_stop(SearchContext &context, SearchNodeKind kind) {
     }
     ++context.total_nodes;
 
-    if (context.local_node_accumulator >= node_flush_interval) {
+    if (context.local_node_accumulator >= search_params::node_flush_interval) {
         flush_thread_node_counter(context);
     }
 
@@ -1117,7 +1102,7 @@ bool should_stop(SearchContext &context, SearchNodeKind kind) {
         return false;
     }
 
-    if ((context.total_nodes & (time_check_interval - 1)) != 0) {
+    if ((context.total_nodes & (search_params::time_check_interval - 1)) != 0) {
         return false;
     }
 
@@ -1148,27 +1133,27 @@ int evaluate_for_current_player(const Board &board) {
 }
 
 int to_tt_score(int score, int ply) {
-    if (score > mate_threshold) {
+    if (score > search_params::mate_threshold) {
         return score + ply;
     }
-    if (score < -mate_threshold) {
+    if (score < -search_params::mate_threshold) {
         return score - ply;
     }
     return score;
 }
 
 int from_tt_score(int score, int ply) {
-    if (score > mate_threshold) {
+    if (score > search_params::mate_threshold) {
         return score - ply;
     }
-    if (score < -mate_threshold) {
+    if (score < -search_params::mate_threshold) {
         return score + ply;
     }
     return score;
 }
 
 void store_killer(const Move &move, SearchContext &context, int ply) {
-    if (!is_quiet(move) || ply >= max_search_depth) {
+    if (!is_quiet(move) || ply >= search_params::max_search_depth) {
         return;
     }
     auto &slots = context.killer_moves[static_cast<std::size_t>(ply)];
@@ -1207,7 +1192,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         static_eval = evaluate_for_current_player(board);
     }
 
-    const int max_remaining_depth = max_search_depth - ply;
+    const int max_remaining_depth = search_params::max_search_depth - ply;
     int depth_left = std::min(depth, max_remaining_depth);
     if (in_check && depth_left < max_remaining_depth) {
         ++depth_left;
@@ -1227,7 +1212,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         syzygy::max_pieces() >= piece_count && depth_left <= syzygy::probe_depth_limit()) {
         if (auto tb = syzygy::probe_wdl(board); tb.has_value()) {
             int tb_score = syzygy_wdl_to_score(tb->wdl, ply);
-            if (std::abs(tb_score) >= mate_threshold || tb->wdl == 0) {
+            if (std::abs(tb_score) >= search_params::mate_threshold || tb->wdl == 0) {
                 if (best_move && tb->best_move) {
                     *best_move = *tb->best_move;
                 }
@@ -1276,9 +1261,8 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
     }
 
     if (!in_check && depth_left == 1) {
-        constexpr int futility_margin = 150;
-        if (static_eval - futility_margin >= beta) {
-            return static_eval - futility_margin;
+        if (static_eval - search_params::futility_margin_depth1 >= beta) {
+            return static_eval - search_params::futility_margin_depth1;
         }
     }
 
@@ -1313,7 +1297,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
     auto raw_moves = generate_legal_moves(board);
     if (raw_moves.empty()) {
         if (in_check) {
-            return -mate_score + ply;
+            return -search_params::mate_score + ply;
         }
         return 0;
     }
@@ -1356,13 +1340,13 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         bool gives_check = board.in_check(board.side_to_move());
 
         int child_depth = depth_left - 1;
-        if (gives_check && child_depth < max_search_depth - (ply + 1)) {
+        if (gives_check && child_depth < search_params::max_search_depth - (ply + 1)) {
             ++child_depth;
         }
-        if (is_pawn_storm_move(move, mover) && child_depth < max_search_depth - (ply + 1)) {
+        if (is_pawn_storm_move(move, mover) && child_depth < search_params::max_search_depth - (ply + 1)) {
             ++child_depth;
         }
-        child_depth = std::min(child_depth, std::max(0, max_search_depth - (ply + 1)));
+        child_depth = std::min(child_depth, std::max(0, search_params::max_search_depth - (ply + 1)));
 
         int reduction = 0;
         if (child_depth > 0 && depth_left >= 3 && move_index > 1 && quiet_move && !gives_check) {
@@ -2158,8 +2142,8 @@ SearchResult run_search_thread(Board board, int max_depth_limit, SearchSharedSta
 
 SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
     SearchResult result;
-    int max_depth_limit = limits.max_depth > 0 ? limits.max_depth : max_search_depth;
-    max_depth_limit = std::min(max_depth_limit, max_search_depth);
+    int max_depth_limit = limits.max_depth > 0 ? limits.max_depth : search_params::max_search_depth;
+    max_depth_limit = std::min(max_depth_limit, search_params::max_search_depth);
 
     SearchSharedState shared;
     shared.start_time = std::chrono::steady_clock::now();
@@ -2211,7 +2195,7 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
                 result.best_move = *root_probe->best_move;
                 result.has_move = true;
                 result.depth_reached = 0;
-                if (std::abs(result.score) >= mate_threshold || root_probe->wdl == 0) {
+                if (std::abs(result.score) >= search_params::mate_threshold || root_probe->wdl == 0) {
                     return result;
                 }
             }
@@ -2318,8 +2302,8 @@ SearchResult search_best_move(const Board &board, const SearchLimits &limits) {
 }
 
 std::string format_uci_score(int score) {
-    if (score >= mate_threshold || score <= -mate_threshold) {
-        int moves = (mate_score - std::abs(score) + 1) / 2;
+    if (score >= search_params::mate_threshold || score <= -search_params::mate_threshold) {
+        int moves = (search_params::mate_score - std::abs(score) + 1) / 2;
         if (score < 0) {
             moves = -moves;
         }
