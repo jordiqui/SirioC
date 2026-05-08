@@ -14,6 +14,7 @@ add_library(sirio_core
     src/draws.cpp
     src/endgame.cpp
     src/evaluation.cpp
+    src/history.cpp
     src/nnue/backend.cpp
     src/nnue/api.cpp
     src/move.cpp
