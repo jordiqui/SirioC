@@ -623,3 +623,61 @@ This task adds an isolated SirioNNUE2-MinimalV1 evaluation probe contract withou
 ## Next deferred step
 - Controlled integration design for explicit evaluation routing policy (including side-to-move semantics) while preserving non-regression constraints.
 
+
+# P0-13 SirioNNUE2 Non-Default Evaluation Adapter / STM-POV Contract
+
+This task adds a strict non-default adapter that converts the existing P0-12 SirioNNUE2 White-POV probe output into side-to-move POV, without changing runtime engine evaluation routing.
+
+## Files changed
+- `include/sirio/nnue/backend.hpp`
+- `src/nnue/backend.cpp`
+- `tests/nnue_eval_probe_v2_tests.cpp`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Adapter API/function names
+- Existing probe preserved: `evaluate_loaded_nnue2_minimal_v1_probe_white_pov(...)`
+- New non-default adapter: `evaluate_loaded_nnue2_minimal_v1_probe_stm_pov(...)`
+
+## White-POV probe contract
+- White-POV probe remains side-to-move invariant.
+- Probe value source remains piece placement features only.
+- No side-to-move sign normalization is applied in the White-POV probe.
+
+## STM-POV adapter contract
+- Adapter calls the existing White-POV probe.
+- If side-to-move is White, return White-POV unchanged.
+- If side-to-move is Black, return negated White-POV.
+- Invalid/unvalidated network remains rejected via existing layout validation path.
+- Adapter is isolated and non-default; no hidden global mutable state was added.
+
+## Sign-flip rule
+- `stm_pov = white_pov` when `board.side_to_move() == White`
+- `stm_pov = -white_pov` when `board.side_to_move() == Black`
+
+## FEN/test cases used
+- Start position side-to-move invariance:
+  - `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
+  - `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1`
+- Non-zero sign-flip coverage:
+  - `4k3/8/8/8/3P4/8/8/4K3 w - - 0 1`
+  - `4k3/8/8/8/3P4/8/8/4K3 b - - 0 1`
+- Kings-only determinism:
+  - `8/8/8/8/8/8/6k1/6K1 w - - 0 1`
+  - `8/8/8/8/8/8/6k1/6K1 b - - 0 1`
+
+## Continuity confirmations
+- SirioNNUE2 remains non-default.
+- Normal `evaluate()` behavior remains unchanged.
+- Normal `evaluate_for_current_player()` behavior remains unchanged.
+- Search/UCI/TT/movegen/Syzygy/time management/threading remain unchanged.
+- No UCI option was added or changed.
+
+## Known limitations
+- Adapter remains a controlled probe-only path and is not wired into search runtime evaluation.
+- Coverage for `evaluate_for_current_player()` is indirect because it is internal to `search.cpp`.
+
+## Next deferred step
+- Controlled wiring decision for optional internal evaluation call-sites (if and only if explicitly authorized in a later roadmap step).
+
+## Originality/provenance note
+- Implementation and tests are original SirioC repository code and do not import third-party engine/trainer source.

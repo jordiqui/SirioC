@@ -340,6 +340,22 @@ bool evaluate_loaded_nnue2_minimal_v1_probe_white_pov(
     return evaluate_loaded_nnue2_minimal_v1(board, network, out_white_pov_score, error_message);
 }
 
+bool evaluate_loaded_nnue2_minimal_v1_probe_stm_pov(
+    const Board &board, const Nnue2NetworkParameters &network, std::int32_t &out_stm_pov_score,
+    std::string &error_message) {
+    std::int32_t white_pov_score = 0;
+    if (!evaluate_loaded_nnue2_minimal_v1_probe_white_pov(board, network, white_pov_score,
+                                                           error_message)) {
+        out_stm_pov_score = 0;
+        return false;
+    }
+
+    // P0-13 contract: non-default adapter converts White-POV probe output to side-to-move POV.
+    out_stm_pov_score =
+        board.side_to_move() == Color::White ? white_pov_score : -white_pov_score;
+    return true;
+}
+
 SparseFeatureState compute_sparse_feature_state(const Board &board) {
     SparseFeatureState state{};
     for (int perspective = 0; perspective < 2; ++perspective) {

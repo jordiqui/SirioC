@@ -38,6 +38,16 @@ std::int32_t probe_white_pov(const std::string &fen,
     return score;
 }
 
+
+std::int32_t probe_stm_pov(const std::string &fen,
+                           const sirio::nnue::Nnue2NetworkParameters &network) {
+    sirio::Board board{fen};
+    std::string error;
+    std::int32_t score = 0;
+    assert(sirio::nnue::evaluate_loaded_nnue2_minimal_v1_probe_stm_pov(board, network, score,
+                                                                        error));
+    return score;
+}
 void test_probe_white_pov_startpos_side_to_move_invariant() {
     const auto net = load_fixture_network();
     const auto wtm = probe_white_pov("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", net);
@@ -52,6 +62,51 @@ void test_probe_white_pov_kings_only_side_to_move_invariant() {
     assert(wtm == btm);
 }
 
+
+void test_probe_stm_adapter_contract_non_zero_sign_flip() {
+    const auto net = load_fixture_network();
+    const std::string white_fen = "4k3/8/8/8/3P4/8/8/4K3 w - - 0 1";
+    const std::string black_fen = "4k3/8/8/8/3P4/8/8/4K3 b - - 0 1";
+
+    const auto white_probe = probe_white_pov(white_fen, net);
+    const auto black_probe = probe_white_pov(black_fen, net);
+    assert(white_probe == black_probe);
+    assert(white_probe != 0);
+
+    const auto white_stm = probe_stm_pov(white_fen, net);
+    const auto black_stm = probe_stm_pov(black_fen, net);
+    assert(white_stm == white_probe);
+    assert(black_stm == -white_probe);
+}
+
+void test_probe_stm_adapter_kings_only_deterministic() {
+    const auto net = load_fixture_network();
+    const std::string white_fen = "8/8/8/8/8/8/6k1/6K1 w - - 0 1";
+    const std::string black_fen = "8/8/8/8/8/8/6k1/6K1 b - - 0 1";
+
+    const auto white_probe = probe_white_pov(white_fen, net);
+    const auto black_probe = probe_white_pov(black_fen, net);
+    assert(white_probe == black_probe);
+
+    const auto white_stm_a = probe_stm_pov(white_fen, net);
+    const auto white_stm_b = probe_stm_pov(white_fen, net);
+    const auto black_stm_a = probe_stm_pov(black_fen, net);
+    const auto black_stm_b = probe_stm_pov(black_fen, net);
+    assert(white_stm_a == white_stm_b);
+    assert(black_stm_a == black_stm_b);
+    assert(white_stm_a == white_probe);
+    assert(black_stm_a == -white_probe);
+}
+
+void test_probe_stm_adapter_rejects_unvalidated_network() {
+    auto net = load_fixture_network();
+    net.hidden_bias.clear();
+
+    std::string error;
+    std::int32_t score = 0;
+    sirio::Board board{"8/8/8/8/8/8/6k1/6K1 w - - 0 1"};
+    assert(!sirio::nnue::evaluate_loaded_nnue2_minimal_v1_probe_stm_pov(board, net, score, error));
+}
 void test_probe_deterministic_repeated_output() {
     const auto net = load_fixture_network();
     const std::string fen = "4k3/8/8/8/3P4/8/8/4K3 w - - 0 1";
@@ -94,6 +149,9 @@ void test_normal_evaluate_unchanged_by_probe_call() {
 void run_nnue_eval_probe_v2_tests() {
     test_probe_white_pov_startpos_side_to_move_invariant();
     test_probe_white_pov_kings_only_side_to_move_invariant();
+    test_probe_stm_adapter_contract_non_zero_sign_flip();
+    test_probe_stm_adapter_kings_only_deterministic();
+    test_probe_stm_adapter_rejects_unvalidated_network();
     test_probe_deterministic_repeated_output();
     test_probe_rejects_unvalidated_network();
     test_normal_evaluate_unchanged_by_probe_call();
