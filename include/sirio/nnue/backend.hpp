@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <compare>
 #include <memory>
 #include <span>
 #include <string>
@@ -24,6 +25,8 @@ struct FeatureState {
 struct SparseFeature {
     std::uint32_t index = 0;
     std::int16_t value = 1;
+
+    auto operator<=>(const SparseFeature &) const = default;
 };
 
 struct SparsePerspectiveState {

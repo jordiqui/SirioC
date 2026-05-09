@@ -1,6 +1,9 @@
 #include "sirio/nnue/features.hpp"
 
+#include <algorithm>
 #include <array>
+#include <iterator>
+#include <vector>
 
 namespace sirio::nnue {
 
@@ -25,6 +28,59 @@ constexpr std::array<std::uint32_t, 5> kEnemyChannels = {
 constexpr std::array<PieceType, 5> kNonKingPieceTypes = {
     PieceType::Pawn, PieceType::Knight, PieceType::Bishop, PieceType::Rook, PieceType::Queen,
 };
+
+
+void sort_features(std::vector<SparseFeature> &features) {
+    std::sort(features.begin(), features.end(), [](const SparseFeature &lhs, const SparseFeature &rhs) {
+        if (lhs.index != rhs.index) {
+            return lhs.index < rhs.index;
+        }
+        return lhs.value < rhs.value;
+    });
+}
+
+void compute_perspective_diff(const SparsePerspectiveState &before,
+                              const SparsePerspectiveState &after,
+                              std::vector<SparseFeature> &removed,
+                              std::vector<SparseFeature> &added) {
+    std::vector<SparseFeature> before_features(before.active.begin(), before.active.begin() + before.count);
+    std::vector<SparseFeature> after_features(after.active.begin(), after.active.begin() + after.count);
+    sort_features(before_features);
+    sort_features(after_features);
+
+    std::set_difference(before_features.begin(), before_features.end(), after_features.begin(),
+                        after_features.end(), std::back_inserter(removed),
+                        [](const SparseFeature &lhs, const SparseFeature &rhs) {
+                            if (lhs.index != rhs.index) {
+                                return lhs.index < rhs.index;
+                            }
+                            return lhs.value < rhs.value;
+                        });
+    std::set_difference(after_features.begin(), after_features.end(), before_features.begin(),
+                        before_features.end(), std::back_inserter(added),
+                        [](const SparseFeature &lhs, const SparseFeature &rhs) {
+                            if (lhs.index != rhs.index) {
+                                return lhs.index < rhs.index;
+                            }
+                            return lhs.value < rhs.value;
+                        });
+}
+
+SirioHalfKAv1FullRefreshReason detect_refresh_reason(const Board &before, const Board &after) {
+    const bool white_king_moved = before.king_square(Color::White) != after.king_square(Color::White);
+    const bool black_king_moved = before.king_square(Color::Black) != after.king_square(Color::Black);
+
+    if (white_king_moved && black_king_moved) {
+        return SirioHalfKAv1FullRefreshReason::BothKingsMoved;
+    }
+    if (white_king_moved) {
+        return SirioHalfKAv1FullRefreshReason::WhiteKingMoved;
+    }
+    if (black_king_moved) {
+        return SirioHalfKAv1FullRefreshReason::BlackKingMoved;
+    }
+    return SirioHalfKAv1FullRefreshReason::None;
+}
 
 }  // namespace
 
@@ -106,6 +162,30 @@ bool encode_sirio_halfka_v1(const Board &board, SparseFeatureState &out_state) {
         }
     }
 
+    return true;
+}
+
+
+bool compute_sirio_halfka_v1_feature_diff(const Board &before, const Board &after,
+                                          SirioHalfKAv1FeatureDiff &out_diff) {
+    out_diff = SirioHalfKAv1FeatureDiff{};
+
+    SparseFeatureState before_state;
+    SparseFeatureState after_state;
+    if (!encode_sirio_halfka_v1(before, before_state) || !encode_sirio_halfka_v1(after, after_state)) {
+        out_diff.full_refresh_required = true;
+        out_diff.full_refresh_reason = SirioHalfKAv1FullRefreshReason::InvalidInput;
+        return false;
+    }
+
+    compute_perspective_diff(before_state.perspectives[0], after_state.perspectives[0],
+                             out_diff.white_removed, out_diff.white_added);
+    compute_perspective_diff(before_state.perspectives[1], after_state.perspectives[1],
+                             out_diff.black_removed, out_diff.black_added);
+
+    out_diff.full_refresh_reason = detect_refresh_reason(before, after);
+    out_diff.full_refresh_required =
+        out_diff.full_refresh_reason != SirioHalfKAv1FullRefreshReason::None;
     return true;
 }
 
