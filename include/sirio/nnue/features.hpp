@@ -35,4 +35,26 @@ enum class SirioHalfKAv1RelativeChannel : std::uint32_t {
                                                int perspective_piece_square);
 [[nodiscard]] bool encode_sirio_halfka_v1(const Board &board, SparseFeatureState &out_state);
 
+enum class SirioHalfKAv1FullRefreshReason : std::uint8_t {
+    None = 0,
+    WhiteKingMoved = 1,
+    BlackKingMoved = 2,
+    BothKingsMoved = 3,
+    InvalidInput = 4,
+};
+
+struct SirioHalfKAv1FeatureDiff {
+    std::vector<SparseFeature> white_removed;
+    std::vector<SparseFeature> white_added;
+    std::vector<SparseFeature> black_removed;
+    std::vector<SparseFeature> black_added;
+    bool full_refresh_required = false;
+    SirioHalfKAv1FullRefreshReason full_refresh_reason =
+        SirioHalfKAv1FullRefreshReason::None;
+};
+
+[[nodiscard]] bool compute_sirio_halfka_v1_feature_diff(
+    const Board &before, const Board &after, SirioHalfKAv1FeatureDiff &out_diff);
+
+
 }  // namespace sirio::nnue

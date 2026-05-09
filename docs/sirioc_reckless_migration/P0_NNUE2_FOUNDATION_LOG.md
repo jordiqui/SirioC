@@ -934,3 +934,73 @@ This task adds a minimal evaluation-layer integration harness that can explicitl
 
 ## Next deferred step
 - P0-19: incremental accumulator updates with deterministic parity checks against full-refresh baseline before any search integration.
+
+# P0-19 SirioNNUE2 Accumulator Delta Planning / Feature-Diff Contract
+
+This task adds a deterministic SirioHalfKAv1 feature-diff planning contract for before/after board comparison. It does not apply incremental accumulator updates and does not change runtime search/evaluation routing.
+
+## Files changed
+- `include/sirio/nnue/backend.hpp`
+- `include/sirio/nnue/features.hpp`
+- `src/nnue/features.cpp`
+- `tests/nnue_feature_diff_v2_tests.cpp`
+- `tests/board_tests.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Feature-diff API
+- `enum class SirioHalfKAv1FullRefreshReason { None, WhiteKingMoved, BlackKingMoved, BothKingsMoved, InvalidInput }`
+- `struct SirioHalfKAv1FeatureDiff`
+- `bool compute_sirio_halfka_v1_feature_diff(const Board &before, const Board &after, SirioHalfKAv1FeatureDiff &out_diff)`
+
+## Diff semantics
+- Encodes both `before` and `after` using `encode_sirio_halfka_v1`.
+- Computes deterministic per-perspective set differences:
+  - white removed / white added
+  - black removed / black added
+- Deterministic ordering is enforced by sorting sparse features by `(index, value)` before `std::set_difference`.
+- Feature identity includes both `index` and `value`.
+- If encoding fails for either board, `full_refresh_required=true` with `InvalidInput`.
+
+## Full-refresh and king-move rule
+- `full_refresh_required` is set when either king square changes.
+- Reason mapping:
+  - white king changed -> `WhiteKingMoved`
+  - black king changed -> `BlackKingMoved`
+  - both changed -> `BothKingsMoved`
+- Even when full refresh is required, the diff lists are still produced when encoding succeeds.
+- Incremental accumulator application must remain deferred when `full_refresh_required=true`.
+
+## Ordering and dedup assumptions
+- Existing SirioHalfKAv1 encoder contract yields deterministic active feature ordering.
+- Diff helper re-sorts each perspective snapshot by `(index, value)` to guarantee deterministic delta lists independent of insertion order.
+- No duplicate features are expected from current encoder contract; diff logic remains value-aware and deterministic.
+
+## Tests added and cases covered
+- Added `tests/nnue_feature_diff_v2_tests.cpp` and wired into `sirio_tests`.
+- Coverage includes:
+  - no-change board
+  - quiet non-king move + deterministic repeated diff
+  - capture-like before/after state
+  - promotion-like before/after state
+  - castling-like before/after state (king moved => full refresh)
+  - king move (full refresh)
+  - side-to-move-only change (no feature delta)
+  - feature index range `[0, 40960)` and value `1` on all delta lists
+- En passant-specific delta case remains deferred as a separate explicit case; current coverage uses safe before/after board states without move-construction fragility.
+
+## Continuity confirmations
+- Incremental accumulator update is deferred.
+- SirioNNUE2 remains non-default.
+- Normal `evaluate()` / `evaluate_for_current_player()` behavior is unchanged.
+- Search routing and UCI options/defaults are unchanged.
+- SirioNNUE1 legacy support remains unchanged.
+- No Elo/strength claims are made.
+
+## Known limitations
+- Diff helper is comparison-based planning only; it does not perform in-place accumulator updates.
+- `InvalidInput` is surfaced through return `false` + refresh-required reason, but no additional diagnostics are attached.
+- En passant-specific legal-move transition coverage is still deferred.
+
+## Deferred next step
+- Implement and validate incremental accumulator application using this contract, with make/unmake no-drift checks and king-move forced refresh handling.
