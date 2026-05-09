@@ -60,6 +60,60 @@ void test_deterministic_inference_fixed_fens() {
     }
 }
 
+void test_accumulator_refresh_equality_fixed_fens() {
+    const auto net = load_fixture_network();
+    std::string error;
+    for (const std::string fen : {
+             std::string{"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"},
+             std::string{"8/8/8/8/8/8/6k1/6K1 w - - 0 1"},
+             std::string{"4k3/8/8/8/8/8/4P3/4K3 w - - 0 1"},
+             std::string{"r3k2r/pp3ppp/2n1bn2/3p4/3P4/2N1PN2/PP3PPP/R3K2R w KQkq - 0 1"},
+         }) {
+        sirio::Board board{fen};
+        std::int32_t direct_score = 0;
+        assert(sirio::nnue::evaluate_loaded_nnue2_minimal_v1(board, net, direct_score, error));
+
+        sirio::nnue::SirioNNUE2MinimalAccumulator accumulator{};
+        assert(sirio::nnue::refresh_sirio_nnue2_minimal_accumulator(board, net, accumulator, error));
+        std::int32_t accum_score = 0;
+        assert(sirio::nnue::evaluate_sirio_nnue2_minimal_accumulator(accumulator, net, accum_score,
+                                                                      error));
+        assert(direct_score == accum_score);
+    }
+}
+
+void test_accumulator_refresh_deterministic_repeat() {
+    const auto net = load_fixture_network();
+    const sirio::Board board{"r3k2r/pp3ppp/2n1bn2/3p4/3P4/2N1PN2/PP3PPP/R3K2R w KQkq - 0 1"};
+    std::string error;
+
+    sirio::nnue::SirioNNUE2MinimalAccumulator a1{};
+    sirio::nnue::SirioNNUE2MinimalAccumulator a2{};
+    assert(sirio::nnue::refresh_sirio_nnue2_minimal_accumulator(board, net, a1, error));
+    assert(sirio::nnue::refresh_sirio_nnue2_minimal_accumulator(board, net, a2, error));
+    assert(a1.valid && a2.valid);
+    assert(a1.hidden_pre_activation == a2.hidden_pre_activation);
+}
+
+void test_accumulator_clear_and_reinitialize() {
+    const auto net = load_fixture_network();
+    std::string error;
+    sirio::nnue::SirioNNUE2MinimalAccumulator accumulator{};
+    const sirio::Board board{"4k3/8/8/8/8/8/4P3/4K3 w - - 0 1"};
+
+    assert(sirio::nnue::refresh_sirio_nnue2_minimal_accumulator(board, net, accumulator, error));
+    assert(accumulator.valid);
+    assert(!accumulator.hidden_pre_activation.empty());
+    accumulator.clear();
+    assert(!accumulator.valid);
+    assert(accumulator.hidden_pre_activation.empty());
+
+    std::int32_t score = 0;
+    assert(!sirio::nnue::evaluate_sirio_nnue2_minimal_accumulator(accumulator, net, score, error));
+    assert(sirio::nnue::refresh_sirio_nnue2_minimal_accumulator(board, net, accumulator, error));
+    assert(accumulator.valid);
+}
+
 void test_reject_malformed_section_size() {
     auto net = load_fixture_network();
     net.output_weights.pop_back();
@@ -69,10 +123,41 @@ void test_reject_malformed_section_size() {
     assert(!sirio::nnue::evaluate_loaded_nnue2_minimal_v1(board, net, score, error));
 }
 
+void test_accumulator_reject_unvalidated_network() {
+    sirio::nnue::Nnue2NetworkParameters net;
+    sirio::Board board{"8/8/8/8/8/8/6k1/6K1 w - - 0 1"};
+    sirio::nnue::SirioNNUE2MinimalAccumulator accumulator{};
+    std::string error;
+    assert(!sirio::nnue::refresh_sirio_nnue2_minimal_accumulator(board, net, accumulator, error));
+}
+
+void test_white_pov_accumulator_side_to_move_invariant() {
+    const auto net = load_fixture_network();
+    std::string error;
+    const sirio::Board white{"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"};
+    const sirio::Board black{"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1"};
+
+    sirio::nnue::SirioNNUE2MinimalAccumulator white_acc{};
+    sirio::nnue::SirioNNUE2MinimalAccumulator black_acc{};
+    assert(sirio::nnue::refresh_sirio_nnue2_minimal_accumulator(white, net, white_acc, error));
+    assert(sirio::nnue::refresh_sirio_nnue2_minimal_accumulator(black, net, black_acc, error));
+
+    std::int32_t white_score = 0;
+    std::int32_t black_score = 0;
+    assert(sirio::nnue::evaluate_sirio_nnue2_minimal_accumulator(white_acc, net, white_score, error));
+    assert(sirio::nnue::evaluate_sirio_nnue2_minimal_accumulator(black_acc, net, black_score, error));
+    assert(white_score == black_score);
+}
+
 }  // namespace
 
 void run_nnue_inference_v2_tests() {
     test_decoded_layout_contract();
     test_deterministic_inference_fixed_fens();
+    test_accumulator_refresh_equality_fixed_fens();
+    test_accumulator_refresh_deterministic_repeat();
+    test_accumulator_clear_and_reinitialize();
     test_reject_malformed_section_size();
+    test_accumulator_reject_unvalidated_network();
+    test_white_pov_accumulator_side_to_move_invariant();
 }

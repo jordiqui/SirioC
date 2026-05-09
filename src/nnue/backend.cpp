@@ -128,6 +128,18 @@ double dot_product(const WeightRegisters &regs, const int *counts) {
 }
 #endif
 
+
+
+bool apply_sirio_nnue2_minimal_test_quantization(const Nnue2NetworkParameters &network,
+                                                 std::int64_t &output_accum) {
+    const std::int64_t denom =
+        static_cast<std::int64_t>(network.header.quant_input_scale) * network.header.quant_output_scale;
+    if (denom > 0) {
+        output_accum /= denom;
+    }
+    return true;
+}
+
 }  // namespace
 
 
@@ -283,9 +295,10 @@ bool decode_nnue2_minimal_layout(const Nnue2NetworkParameters &network,
     return true;
 }
 
-bool evaluate_loaded_nnue2_minimal_v1(const Board &board, const Nnue2NetworkParameters &network,
-                                      std::int32_t &out_score, std::string &error_message) {
-    out_score = 0;
+bool refresh_sirio_nnue2_minimal_accumulator(
+    const Board &board, const Nnue2NetworkParameters &network,
+    SirioNNUE2MinimalAccumulator &accumulator, std::string &error_message) {
+    accumulator.clear();
     Nnue2MinimalDecodedLayout layout{};
     if (!decode_nnue2_minimal_layout(network, layout, error_message)) {
         return false;
@@ -297,39 +310,67 @@ bool evaluate_loaded_nnue2_minimal_v1(const Board &board, const Nnue2NetworkPara
         return false;
     }
 
-    std::vector<std::int32_t> hidden(layout.hidden1_size, 0);
+    accumulator.hidden_pre_activation.assign(layout.hidden1_size, 0);
+    for (std::size_t h = 0; h < layout.hidden1_size; ++h) {
+        accumulator.hidden_pre_activation[h] = network.hidden_bias[h];
+    }
+
     for (std::size_t perspective = 0; perspective < kNnue2PerspectiveCount; ++perspective) {
         const auto &perspective_state = sparse.perspectives[perspective];
         for (std::size_t idx = 0; idx < perspective_state.count; ++idx) {
             const auto feature = perspective_state.active[idx];
             if (feature.index >= layout.features_per_perspective) {
                 error_message = "Feature index exceeds SirioHalfKAv1 dimensions";
+                accumulator.clear();
                 return false;
             }
             const std::size_t row_offset = static_cast<std::size_t>(feature.index) * layout.hidden1_size;
             for (std::size_t h = 0; h < layout.hidden1_size; ++h) {
-                hidden[h] += static_cast<std::int32_t>(network.input_weights[row_offset + h]) *
-                             static_cast<std::int32_t>(feature.value);
+                accumulator.hidden_pre_activation[h] +=
+                    static_cast<std::int32_t>(network.input_weights[row_offset + h]) *
+                    static_cast<std::int32_t>(feature.value);
             }
         }
+    }
+    accumulator.valid = true;
+    return true;
+}
+
+bool evaluate_sirio_nnue2_minimal_accumulator(
+    const SirioNNUE2MinimalAccumulator &accumulator, const Nnue2NetworkParameters &network,
+    std::int32_t &out_score, std::string &error_message) {
+    out_score = 0;
+    Nnue2MinimalDecodedLayout layout{};
+    if (!decode_nnue2_minimal_layout(network, layout, error_message)) {
+        return false;
+    }
+    if (!accumulator.valid) {
+        error_message = "SirioNNUE2-MinimalV1 accumulator is not valid";
+        return false;
+    }
+    if (accumulator.hidden_pre_activation.size() != layout.hidden1_size) {
+        error_message = "SirioNNUE2-MinimalV1 accumulator dimension mismatch";
+        return false;
     }
 
     std::int64_t output_accum = network.output_bias;
     for (std::size_t h = 0; h < layout.hidden1_size; ++h) {
-        const std::int32_t pre_relu = hidden[h] + network.hidden_bias[h];
-        const std::int32_t activated = std::max<std::int32_t>(0, pre_relu);
+        const std::int32_t activated = std::max<std::int32_t>(0, accumulator.hidden_pre_activation[h]);
         output_accum += static_cast<std::int64_t>(activated) * network.output_weights[h];
     }
-
-    // Test-only scaling contract: exported placeholders currently use integer scales;
-    // we normalize by quant_input_scale*quant_output_scale when both are non-zero.
-    const std::int64_t denom =
-        static_cast<std::int64_t>(network.header.quant_input_scale) * network.header.quant_output_scale;
-    if (denom > 0) {
-        output_accum /= denom;
-    }
+    apply_sirio_nnue2_minimal_test_quantization(network, output_accum);
     out_score = static_cast<std::int32_t>(output_accum);
     return true;
+}
+
+bool evaluate_loaded_nnue2_minimal_v1(const Board &board, const Nnue2NetworkParameters &network,
+                                      std::int32_t &out_score, std::string &error_message) {
+    SirioNNUE2MinimalAccumulator accumulator{};
+    if (!refresh_sirio_nnue2_minimal_accumulator(board, network, accumulator, error_message)) {
+        out_score = 0;
+        return false;
+    }
+    return evaluate_sirio_nnue2_minimal_accumulator(accumulator, network, out_score, error_message);
 }
 
 bool evaluate_loaded_nnue2_minimal_v1_probe_white_pov(
