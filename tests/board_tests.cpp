@@ -26,6 +26,7 @@ void run_nnue_roundtrip_tests();
 void run_nnue_inference_v2_tests();
 void run_nnue_eval_probe_v2_tests();
 void run_nnue_feature_diff_v2_tests();
+void run_nnue_accumulator_delta_v2_tests();
 
 namespace {
 int square_index(char file, int rank) {
@@ -441,6 +442,7 @@ int main() {
     run_nnue_inference_v2_tests();
     run_nnue_eval_probe_v2_tests();
     run_nnue_feature_diff_v2_tests();
+    run_nnue_accumulator_delta_v2_tests();
     run_history_tests();
     run_search_tests();
     run_evaluation_phase_tests();

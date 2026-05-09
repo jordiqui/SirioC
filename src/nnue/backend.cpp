@@ -336,6 +336,51 @@ bool refresh_sirio_nnue2_minimal_accumulator(
     return true;
 }
 
+bool apply_sirio_nnue2_minimal_accumulator_delta(
+    const Nnue2NetworkParameters &network, const SirioHalfKAv1FeatureDiff &diff,
+    SirioNNUE2MinimalAccumulator &accumulator, std::string &error_message) {
+    Nnue2MinimalDecodedLayout layout{};
+    if (!decode_nnue2_minimal_layout(network, layout, error_message)) {
+        return false;
+    }
+    if (!accumulator.valid) {
+        error_message = "SirioNNUE2-MinimalV1 accumulator is not valid";
+        return false;
+    }
+    if (accumulator.hidden_pre_activation.size() != layout.hidden1_size) {
+        error_message = "SirioNNUE2-MinimalV1 accumulator dimension mismatch";
+        return false;
+    }
+    if (diff.full_refresh_required) {
+        error_message = "SirioHalfKAv1 feature diff requires full refresh";
+        return false;
+    }
+
+    auto updated_hidden = accumulator.hidden_pre_activation;
+    const auto apply_list = [&](const std::vector<SparseFeature> &features, std::int32_t sign) -> bool {
+        for (const SparseFeature &feature : features) {
+            if (feature.index >= layout.features_per_perspective) {
+                error_message = "Feature index exceeds SirioHalfKAv1 dimensions";
+                return false;
+            }
+            const std::size_t row_offset = static_cast<std::size_t>(feature.index) * layout.hidden1_size;
+            for (std::size_t h = 0; h < layout.hidden1_size; ++h) {
+                updated_hidden[h] += sign * static_cast<std::int32_t>(network.input_weights[row_offset + h]) *
+                                     static_cast<std::int32_t>(feature.value);
+            }
+        }
+        return true;
+    };
+
+    if (!apply_list(diff.white_removed, -1) || !apply_list(diff.black_removed, -1) ||
+        !apply_list(diff.white_added, 1) || !apply_list(diff.black_added, 1)) {
+        return false;
+    }
+
+    accumulator.hidden_pre_activation = std::move(updated_hidden);
+    return true;
+}
+
 bool evaluate_sirio_nnue2_minimal_accumulator(
     const SirioNNUE2MinimalAccumulator &accumulator, const Nnue2NetworkParameters &network,
     std::int32_t &out_score, std::string &error_message) {
