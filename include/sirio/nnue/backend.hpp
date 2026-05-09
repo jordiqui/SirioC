@@ -239,6 +239,34 @@ private:
                                                std::string &error_message);
 struct SirioHalfKAv1FeatureDiff;
 
+enum class SirioNNUE2MinimalAccumulatorTransitionStatus : std::uint8_t {
+    Valid = 0,
+    FullRefreshRequired = 1,
+    InvalidDiff = 2,
+};
+
+struct SirioNNUE2MinimalAccumulatorTransition {
+    std::vector<SparseFeature> white_removed;
+    std::vector<SparseFeature> white_added;
+    std::vector<SparseFeature> black_removed;
+    std::vector<SparseFeature> black_added;
+    SirioNNUE2MinimalAccumulatorTransitionStatus status =
+        SirioNNUE2MinimalAccumulatorTransitionStatus::InvalidDiff;
+    bool valid = false;
+};
+
+[[nodiscard]] bool make_sirio_nnue2_minimal_accumulator_transition(
+    const SirioHalfKAv1FeatureDiff &diff,
+    SirioNNUE2MinimalAccumulatorTransition &out_transition);
+[[nodiscard]] bool apply_sirio_nnue2_minimal_accumulator_transition(
+    const Nnue2NetworkParameters &network,
+    const SirioNNUE2MinimalAccumulatorTransition &transition,
+    SirioNNUE2MinimalAccumulator &accumulator, std::string &error_message);
+[[nodiscard]] bool undo_sirio_nnue2_minimal_accumulator_transition(
+    const Nnue2NetworkParameters &network,
+    const SirioNNUE2MinimalAccumulatorTransition &transition,
+    SirioNNUE2MinimalAccumulator &accumulator, std::string &error_message);
+
 [[nodiscard]] bool refresh_sirio_nnue2_minimal_accumulator(
     const Board &board, const Nnue2NetworkParameters &network,
     SirioNNUE2MinimalAccumulator &accumulator, std::string &error_message);
