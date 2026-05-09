@@ -792,3 +792,23 @@ This task adds a minimal evaluation-layer integration harness that can explicitl
 
 ## Next deferred step
 - Controlled production-side internal selector integration (if authorized), preserving default-off behavior and existing public UCI defaults.
+
+## P0-16 SirioNNUE2 File-Backed Experimental Evaluation Harness / Explicit Net Loading Contract
+
+- **Files changed:**
+  - `include/sirio/evaluation_route.hpp`
+  - `src/evaluation_route.cpp`
+  - `tests/evaluation_route_harness_tests.cpp`
+- **Helper API/function names:**
+  - `evaluate_with_experimental_backend_file_for_tests(const Board&, std::int32_t, EvaluationRoute, const std::string&, std::string*)`
+  - `evaluate_with_experimental_backend_file_for_tests(const Board&, EvaluationRoute, const std::string&, std::string*)`
+- **File-loading contract:** file loading is attempted only when `EvaluationRoute::ExperimentalSirioNNUE2` is selected. `DefaultExisting` never attempts load.
+- **Validation requirements:** loading uses `load_nnue2_network_file` and execution uses existing `route_experimental_nnue2_evaluation`, which preserves existing SirioNNUE2 header/layout/tensor validation and STM-POV adapter behavior.
+- **Fallback rule:** any load failure (missing file, unreadable/truncated/malformed payload, wrong contract header/layout) routes to classical score exactly per P0-14/P0-15 default-off behavior.
+- **Metadata contract:** result now exposes selected route, actual route used, file-load attempted/succeeded flags, fallback flag, and fallback reason string.
+- **Tests added and fixture policy:** tests build tiny deterministic fixture using existing exporter; malformed/wrong-format/header-mismatch files are tiny temp-directory artifacts only, with no committed large binaries.
+- **Non-default confirmation:** SirioNNUE2 remains experimental and default-off.
+- **Behavioral invariants:** normal evaluate/search/UCI behavior unchanged; no new UCI options; no search integration.
+- **Format compatibility note:** Stockfish `.nnue` compatibility is not claimed and fake `.nnue` content is rejected/fallback.
+- **Known limitations:** no runtime production toggle, no network cache, no global mutable file-backed state in this step.
+- **Next deferred step:** controlled production wiring and option surface remain deferred beyond P0-16.
