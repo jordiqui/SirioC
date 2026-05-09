@@ -30,6 +30,7 @@ void run_nnue_accumulator_delta_v2_tests();
 void run_nnue_accumulator_transition_v2_tests();
 void run_nnue_board_shadow_v2_tests();
 void run_nnue_experimental_runtime_v2_tests();
+void run_nnue_evaluation_shadow_hook_v2_tests();
 
 namespace {
 int square_index(char file, int rank) {
@@ -449,6 +450,7 @@ int main() {
     run_nnue_accumulator_transition_v2_tests();
     run_nnue_board_shadow_v2_tests();
     run_nnue_experimental_runtime_v2_tests();
+    run_nnue_evaluation_shadow_hook_v2_tests();
     run_history_tests();
     run_search_tests();
     run_evaluation_phase_tests();
