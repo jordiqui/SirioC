@@ -1276,3 +1276,63 @@ En-passant-like delta case remains deferred in this step.
 
 ## Next deferred step
 - Controlled integration point planning for optional runtime wiring, still guarded by explicit fallback and parity checks, without changing default engine behavior.
+
+# P0-25 SirioNNUE2 Train-Export-Runtime Golden Path / Minimal Network Smoke Contract
+
+## Files changed
+- `tests/nnue_train_export_runtime_golden_path_test.py`
+- `tests/nnue_runtime_smoke_contract.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Exact scope
+- Added a deterministic, temp-directory smoke-contract test that executes the full chain:
+  dataset-v2 fixture -> `train_v2` checkpoint -> `export_to_engine_v2` binary -> C++ loader/runtime evaluation.
+- Added a dedicated C++ smoke helper binary that only validates `ExperimentalSirioNNUE2Runtime` loading/evaluation behavior for fixed FENs and determinism.
+- Kept normal evaluation, search routing, UCI defaults/options, board make/unmake, and SirioNNUE1 behavior unchanged.
+
+## Test command/path
+- Python end-to-end smoke entrypoint: `python tests/nnue_train_export_runtime_golden_path_test.py`
+- C++ runtime helper invoked by the Python smoke test: `build/sirio_nnue_runtime_smoke_contract`
+
+## Generated temporary artifacts
+- Per-run temporary directory (via `tempfile.TemporaryDirectory`) containing:
+  - tiny dataset-v2 JSONL split (`train.jsonl`, `val.jsonl`, `test.jsonl`, `MANIFEST.json`)
+  - `train_out/checkpoint.pt`
+  - exported `tiny.nnue2`
+- No generated checkpoints or network binaries are committed.
+
+## Dataset/trainer/export/runtime chain
+1. Tiny deterministic dataset-v2 fixture is created in temp storage.
+2. `training.nnue.scripts.train_v2` runs for 1 CPU epoch.
+3. Checkpoint metadata contract is verified:
+   - `script_name = training.nnue.scripts.train_v2`
+   - `feature_set = SirioHalfKAv1`
+   - `features_per_perspective = 40960`
+   - `model_layout_name = SirioNNUE2-MinimalV1`
+   - `model_layout_version = 1`
+4. `training.nnue.scripts.export_to_engine_v2` exports a SirioNNUE2 binary.
+5. `ExperimentalSirioNNUE2Runtime` loads the exported binary and evaluates fixed FENs.
+
+## FENs evaluated
+- Starting position: `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
+- Kings-only position: `8/8/8/8/8/8/6k1/6K1 w - - 0 1`
+- Asymmetric material position: `4k3/8/8/3q4/4N3/8/8/4K3 w - - 0 1`
+
+## Deterministic result contract
+- Repeated runtime evaluation on each FEN must return identical score values.
+- Runtime path must report `used_experimental_route=true` and `fell_back_to_default=false` for the valid exported binary.
+- Board FEN must remain unchanged across runtime calls.
+
+## Continuity confirmations
+- Generated network is test-only and not competitive/strength-oriented.
+- SirioNNUE2 remains non-default.
+- Normal `evaluate()` / search / UCI behavior is unchanged.
+- No self-play, teacher engines, OpenBench, fastchess, cutechess, or ORDO integration was added.
+
+## Known limitations
+- This is a minimal smoke contract, not a training quality or strength benchmark.
+- It validates integration correctness only for a tiny deterministic fixture and fixed FENs.
+
+## Next deferred step
+- Expand controlled validation toward larger deterministic fixture coverage and additional runtime invariants while still keeping SirioNNUE2 off default search routing until later roadmap gates.
