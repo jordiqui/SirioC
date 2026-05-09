@@ -452,3 +452,58 @@ The bridge now requires all of:
 
 ## Originality/provenance note
 - Changes are original SirioC repository work and do not import third-party engine/trainer source.
+
+# P0-10 SirioNNUE2 Unified Model Layout Contract / Trainer-Binary Alignment
+
+- model layout: `SirioNNUE2-MinimalV1`, version `1`.
+- feature set: `SirioHalfKAv1`, `features_per_perspective=40960`, little-endian binary fields.
+- dimensions: `accumulator_size=256`, `hidden1_size=256`, `hidden2_size=0 (deferred placeholder)`, `output_size=1`.
+- activation: `relu`.
+- tensor names/order: `input_embedding.weight`, `hidden.bias`, `output.weight`, `output.bias`.
+- binary section order: `input_weights`, `hidden_bias`, `output_weights`, `output_bias`.
+- checkpoint metadata contract now includes script name, feature contract, model layout name/version, seed, dataset manifest hash/path, epochs, batch size, learning rate.
+- exporter validates metadata/model_config/state_dict presence, script/feature/layout compatibility, required tensor names and exact shapes before writing.
+- checkpoint exports now map deterministically to the existing SirioNNUE2 container without reshape/pad/truncate.
+- quantization/scaling status: deterministic placeholder integer rounding with fixed `quant_input_scale=256` and `quant_output_scale=256`; production-grade quantization remains deferred.
+- tests updated for checkpoint metadata coverage and exporter compatibility/rejection cases.
+- dummy export path remains unchanged and deterministic.
+- SirioNNUE2 remains non-default; C++ evaluation routing/search behavior unchanged.
+- deferred next step: production quantization/training semantics and runtime NNUE2 inference path.
+
+# P0-10B SirioNNUE2 Unified Layout Validation Closure
+
+- Coverage restoration: **yes**. `tests/nnue_export_v2_test.py` was tightened to restore explicit header checks and deterministic C++ loader-path validation requirements.
+- Dummy export continuity: deterministic dummy export remains byte-identical across repeated exports.
+- Checkpoint continuity: `train_v2` checkpoint with `SirioNNUE2-MinimalV1` exports successfully.
+- C++ acceptance: exported checkpoint path is validated alongside built `build/sirio_tests` `[nnue_roundtrip]` coverage; loader acceptance path is exercised through the real built test binary.
+- Deterministic binary location: `build/sirio_tests` (asserted by the Python export-v2 test before roundtrip invocation).
+
+## Validation commands run
+- `git status --short`
+- `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`
+- `cmake --build build -j`
+- `ctest --test-dir build --output-on-failure`
+- `./build/sirio_tests`
+- `./build/sirio_bench`
+- `python -m compileall training/nnue/scripts`
+- `python tests/nnue_feature_parity_test.py`
+- `python tests/nnue_dataset_v2_test.py`
+- `python tests/nnue_train_v2_test.py`
+- `python tests/nnue_export_v2_test.py`
+
+## Results summary
+- C++ configure/build: passed.
+- ctest: passed (`sirio_board_tests`).
+- `./build/sirio_tests`: passed.
+- `./build/sirio_bench`: passed.
+- Python parity/dataset/train/export tests: all passed.
+
+## Explicit confirmations
+- Exported checkpoint binary compatibility is accepted by the C++ SirioNNUE2 loader/roundtrip validation path.
+- Dummy export remains byte-identical.
+- SirioNNUE2 remains non-default.
+- Engine evaluation/search routing behavior is unchanged.
+
+## Known limitations
+- Production-grade quantization remains deferred; current path remains deterministic placeholder quantization/scaling.
+- This closure validates layout/export/loader contract alignment; it does not introduce runtime SirioNNUE2 evaluation routing.
