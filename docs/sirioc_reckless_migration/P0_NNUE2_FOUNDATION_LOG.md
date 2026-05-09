@@ -1518,3 +1518,67 @@ This task adds an explicit internal selector contract for test/internal runtime 
 
 ## Next deferred step
 - Controlled opt-in wiring at later roadmap stage (search/public activation still deferred).
+
+# P0-29 Evaluation.cpp Internal Selector Awareness / No-Route-Change Contract
+
+## Files changed
+- `include/sirio/evaluation_route.hpp`
+- `src/evaluation_route.cpp`
+- `tests/evaluation_internal_selector_v2_tests.cpp`
+- `tests/board_tests.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Evaluation.cpp entry points inspected
+- `make_nnue_evaluation(...)`
+- `ensure_thread_backend(...)`
+- `initialize_evaluation(...)`
+- `evaluate(...)`
+
+## Helper API/function names
+- Added `evaluate_with_internal_eval_selector_for_tests(...)`.
+- Reused existing `evaluate_with_internal_eval_backend_for_tests(...)` as the delegated selector routing implementation.
+
+## evaluation.cpp touch decision
+- `src/evaluation.cpp` was inspected but intentionally not modified to avoid any risk to default routing behavior.
+- The new selector-aware helper was implemented in `src/evaluation_route.cpp` adjacent to existing internal test routing helpers.
+
+## Default behavior preservation proof
+- The new helper computes default score by calling existing `evaluate(board)` exactly as-is.
+- `DefaultExisting` selection returns exactly the same score and route metadata indicating default backend.
+- Tests assert unchanged `evaluate()` results across fixed FENs before/after helper usage.
+
+## Selector default/fallback contract
+- Selector is internal/test-facing and remains default-off (`DefaultExisting`).
+- Experimental selection delegates to existing P0-28 `evaluate_with_internal_eval_backend_for_tests(...)`.
+- Inactive or unloaded runtime falls back to classical score with explicit fallback metadata.
+- Loaded runtime reports experimental backend usage and remains deterministic.
+
+## Tests added and FENs used
+- Added `tests/evaluation_internal_selector_v2_tests.cpp`.
+- FENs used:
+  1. `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
+  2. `8/8/8/8/8/8/6k1/6K1 w - - 0 1`
+  3. `4k3/8/8/3q4/4N3/8/8/4K3 w - - 0 1`
+- Coverage includes:
+  - normal `evaluate()` unchanged on all three FENs,
+  - selector helper with `DefaultExisting` equals `evaluate()`,
+  - selector helper with experimental selection and inactive runtime falls back with metadata,
+  - selector helper with loaded runtime matches P0-28 backend-selector helper,
+  - repeated calls deterministic,
+  - board immutability via unchanged FEN snapshots.
+
+## Routing and integration confirmations
+- `evaluate()` public behavior unchanged.
+- `evaluate_for_current_player()` unchanged indirectly because `src/search.cpp` and default evaluation routing were not edited.
+- Search integration remains deferred.
+- Public UCI options/defaults unchanged.
+- SirioNNUE2 remains non-default and internal-only in this step.
+- No Elo/strength claim is made.
+
+## Known limitations
+- This step only adds selector-awareness helper glue for internal/test usage.
+- No search-thread integration and no public runtime selection exposure are included.
+
+## Next deferred step
+- Integrate internal selector decisions into broader evaluation/search plumbing only when explicitly authorized, while preserving fallback safety and UCI contract.

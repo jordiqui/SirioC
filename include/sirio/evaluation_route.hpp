@@ -129,6 +129,10 @@ evaluate_with_sirio_nnue2_shadow_integration_for_tests(
     const Board &board, std::int32_t default_score, const ExperimentalSirioNNUE2Runtime &runtime,
     std::string *diagnostic_message = nullptr);
 
+[[nodiscard]] InternalEvalBackendResult evaluate_with_internal_eval_selector_for_tests(
+    const Board &board, InternalEvalBackendSelection selection,
+    const ExperimentalSirioNNUE2Runtime &runtime, std::string *diagnostic_message = nullptr);
+
 [[nodiscard]] InternalEvalBackendResult evaluate_with_internal_eval_backend_for_tests(
     const Board &board, std::int32_t default_score, InternalEvalBackendSelection selection,
     const ExperimentalSirioNNUE2Runtime &runtime, std::string *diagnostic_message = nullptr);
