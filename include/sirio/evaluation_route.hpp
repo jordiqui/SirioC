@@ -94,6 +94,31 @@ struct ExperimentalSirioNNUE2EvaluationShadowIntegrationResult {
     std::string fallback_reason;
 };
 
+enum class InternalEvalBackend {
+    DefaultExisting = 0,
+    ExperimentalSirioNNUE2 = 1,
+};
+
+struct InternalEvalBackendSelection {
+    InternalEvalBackend backend = InternalEvalBackend::DefaultExisting;
+};
+
+enum class InternalEvalBackendFallbackStatus {
+    NotNeeded = 0,
+    RuntimeInactiveOrUnloaded = 1,
+};
+
+struct InternalEvalBackendResult {
+    std::int32_t score = 0;
+    InternalEvalBackend requested_backend = InternalEvalBackend::DefaultExisting;
+    InternalEvalBackend actual_backend = InternalEvalBackend::DefaultExisting;
+    bool fallback_occurred = false;
+    InternalEvalBackendFallbackStatus fallback_status = InternalEvalBackendFallbackStatus::NotNeeded;
+    bool consulted_experimental_runtime = false;
+    bool experimental_runtime_returned_valid_score = false;
+    std::string fallback_reason;
+};
+
 [[nodiscard]] ExperimentalSirioNNUE2ShadowEvaluationResult
 evaluate_with_sirio_nnue2_runtime_for_tests(const Board &board, std::int32_t default_score,
                                             const ExperimentalSirioNNUE2Runtime &runtime,
@@ -103,6 +128,10 @@ evaluate_with_sirio_nnue2_runtime_for_tests(const Board &board, std::int32_t def
 evaluate_with_sirio_nnue2_shadow_integration_for_tests(
     const Board &board, std::int32_t default_score, const ExperimentalSirioNNUE2Runtime &runtime,
     std::string *diagnostic_message = nullptr);
+
+[[nodiscard]] InternalEvalBackendResult evaluate_with_internal_eval_backend_for_tests(
+    const Board &board, std::int32_t default_score, InternalEvalBackendSelection selection,
+    const ExperimentalSirioNNUE2Runtime &runtime, std::string *diagnostic_message = nullptr);
 
 struct EvaluationRouteResult {
     std::int32_t score = 0;
