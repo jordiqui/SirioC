@@ -1442,3 +1442,79 @@ En-passant-like delta case remains deferred in this step.
 
 ## Next deferred step
 - Controlled, explicitly gated bridge planning between evaluation runtime hooks and higher-level optional routing, still preserving default classical/legacy behaviour.
+
+# P0-28 SirioNNUE2 Explicit Internal EvalBackend Selector / Default-Off Runtime Wiring
+
+This task adds an explicit internal selector contract for test/internal runtime wiring only. Public UCI options/defaults, search integration, and default evaluation routing remain unchanged.
+
+## Files changed
+- `include/sirio/evaluation_route.hpp`
+- `src/evaluation_route.cpp`
+- `tests/internal_eval_backend_selector_v2_tests.cpp`
+- `tests/board_tests.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Selector contract
+- Types:
+  - `InternalEvalBackend`
+  - `InternalEvalBackendSelection`
+  - `InternalEvalBackendFallbackStatus`
+  - `InternalEvalBackendResult`
+- Helper:
+  - `evaluate_with_internal_eval_backend_for_tests(...)`
+
+## Backend values
+- `DefaultExisting`
+- `ExperimentalSirioNNUE2`
+
+## Default-off contract
+- Default-constructed `InternalEvalBackendSelection` selects `DefaultExisting`.
+- Default route returns provided classical/default score.
+- Default route does not consult `ExperimentalSirioNNUE2Runtime`.
+- SirioNNUE2 remains non-default and internal-only.
+
+## Fallback rule
+- If `ExperimentalSirioNNUE2` is requested and runtime is inactive/unloaded, helper falls back to default score.
+- Fallback metadata is explicit (`fallback_occurred`, `fallback_status`, `fallback_reason`).
+
+## Metadata contract
+`InternalEvalBackendResult` reports:
+- requested backend,
+- actual backend used,
+- whether fallback occurred,
+- fallback status/reason,
+- whether experimental runtime was consulted,
+- whether experimental runtime returned a valid score,
+- final score.
+
+## Tests added and FENs used
+- Added `tests/internal_eval_backend_selector_v2_tests.cpp`.
+- Coverage includes:
+  - default-constructed selection uses `DefaultExisting`;
+  - `DefaultExisting` returns default score and does not consult runtime;
+  - experimental selection falls back with inactive runtime;
+  - loaded runtime path matches P0-27 shadow integration helper;
+  - determinism across repeated calls;
+  - board non-mutation;
+  - normal `evaluate()` unchanged for fixed FENs.
+- FENs:
+  - `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
+  - `8/8/8/8/8/8/6k1/6K1 w - - 0 1`
+  - `4k3/8/8/3q4/4N3/8/8/4K3 w - - 0 1`
+
+## Continuity confirmations
+- `evaluate()` public/default routing remains unchanged.
+- `evaluate_for_current_player()` behavior is preserved indirectly because no public/default evaluation routing changed.
+- Search integration remains deferred.
+- Public UCI options/defaults are unchanged.
+- SirioNNUE1 legacy support remains intact.
+- No Stockfish `.nnue` compatibility claim is made.
+- No strength/Elo claim is made.
+
+## Known limitations
+- Selector helper is internal/test-facing only and not exposed via public UCI.
+- Experimental path still depends on explicit runtime load and shadow routing.
+
+## Next deferred step
+- Controlled opt-in wiring at later roadmap stage (search/public activation still deferred).

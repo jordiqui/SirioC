@@ -183,6 +183,38 @@ evaluate_with_sirio_nnue2_shadow_integration_for_tests(
     return result;
 }
 
+InternalEvalBackendResult evaluate_with_internal_eval_backend_for_tests(
+    const Board &board, std::int32_t default_score, InternalEvalBackendSelection selection,
+    const ExperimentalSirioNNUE2Runtime &runtime, std::string *diagnostic_message) {
+    InternalEvalBackendResult result{};
+    result.score = default_score;
+    result.requested_backend = selection.backend;
+
+    if (selection.backend == InternalEvalBackend::DefaultExisting) {
+        result.actual_backend = InternalEvalBackend::DefaultExisting;
+        if (diagnostic_message) {
+            *diagnostic_message = "Internal EvalBackend default route selected";
+        }
+        return result;
+    }
+
+    result.consulted_experimental_runtime = true;
+    const auto shadow_result = evaluate_with_sirio_nnue2_shadow_integration_for_tests(
+        board, default_score, runtime, diagnostic_message);
+    result.score = shadow_result.score;
+    result.experimental_runtime_returned_valid_score = shadow_result.used_experimental_runtime;
+    if (shadow_result.used_experimental_runtime) {
+        result.actual_backend = InternalEvalBackend::ExperimentalSirioNNUE2;
+        return result;
+    }
+
+    result.actual_backend = InternalEvalBackend::DefaultExisting;
+    result.fallback_occurred = true;
+    result.fallback_status = InternalEvalBackendFallbackStatus::RuntimeInactiveOrUnloaded;
+    result.fallback_reason = shadow_result.fallback_reason;
+    return result;
+}
+
 EvaluationRouteResult evaluate_with_experimental_evaluation_state_for_tests(
     const Board &board, std::int32_t default_score, const ExperimentalEvaluationState &state,
     std::string *diagnostic_message) {
