@@ -332,6 +332,14 @@ bool evaluate_loaded_nnue2_minimal_v1(const Board &board, const Nnue2NetworkPara
     return true;
 }
 
+bool evaluate_loaded_nnue2_minimal_v1_probe_white_pov(
+    const Board &board, const Nnue2NetworkParameters &network, std::int32_t &out_white_pov_score,
+    std::string &error_message) {
+    // P0-12 contract: this non-default probe returns White-POV directly and does not
+    // apply side-to-move sign normalization.
+    return evaluate_loaded_nnue2_minimal_v1(board, network, out_white_pov_score, error_message);
+}
+
 SparseFeatureState compute_sparse_feature_state(const Board &board) {
     SparseFeatureState state{};
     for (int perspective = 0; perspective < 2; ++perspective) {

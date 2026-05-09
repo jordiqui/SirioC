@@ -578,3 +578,48 @@ The decoder performs explicit size checks and rejects malformed tensors instead 
 
 ## Next deferred step
 - Wire validated NNUE2 inference into a guarded runtime path only after finalizing quantization semantics, incremental accumulators, and explicit backend-selection policy gates.
+
+# P0-12 SirioNNUE2 Non-Default Evaluation Probe / White-POV Contract
+
+This task adds an isolated SirioNNUE2-MinimalV1 evaluation probe contract without routing runtime engine evaluation through NNUE2.
+
+## Files changed
+- `include/sirio/nnue/backend.hpp`
+- `src/nnue/backend.cpp`
+- `tests/nnue_eval_probe_v2_tests.cpp`
+- `tests/board_tests.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Probe API/function names
+- `evaluate_loaded_nnue2_minimal_v1_probe_white_pov(const Board&, const Nnue2NetworkParameters&, std::int32_t&, std::string&)`
+- Probe delegates to P0-11 inference helper `evaluate_loaded_nnue2_minimal_v1(...)` and remains non-default.
+
+## White-POV contract
+- Probe output is explicitly **White POV**.
+- Probe does **not** flip by side to move.
+- Side-to-move normalization remains a responsibility of existing `evaluate_for_current_player()` or future integration code.
+
+## Side-to-move invariance tests
+- Start position piece placement with white-to-move vs black-to-move returns identical White-POV probe output.
+- Kings-only piece placement with white-to-move vs black-to-move returns identical White-POV probe output.
+- Deterministic repeated output verified on a simple material FEN.
+
+## Network validation requirements
+- Probe requires a validated SirioNNUE2-MinimalV1 network contract.
+- Unvalidated/malformed payloads are rejected through existing layout decode and tensor size checks.
+
+## Continuity confirmations
+- SirioNNUE2 remains **non-default**.
+- Normal `evaluate()` behavior is unchanged.
+- `evaluate_for_current_player()` behavior is unchanged.
+- Search/UCI/TT/move generation/Syzygy/time management/threading are unchanged.
+- No UCI option was added or modified.
+
+## Known limitations
+- Probe is an integration contract path only and is not wired into search evaluation routing.
+- No strength or Elo claim is made.
+
+## Next deferred step
+- Controlled integration design for explicit evaluation routing policy (including side-to-move semantics) while preserving non-regression constraints.
+

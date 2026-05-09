@@ -75,6 +75,7 @@ add_executable(sirio_tests
     tests/nnue_features_tests.cpp
     tests/nnue_roundtrip_tests.cpp
     tests/nnue_inference_v2_tests.cpp
+    tests/nnue_eval_probe_v2_tests.cpp
     tests/tt_tests.cpp
     tests/history_tests.cpp
     tests/time_manager_tests.cpp
