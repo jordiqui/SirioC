@@ -150,6 +150,23 @@ ExperimentalEvaluationState prepare_experimental_evaluation_state_for_tests(
     return state;
 }
 
+
+ExperimentalSirioNNUE2ShadowEvaluationResult evaluate_with_sirio_nnue2_runtime_for_tests(
+    const Board &board, std::int32_t default_score, const ExperimentalSirioNNUE2Runtime &runtime,
+    std::string *diagnostic_message) {
+    const auto runtime_result = runtime.evaluate_with_fallback(board, default_score, diagnostic_message);
+
+    ExperimentalSirioNNUE2ShadowEvaluationResult result{};
+    result.score = runtime_result.score;
+    result.used_experimental_runtime = runtime_result.used_experimental_route;
+    result.fell_back_to_default = runtime_result.fell_back_to_default;
+    result.runtime_active = runtime.is_active();
+    result.runtime_loaded = runtime.is_loaded();
+    result.runtime_status = runtime_result.status;
+    result.fallback_reason = runtime_result.fallback_reason;
+    return result;
+}
+
 EvaluationRouteResult evaluate_with_experimental_evaluation_state_for_tests(
     const Board &board, std::int32_t default_score, const ExperimentalEvaluationState &state,
     std::string *diagnostic_message) {

@@ -1336,3 +1336,50 @@ En-passant-like delta case remains deferred in this step.
 
 ## Next deferred step
 - Expand controlled validation toward larger deterministic fixture coverage and additional runtime invariants while still keeping SirioNNUE2 off default search routing until later roadmap gates.
+
+# P0-26 SirioNNUE2 Evaluation-Layer Shadow Wiring / Explicit Internal Eval Hook Contract
+
+## Files changed
+- `include/sirio/evaluation_route.hpp`
+- `src/evaluation_route.cpp`
+- `tests/nnue_evaluation_shadow_hook_v2_tests.cpp`
+- `tests/board_tests.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Helper API/function names
+- `evaluate_with_sirio_nnue2_runtime_for_tests(...)`
+- `ExperimentalSirioNNUE2ShadowEvaluationResult`
+
+## Runtime-to-evaluation-layer contract
+- The shadow helper takes a `Board`, a provided default/classical score, and an explicit `ExperimentalSirioNNUE2Runtime` instance.
+- It delegates to `ExperimentalSirioNNUE2Runtime::evaluate_with_fallback(...)` and returns score + explicit metadata about route usage and fallback.
+- It is internal/test-facing wiring and does not alter search or public UCI routing.
+
+## Fallback rule
+- If the provided runtime is inactive/unloaded/rejected (or runtime eval rejects), the helper returns the caller-provided default/classical score and marks fallback metadata.
+
+## Tests added and FENs used
+- Added `tests/nnue_evaluation_shadow_hook_v2_tests.cpp` with coverage for:
+  - inactive runtime fallback to provided default score,
+  - loaded runtime parity versus direct runtime evaluation,
+  - deterministic repeated calls,
+  - board immutability,
+  - unchanged normal `evaluate()` before/after shadow hook calls.
+- FENs:
+  - `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
+  - `8/8/8/8/8/8/6k1/6K1 w - - 0 1`
+  - `4k3/8/8/3q4/4N3/8/8/4K3 w - - 0 1`
+
+## Continuity confirmations
+- `evaluate()` and existing public routing are unchanged.
+- `evaluate_for_current_player()` behavior remains unchanged (no modifications).
+- Search integration remains deferred.
+- SirioNNUE2 remains non-default/experimental.
+- No Stockfish `.nnue` compatibility claim is made.
+
+## Known limitations
+- This task only adds explicit shadow wiring and metadata contract; no search-path activation is included.
+
+## Next deferred step
+- Controlled integration planning for optional evaluation routing activation (still gated and non-default).
