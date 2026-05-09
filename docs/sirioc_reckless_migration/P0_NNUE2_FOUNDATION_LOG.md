@@ -1222,3 +1222,57 @@ En-passant-like delta case remains deferred in this step.
 
 ## Next deferred step
 - Controlled runtime integration of the validated transition lifecycle into search-node make/unmake state, guarded by full-refresh fallback and parity checks.
+
+# P0-24 SirioNNUE2 Experimental Runtime Backend / Explicit Internal Activation Contract
+
+## Files changed
+- `include/sirio/evaluation_route.hpp`
+- `src/evaluation_route.cpp`
+- `tests/nnue_experimental_runtime_v2_tests.cpp`
+- `tests/board_tests.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Runtime type/function names
+- `ExperimentalSirioNNUE2RuntimeStatus`
+- `ExperimentalSirioNNUE2RuntimeResult`
+- `ExperimentalSirioNNUE2Runtime`
+- `ExperimentalSirioNNUE2Runtime::load_from_config(...)`
+- `ExperimentalSirioNNUE2Runtime::load_from_file(...)`
+- `ExperimentalSirioNNUE2Runtime::evaluate_with_fallback(...)`
+
+## Activation/load contract
+- Runtime defaults to inactive/unloaded with no implicit file loading.
+- Activation occurs only via explicit config route selection or explicit `load_from_file`.
+- Loading uses existing `load_nnue2_network_file` and required SirioNNUE2-MinimalV1 header/layout contract checks.
+- Missing/malformed/wrong-contract files are rejected with explicit `LoadRejected` status and fallback reason.
+
+## Accumulator refresh/evaluation contract
+- When active+loaded, evaluation performs explicit `refresh_sirio_nnue2_minimal_accumulator` for the provided `Board`.
+- It then evaluates through `evaluate_sirio_nnue2_minimal_accumulator` and converts to STM-POV (`white_pov` negated when side to move is black).
+- No Board mutation, no search invocation, and no global evaluation-state mutation are introduced.
+
+## Fallback rule and metadata contract
+- If inactive/unloaded/invalid, runtime returns caller-provided default/classical score.
+- Result metadata reports whether experimental route was used, whether fallback happened, whether refresh succeeded, runtime status, and fallback reason.
+
+## Tests added and FENs used
+- Added `tests/nnue_experimental_runtime_v2_tests.cpp`.
+- Covered default inactive fallback, explicit valid load, missing/malformed load failure, deterministic repeated evaluation, and board non-mutation.
+- Compared loaded runtime output against existing file-backed harness for:
+  - `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
+  - `8/8/8/8/8/8/6k1/6K1 w - - 0 1`
+  - `4k3/8/8/8/3P4/8/8/4K3 b - - 0 1`
+
+## Continuity confirmations
+- Search/UCI integration is still deferred.
+- SirioNNUE2 remains non-default.
+- Normal `evaluate()`, `evaluate_for_current_player()`, search, and UCI option/default behavior remain unchanged.
+- No Stockfish `.nnue` compatibility is claimed.
+
+## Known limitations
+- Runtime object is internal scaffolding for explicit activation/testing paths only.
+- It is not yet wired into production search node lifecycle or UCI runtime selection.
+
+## Next deferred step
+- Controlled integration point planning for optional runtime wiring, still guarded by explicit fallback and parity checks, without changing default engine behavior.
