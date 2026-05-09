@@ -15,6 +15,10 @@ enum class NetworkSelectionPolicy;
 struct MultiNetworkConfig;
 }
 
+class ExperimentalSirioNNUE2Runtime;
+struct InternalEvalBackendSelection;
+struct InternalEvalBackendResult;
+
 class EvaluationBackend {
 public:
     virtual ~EvaluationBackend() = default;
@@ -52,5 +56,9 @@ void notify_move_applied(Color mover, const std::optional<Move> &move,
 
 int evaluate(const Board &board);
 
-}  // namespace sirio
+[[nodiscard]] InternalEvalBackendResult
+evaluate_with_experimental_selector_shadow_for_tests(
+    const Board &board, const InternalEvalBackendSelection &selection,
+    const ExperimentalSirioNNUE2Runtime &runtime, std::string *diagnostic_message = nullptr);
 
+}  // namespace sirio

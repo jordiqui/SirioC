@@ -1582,3 +1582,72 @@ This task adds an explicit internal selector contract for test/internal runtime 
 
 ## Next deferred step
 - Integrate internal selector decisions into broader evaluation/search plumbing only when explicitly authorized, while preserving fallback safety and UCI contract.
+
+# P0-30 Evaluation.cpp Explicit Experimental Wrapper / Default Path Equivalence Contract
+
+## Files changed
+- `include/sirio/evaluation.hpp`
+- `src/evaluation.cpp`
+- `tests/evaluation_cpp_shadow_wrapper_v2_tests.cpp`
+- `tests/board_tests.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Evaluation.cpp entry points inspected
+- `make_nnue_evaluation(...)`
+- `ensure_thread_backend(...)`
+- `initialize_evaluation(...)`
+- `evaluate(...)`
+
+## Wrapper API/function names
+- Added explicit evaluation-layer wrapper:
+  - `evaluate_with_experimental_selector_shadow_for_tests(...)`
+- Wrapper delegates to existing P0-29 selector-aware helper path via:
+  - `evaluate_with_internal_eval_backend_for_tests(...)`
+
+## src/evaluation.cpp touch decision
+- `src/evaluation.cpp` was directly touched for this step.
+- Added a minimal wrapper implementation colocated with `evaluate(...)`.
+- Wrapper is explicit/internal test-facing and default-off.
+
+## Default path equivalence proof
+- Wrapper computes default score by calling existing `evaluate(board)` exactly as-is.
+- For `InternalEvalBackend::DefaultExisting`, wrapper result score equals `evaluate(board)` exactly.
+- Baseline `evaluate()` determinism checks across fixed FENs are unchanged.
+
+## Fallback rule
+- For `InternalEvalBackend::ExperimentalSirioNNUE2` with inactive/unloaded runtime, wrapper falls back to default score and returns fallback metadata via `InternalEvalBackendResult`:
+  - `actual_backend = DefaultExisting`
+  - `fallback_occurred = true`
+  - `fallback_status = RuntimeInactiveOrUnloaded`
+
+## Tests added and FENs used
+- Added `tests/evaluation_cpp_shadow_wrapper_v2_tests.cpp`.
+- FENs covered:
+  1. `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
+  2. `8/8/8/8/8/8/6k1/6K1 w - - 0 1`
+  3. `4k3/8/8/3q4/4N3/8/8/4K3 w - - 0 1`
+- Coverage includes:
+  - normal `evaluate()` unchanged on all three FENs,
+  - wrapper `DefaultExisting` equals `evaluate()`,
+  - wrapper experimental + inactive runtime falls back with metadata,
+  - wrapper experimental + loaded runtime matches P0-29 helper,
+  - repeated calls deterministic,
+  - board not mutated (FEN snapshots unchanged),
+  - no search-path invocation (no `src/search.cpp` edits),
+  - no UCI option changes.
+
+## Routing and integration confirmations
+- `evaluate()` public/default route is unchanged.
+- `evaluate_for_current_player()` behavior is preserved indirectly because no search/default route edits were made.
+- Search integration remains deferred.
+- Public UCI options/defaults are unchanged.
+- SirioNNUE2 remains non-default.
+- No strength/Elo claim is made.
+
+## Known limitations
+- Wrapper is internal/test-facing only and not connected to search or public UCI runtime switching.
+- Experimental runtime remains opt-in and dependent on explicit network loading.
+
+## Next deferred step
+- Controlled integration point for selector-aware evaluation routing in search plumbing, still default-safe and explicitly authorized.
