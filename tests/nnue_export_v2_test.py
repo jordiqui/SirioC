@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import struct
 import subprocess
 import sys
 import tempfile
@@ -42,24 +43,41 @@ def _make_dataset(dataset_dir: Path, *, feature_set: str = "SirioHalfKAv1") -> N
     (dataset_dir / "MANIFEST.json").write_text(json.dumps({"feature_set": feature_set}), encoding="utf-8")
 
 
+def _assert_header(binary_path: Path) -> None:
+    data = binary_path.read_bytes()
+    header = struct.unpack("<12sHHHIIIIIIIIIIIII", data[:70])
+    magic, version, feature_set_id = header[0], header[1], header[2]
+    features_per_perspective, accumulator_size, hidden_dimensions, output_dimensions = (
+        header[4],
+        header[6],
+        header[7],
+        header[8],
+    )
+    assert magic == b"SirioNNUE2\0\0"
+    assert version == 2
+    assert feature_set_id == 1
+    assert features_per_perspective == 40960
+    assert accumulator_size == 256
+    assert hidden_dimensions == 256
+    assert output_dimensions == 1
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
-        t = Path(tmp)
-        a = t / "dummy_a.nnue2"
-        b = t / "dummy_b.nnue2"
+        tmp_path = Path(tmp)
+        dummy_a = tmp_path / "dummy_a.nnue2"
+        dummy_b = tmp_path / "dummy_b.nnue2"
 
-        _run([sys.executable, "-m", EXPORT_SCRIPT, "--output", str(a)])
-        _run([sys.executable, "-m", EXPORT_SCRIPT, "--output", str(b)])
-        assert a.read_bytes() == b.read_bytes(), "dummy export must remain deterministic"
+        _run([sys.executable, "-m", EXPORT_SCRIPT, "--output", str(dummy_a)])
+        _run([sys.executable, "-m", EXPORT_SCRIPT, "--output", str(dummy_b)])
+        assert dummy_a.read_bytes() == dummy_b.read_bytes(), "dummy export must remain deterministic"
+        _assert_header(dummy_a)
 
-        sirio_tests = ROOT / "build" / "sirio_tests"
-        if sirio_tests.exists():
-            _run([str(sirio_tests), "[nnue_roundtrip]"])
-
-        dataset = t / "dataset"
-        out = t / "train_out"
+        dataset = tmp_path / "dataset"
+        out = tmp_path / "train_out"
         dataset.mkdir()
         _make_dataset(dataset)
+
         _run(
             [
                 sys.executable,
@@ -83,45 +101,46 @@ def main() -> int:
         )
 
         checkpoint = out / "checkpoint.pt"
-        failed = _run(
-            [sys.executable, "-m", EXPORT_SCRIPT, "--output", str(t / "from_checkpoint.nnue2"), "--checkpoint", str(checkpoint)],
-            check=False,
-        )
-        assert failed.returncode != 0
-        assert "mapping safely deferred" in (failed.stderr + failed.stdout)
+        from_checkpoint = tmp_path / "from_checkpoint.nnue2"
+        _run([sys.executable, "-m", EXPORT_SCRIPT, "--output", str(from_checkpoint), "--checkpoint", str(checkpoint)])
+        _assert_header(from_checkpoint)
 
-        bad_feature = out / "bad_feature.pt"
-        payload = torch.load(checkpoint, map_location="cpu")
-        payload["metadata"]["feature_set"] = "WrongFeature"
-        torch.save(payload, bad_feature)
-        bad_feature_res = _run(
-            [sys.executable, "-m", EXPORT_SCRIPT, "--output", str(t / "bad_feature.nnue2"), "--checkpoint", str(bad_feature)],
-            check=False,
-        )
-        assert bad_feature_res.returncode != 0
-        assert "feature_set mismatch" in (bad_feature_res.stderr + bad_feature_res.stdout)
+        sirio_tests_bin = ROOT / "build" / "sirio_tests"
+        assert sirio_tests_bin.exists(), "expected built test binary at build/sirio_tests"
+        roundtrip = _run([str(sirio_tests_bin), "[nnue_roundtrip]"])
+        assert roundtrip.returncode == 0
 
-        bad_meta = out / "bad_meta.pt"
-        payload2 = torch.load(checkpoint, map_location="cpu")
-        payload2.pop("metadata", None)
-        torch.save(payload2, bad_meta)
-        bad_meta_res = _run(
-            [sys.executable, "-m", EXPORT_SCRIPT, "--output", str(t / "bad_meta.nnue2"), "--checkpoint", str(bad_meta)],
-            check=False,
-        )
-        assert bad_meta_res.returncode != 0
-        assert "missing metadata" in (bad_meta_res.stderr + bad_meta_res.stdout)
-
-        bad_dims = out / "bad_dims.pt"
-        payload3 = torch.load(checkpoint, map_location="cpu")
-        payload3["state_dict"]["embedding.weight"] = payload3["state_dict"]["embedding.weight"][:1024, :]
-        torch.save(payload3, bad_dims)
-        bad_dims_res = _run(
-            [sys.executable, "-m", EXPORT_SCRIPT, "--output", str(t / "bad_dims.nnue2"), "--checkpoint", str(bad_dims)],
-            check=False,
-        )
-        assert bad_dims_res.returncode != 0
-        assert "incompatible" in (bad_dims_res.stderr + bad_dims_res.stdout)
+        for mutator, error_text in [
+            (lambda p: p["metadata"].__setitem__("feature_set", "WrongFeature"), "feature_set mismatch"),
+            (lambda p: p.pop("metadata", None), "missing metadata"),
+            (lambda p: p.pop("model_config", None), "missing model_config"),
+            (lambda p: p.pop("state_dict", None), "missing state_dict"),
+            (
+                lambda p: p["state_dict"].__setitem__(
+                    "input_embedding.weight", p["state_dict"]["input_embedding.weight"][:1024, :]
+                ),
+                "wrong tensor shape",
+            ),
+            (lambda p: p["metadata"].__setitem__("model_layout_version", 999), "unsupported model_layout_version"),
+        ]:
+            bad_payload = torch.load(checkpoint, map_location="cpu")
+            mutator(bad_payload)
+            bad_checkpoint = tmp_path / f"bad_{error_text[:8]}.pt"
+            torch.save(bad_payload, bad_checkpoint)
+            failed = _run(
+                [
+                    sys.executable,
+                    "-m",
+                    EXPORT_SCRIPT,
+                    "--output",
+                    str(tmp_path / "bad.nnue2"),
+                    "--checkpoint",
+                    str(bad_checkpoint),
+                ],
+                check=False,
+            )
+            assert failed.returncode != 0
+            assert error_text in (failed.stderr + failed.stdout)
 
     print("export v2 bridge checks passed")
     return 0

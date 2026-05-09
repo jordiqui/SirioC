@@ -81,6 +81,8 @@ def main() -> int:
         assert md["feature_set"] == "SirioHalfKAv1"
         assert md["features_per_perspective"] == 40960
         assert md["seed"] == 123
+        assert md["model_layout_name"] == "SirioNNUE2-MinimalV1"
+        assert md["model_layout_version"] == 1
         assert md["timestamp"] == "deterministic-seed-123"
         assert payload1["metadata"] == payload2["metadata"]
 

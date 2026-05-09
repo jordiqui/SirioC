@@ -14,11 +14,24 @@ import yaml
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
-from .features_v2 import FEATURES_PER_PERSPECTIVE, SIRIO_HALFKA_V1_ID
+from .features_v2 import SIRIO_HALFKA_V1_ID
+from .nnue2_layout_contract import (
+    ACCUMULATOR_SIZE,
+    ACTIVATION,
+    EXPECTED_SCRIPT_NAME as SCRIPT_NAME,
+    FEATURE_SET,
+    FEATURES_PER_PERSPECTIVE,
+    HIDDEN1_SIZE,
+    HIDDEN2_SIZE,
+    MODEL_LAYOUT_NAME,
+    MODEL_LAYOUT_VERSION,
+    OUTPUT_SIZE,
+    QUANT_INPUT_SCALE,
+    QUANT_OUTPUT_SCALE,
+    TENSOR_ORDER,
+)
 
-ACCUMULATOR_SIZE = 256
-SCRIPT_NAME = "training.nnue.scripts.train_v2"
-SCRIPT_VERSION = "p0-08-minimal-v1"
+SCRIPT_VERSION = "p0-10-layout-v1"
 
 
 @dataclass(frozen=True)
@@ -48,19 +61,18 @@ class SparseJsonlDataset(Dataset[Record]):
 
 
 class SirioNnue2MinimalModel(nn.Module):
-    def __init__(self, accumulator_size: int = ACCUMULATOR_SIZE, hidden_size: int = 32) -> None:
+    def __init__(self, accumulator_size: int = ACCUMULATOR_SIZE) -> None:
         super().__init__()
-        self.embedding = nn.Embedding(FEATURES_PER_PERSPECTIVE, accumulator_size)
-        self.head = nn.Sequential(
-            nn.Linear(accumulator_size * 2, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, 1),
-        )
+        self.input_embedding = nn.Embedding(FEATURES_PER_PERSPECTIVE, accumulator_size)
+        self.hidden = nn.Linear(accumulator_size, HIDDEN1_SIZE, bias=True)
+        self.output = nn.Linear(HIDDEN1_SIZE, OUTPUT_SIZE, bias=True)
 
     def forward(self, white_idx: torch.Tensor, black_idx: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
-        white_sum = self.embedding(white_idx).sum(dim=1)
-        black_sum = self.embedding(black_idx).sum(dim=1)
-        return self.head(torch.cat([white_sum, black_sum], dim=1)).squeeze(1)
+        white_sum = self.input_embedding(white_idx).sum(dim=1)
+        black_sum = self.input_embedding(black_idx).sum(dim=1)
+        combined = white_sum - black_sum
+        hidden = torch.relu(self.hidden(combined))
+        return self.output(hidden).squeeze(1)
 
 
 def _parse_record(payload: dict[str, Any], path: pathlib.Path, line_no: int) -> Record:
@@ -199,10 +211,10 @@ def main() -> None:
         print(json.dumps(metrics, sort_keys=True))
 
     metadata = {
-        "feature_set": SIRIO_HALFKA_V1_ID,
+        "feature_set": FEATURE_SET,
         "features_per_perspective": FEATURES_PER_PERSPECTIVE,
         "target_contract": "score_cp_white_pov",
-        "model_architecture": "embedding_sum_per_perspective -> concat -> Linear/ReLU/Linear -> scalar",
+        "model_architecture": "shared_sparse_projection(white/black) -> subtract -> Linear/ReLU/Linear -> scalar",
         "dataset_manifest_path": str(manifest_path.resolve()),
         "dataset_manifest_sha256": _manifest_digest(manifest_path),
         "seed": int(args.seed),
@@ -210,13 +222,28 @@ def main() -> None:
         "batch_size": int(args.batch_size),
         "learning_rate": float(args.learning_rate),
         "script_name": SCRIPT_NAME,
+        "model_layout_name": MODEL_LAYOUT_NAME,
+        "model_layout_version": MODEL_LAYOUT_VERSION,
         "script_version": SCRIPT_VERSION,
         "timestamp": f"deterministic-seed-{int(args.seed)}",
     }
     payload = {
         "state_dict": model.state_dict(),
         "metadata": metadata,
-        "model_config": {"accumulator_size": ACCUMULATOR_SIZE, "hidden_size": 32},
+        "model_config": {
+            "model_layout_name": MODEL_LAYOUT_NAME,
+            "model_layout_version": MODEL_LAYOUT_VERSION,
+            "feature_set": FEATURE_SET,
+            "features_per_perspective": FEATURES_PER_PERSPECTIVE,
+            "accumulator_size": ACCUMULATOR_SIZE,
+            "hidden1_size": HIDDEN1_SIZE,
+            "hidden2_size": HIDDEN2_SIZE,
+            "output_size": OUTPUT_SIZE,
+            "activation": ACTIVATION,
+            "tensor_order": list(TENSOR_ORDER),
+            "quant_input_scale": QUANT_INPUT_SCALE,
+            "quant_output_scale": QUANT_OUTPUT_SCALE,
+        },
         "logs": logs,
     }
     torch.save(payload, output_dir / "checkpoint.pt")
