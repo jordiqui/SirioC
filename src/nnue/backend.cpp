@@ -356,6 +356,48 @@ bool evaluate_loaded_nnue2_minimal_v1_probe_stm_pov(
     return true;
 }
 
+ExperimentalEvalRoutingResult route_experimental_nnue2_evaluation(
+    const Board &board, ExperimentalEvalBackend backend, std::int32_t classical_score,
+    const Nnue2NetworkParameters *network, std::string *diagnostic_message) {
+    ExperimentalEvalRoutingResult result{};
+    result.score = classical_score;
+
+    if (backend != ExperimentalEvalBackend::ExperimentalSirioNNUE2) {
+        if (diagnostic_message) {
+            *diagnostic_message = "Experimental backend disabled; classical evaluation preserved";
+        }
+        return result;
+    }
+
+    if (!network) {
+        result.fell_back_to_classical = true;
+        if (diagnostic_message) {
+            *diagnostic_message =
+                "Experimental SirioNNUE2 backend selected but no network provided; using classical fallback";
+        }
+        return result;
+    }
+
+    std::string nnue_error;
+    std::int32_t routed_score = 0;
+    if (!evaluate_loaded_nnue2_minimal_v1_probe_stm_pov(board, *network, routed_score,
+                                                        nnue_error)) {
+        result.fell_back_to_classical = true;
+        if (diagnostic_message) {
+            *diagnostic_message = "Experimental SirioNNUE2 backend selected but network rejected: " +
+                                  nnue_error + "; using classical fallback";
+        }
+        return result;
+    }
+
+    result.score = routed_score;
+    result.used_experimental_backend = true;
+    if (diagnostic_message) {
+        *diagnostic_message = "Experimental SirioNNUE2 backend active via STM-POV adapter";
+    }
+    return result;
+}
+
 SparseFeatureState compute_sparse_feature_state(const Board &board) {
     SparseFeatureState state{};
     for (int perspective = 0; perspective < 2; ++perspective) {

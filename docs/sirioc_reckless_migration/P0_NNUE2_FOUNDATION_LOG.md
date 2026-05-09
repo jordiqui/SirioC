@@ -681,3 +681,52 @@ This task adds a strict non-default adapter that converts the existing P0-12 Sir
 
 ## Originality/provenance note
 - Implementation and tests are original SirioC repository code and do not import third-party engine/trainer source.
+
+# P0-14 SirioNNUE2 Experimental Backend Gate / Non-Default Evaluation Routing
+
+This task adds an explicit, non-default experimental backend routing gate for SirioNNUE2 evaluation selection. It does not change default evaluator/search/UCI behavior and does not make any strength claim.
+
+## Files changed
+- `include/sirio/nnue/backend.hpp`
+- `src/nnue/backend.cpp`
+- `tests/nnue_eval_probe_v2_tests.cpp`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Backend gate API added
+- `enum class ExperimentalEvalBackend { Classical, ExperimentalSirioNNUE2 }`
+- `struct ExperimentalEvalRoutingResult`
+- `route_experimental_nnue2_evaluation(...)`
+
+## Default backend behavior
+- Default route is preserved as classical by selecting `ExperimentalEvalBackend::Classical`.
+- Routing helper returns the provided classical score unchanged when experimental routing is not explicitly selected.
+
+## Experimental backend behavior
+- SirioNNUE2 is only attempted when explicitly selecting `ExperimentalEvalBackend::ExperimentalSirioNNUE2`.
+- When selected and a valid `SirioNNUE2-MinimalV1` network is supplied, routing calls the existing P0-13 STM-POV adapter (`evaluate_loaded_nnue2_minimal_v1_probe_stm_pov`).
+
+## Missing/invalid network rule
+- Contract implemented in this patch: **safe classical fallback**.
+- If no network is provided, or the supplied network fails validation/probe execution, routing returns the classical score and marks fallback in `ExperimentalEvalRoutingResult`.
+
+## Tests added
+- Default-disabled gate keeps classical score unchanged.
+- Explicit experimental gate with valid fixture network matches STM-POV probe output.
+- Explicit experimental gate with invalid network falls back to classical.
+- Explicit experimental gate with missing network falls back to classical.
+
+## Continuity confirmations
+- SirioNNUE2 remains non-default.
+- Existing SirioNNUE1 support remains intact.
+- Normal search and UCI behavior are unchanged.
+- No strength/Elo claim is made.
+
+## Known limitations
+- Routing is currently exposed as explicit integration helper, not promoted to a default runtime backend selection policy.
+- Fallback diagnostics are plain text and intended for deterministic testing/internal observability.
+
+## Deferred next step
+- Wire a controlled internal evaluation-backend selector to this gate in production evaluation flow while preserving non-default status and existing UCI defaults.
+
+## Originality/provenance note
+- Implementation and tests are original SirioC repository work and do not import external engine/trainer source.
