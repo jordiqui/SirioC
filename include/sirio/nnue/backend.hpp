@@ -220,6 +220,9 @@ private:
 [[nodiscard]] bool evaluate_loaded_nnue2_minimal_v1_probe_white_pov(
     const Board &board, const Nnue2NetworkParameters &network, std::int32_t &out_white_pov_score,
     std::string &error_message);
+[[nodiscard]] bool evaluate_loaded_nnue2_minimal_v1_probe_stm_pov(
+    const Board &board, const Nnue2NetworkParameters &network, std::int32_t &out_stm_pov_score,
+    std::string &error_message);
 [[nodiscard]] SparseFeatureState compute_sparse_feature_state(const Board &board);
 void incremental_update_sparse_state(SparseFeatureState &state, const Board &current,
                                      const Move &move, Color mover);
