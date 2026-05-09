@@ -382,6 +382,9 @@ void print_loaded_nnue_info(const sirio::nnue::NetworkInfo& info) {
         std::cout << " (" << info.dims << ")";
     }
     std::cout << std::endl;
+    if (!info.format_report.empty()) {
+        std::cout << "info string NNUE format-report " << info.format_report << std::endl;
+    }
 }
 
 bool nnue_try_load(const std::string& path, sirio::Board& board) {
@@ -1482,4 +1485,3 @@ int run() {
 
 }  // namespace uci
 }  // namespace sirio
-

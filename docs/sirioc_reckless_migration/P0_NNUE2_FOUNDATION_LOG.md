@@ -1724,3 +1724,57 @@ FENs used:
 
 ## Next deferred step
 - Controlled integration of explicit runtime selection into non-default internal evaluation orchestration, still without changing public UCI defaults or search default routing.
+
+# P0-32 SirioNNUE2 Evaluation API Build Info / Format-Reporting Closure
+
+## Files changed
+- `include/sirio/nnue/api.hpp`
+- `src/nnue/api.cpp`
+- `src/uci.cpp`
+- `tests/nnue_api_build_info_v2_tests.cpp`
+- `tests/board_tests.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## API/build-info function names
+- `sirio::nnue::init(...)`
+- `sirio::nnue::info()`
+- internal `build_info(...)` in `src/nnue/api.cpp`
+- `print_loaded_nnue_info(...)` in `src/uci.cpp`
+
+## Reported SirioNNUE2 fields
+- support presence marker (`support_present=true` when SirioNNUE2 contract loads)
+- `model_layout_name=SirioNNUE2-MinimalV1`
+- `model_layout_version=1`
+- `feature_set=SirioHalfKAv1`
+- `features_per_perspective=40960`
+- `accumulator_size=256`
+- `hidden1_size=256`
+- `hidden2_size=0`
+- `output_size=1`
+- `activation=relu`
+- `binary_magic=SirioNNUE2`
+- `binary_version=<header.version>`
+- binary section order: `input_weights,hidden_bias,output_weights,output_bias`
+- quantization reporting: deterministic placeholder/test scaling currently used, production quantization deferred
+- legacy status marker: `legacy_sirio_nnue1_status=legacy_test_baseline`
+
+## Checksum/reporting limitations
+- `checksum` is reported from the loaded SirioNNUE2 header field only.
+- No checksum is invented when unavailable; fallback/non-NNUE2 path reports `checksum=unavailable`.
+
+## Explicit compatibility/scope statements
+- No Stockfish `.nnue` compatibility claim is added.
+- No runtime/search/UCI routing change is introduced beyond additional reporting text output.
+- SirioNNUE2 remains non-default.
+- No Elo or strength claim is made.
+
+## Tests added
+- Added `tests/nnue_api_build_info_v2_tests.cpp` with substring assertions for required and forbidden reporting content.
+
+## Known limitations
+- Build-info reporting is string-contract based (`NetworkInfo::format_report`) and not a fully structured schema.
+- Quantization reporting remains contractual/reporting-only (production quantization pipeline is still deferred).
+
+## Next deferred step
+- Move from report-only closure to controlled runtime-integration milestones after separate approval gates.
