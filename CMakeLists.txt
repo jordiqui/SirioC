@@ -14,6 +14,7 @@ add_library(sirio_core
     src/draws.cpp
     src/endgame.cpp
     src/evaluation.cpp
+    src/evaluation_route.cpp
     src/history.cpp
     src/nnue/backend.cpp
     src/nnue/api.cpp
@@ -68,6 +69,7 @@ target_link_libraries(sirio PRIVATE sirio_core)
 add_executable(sirio_tests
     tests/board_tests.cpp
     tests/evaluation_tests.cpp
+    tests/evaluation_route_harness_tests.cpp
     tests/perft_quiescence.cpp
     tests/perft_tests.cpp
     tests/search_tests.cpp
