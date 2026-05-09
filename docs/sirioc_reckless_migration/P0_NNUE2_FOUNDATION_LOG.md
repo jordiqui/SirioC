@@ -1280,62 +1280,62 @@ En-passant-like delta case remains deferred in this step.
 # P0-25 SirioNNUE2 Train-Export-Runtime Golden Path / Minimal Network Smoke Contract
 
 ## Files changed
-- `tests/nnue_train_export_runtime_golden_path_test.py`
-- `tests/nnue_runtime_smoke_contract.cpp`
-- `CMakeLists.txt`
+- `tests/nnue_golden_path_v2_smoke_test.py`
 - `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
 
 ## Exact scope
-- Added a deterministic, temp-directory smoke-contract test that executes the full chain:
-  dataset-v2 fixture -> `train_v2` checkpoint -> `export_to_engine_v2` binary -> C++ loader/runtime evaluation.
-- Added a dedicated C++ smoke helper binary that only validates `ExperimentalSirioNNUE2Runtime` loading/evaluation behavior for fixed FENs and determinism.
-- Kept normal evaluation, search routing, UCI defaults/options, board make/unmake, and SirioNNUE1 behavior unchanged.
+- Added a deterministic, temporary-directory Python smoke test that proves the full minimal chain:
+  dataset-v2 fixture -> `train_v2` checkpoint -> `export_to_engine_v2` engine binary -> `ExperimentalSirioNNUE2Runtime` load/evaluate through the existing C++ runtime smoke helper.
+- Reused existing dataset-v2 format, `train_v2.py`, `export_to_engine_v2.py`, C++ loader, and `ExperimentalSirioNNUE2Runtime` contracts.
+- Did not alter normal evaluation/search/UCI routing or defaults.
 
 ## Test command/path
-- Python end-to-end smoke entrypoint: `python tests/nnue_train_export_runtime_golden_path_test.py`
-- C++ runtime helper invoked by the Python smoke test: `build/sirio_nnue_runtime_smoke_contract`
+- Golden-path smoke test command: `python tests/nnue_golden_path_v2_smoke_test.py`
+- C++ helper consumed by the test: `build/sirio_nnue_runtime_smoke_contract`
 
 ## Generated temporary artifacts
-- Per-run temporary directory (via `tempfile.TemporaryDirectory`) containing:
-  - tiny dataset-v2 JSONL split (`train.jsonl`, `val.jsonl`, `test.jsonl`, `MANIFEST.json`)
+- `tempfile.TemporaryDirectory()` workspace per run containing:
+  - `dataset_v2/{train.jsonl,val.jsonl,test.jsonl,MANIFEST.json}`
   - `train_out/checkpoint.pt`
-  - exported `tiny.nnue2`
-- No generated checkpoints or network binaries are committed.
+  - `golden_path.nnue2`
+- All generated artifacts are ephemeral and are not committed.
 
 ## Dataset/trainer/export/runtime chain
-1. Tiny deterministic dataset-v2 fixture is created in temp storage.
-2. `training.nnue.scripts.train_v2` runs for 1 CPU epoch.
-3. Checkpoint metadata contract is verified:
+1. Build tiny deterministic dataset-v2 rows for three fixed FENs.
+2. Train with `training.nnue.scripts.train_v2` for 1 epoch on CPU.
+3. Verify checkpoint exists and metadata contract fields:
    - `script_name = training.nnue.scripts.train_v2`
    - `feature_set = SirioHalfKAv1`
    - `features_per_perspective = 40960`
    - `model_layout_name = SirioNNUE2-MinimalV1`
    - `model_layout_version = 1`
-4. `training.nnue.scripts.export_to_engine_v2` exports a SirioNNUE2 binary.
-5. `ExperimentalSirioNNUE2Runtime` loads the exported binary and evaluates fixed FENs.
+4. Export checkpoint using `training.nnue.scripts.export_to_engine_v2`.
+5. Load and evaluate via `ExperimentalSirioNNUE2Runtime` through `sirio_nnue_runtime_smoke_contract`.
 
 ## FENs evaluated
 - Starting position: `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
-- Kings-only position: `8/8/8/8/8/8/6k1/6K1 w - - 0 1`
-- Asymmetric material position: `4k3/8/8/3q4/4N3/8/8/4K3 w - - 0 1`
+- Kings-only: `8/8/8/8/8/8/6k1/6K1 w - - 0 1`
+- Asymmetric material: `4k3/8/8/3q4/4N3/8/8/4K3 w - - 0 1`
 
 ## Deterministic result contract
-- Repeated runtime evaluation on each FEN must return identical score values.
-- Runtime path must report `used_experimental_route=true` and `fell_back_to_default=false` for the valid exported binary.
-- Board FEN must remain unchanged across runtime calls.
+- Runtime evaluation is repeated for each FEN and score equality is required between repeated calls.
+- For the valid exported network, runtime must remain on the experimental route (`used_experimental_route=true`) with no fallback (`fell_back_to_default=false`).
+- FEN text is unchanged before/after runtime evaluation calls.
+- Fallback metadata is therefore not used for the valid exported binary.
+- Missing/malformed fallback coverage remains in existing runtime/export tests.
 
 ## Continuity confirmations
-- Generated network is test-only and not competitive/strength-oriented.
+- Generated network is test-only and not competitive; no strength/Elo claim is made.
 - SirioNNUE2 remains non-default.
-- Normal `evaluate()` / search / UCI behavior is unchanged.
-- No self-play, teacher engines, OpenBench, fastchess, cutechess, or ORDO integration was added.
+- Normal `evaluate()` / `evaluate_for_current_player()` / search / UCI behavior is unchanged.
+- No self-play, teacher engine, OpenBench, fastchess, cutechess, or ORDO workflow was added.
 
 ## Known limitations
-- This is a minimal smoke contract, not a training quality or strength benchmark.
-- It validates integration correctness only for a tiny deterministic fixture and fixed FENs.
+- The smoke test validates only minimal deterministic integration correctness, not training quality or playing strength.
+- It depends on locally built test binaries (`build/sirio_nnue_runtime_smoke_contract`).
 
 ## Next deferred step
-- Expand controlled validation toward larger deterministic fixture coverage and additional runtime invariants while still keeping SirioNNUE2 off default search routing until later roadmap gates.
+- Extend deterministic fixture coverage and runtime invariants under controlled gating, while keeping SirioNNUE2 off default search routing.
 
 # P0-26 SirioNNUE2 Evaluation-Layer Shadow Wiring / Explicit Internal Eval Hook Contract
 
