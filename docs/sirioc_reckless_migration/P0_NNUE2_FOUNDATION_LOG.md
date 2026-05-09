@@ -1004,3 +1004,64 @@ This task adds a deterministic SirioHalfKAv1 feature-diff planning contract for 
 
 ## Deferred next step
 - Implement and validate incremental accumulator application using this contract, with make/unmake no-drift checks and king-move forced refresh handling.
+
+# P0-20 SirioNNUE2 Accumulator Delta Apply / Incremental Equals Full-Refresh Contract
+
+## Files changed
+- `include/sirio/nnue/backend.hpp`
+- `src/nnue/backend.cpp`
+- `tests/nnue_accumulator_delta_v2_tests.cpp`
+- `tests/board_tests.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Delta-apply function names
+- `apply_sirio_nnue2_minimal_accumulator_delta(...)`
+- Existing full-refresh/eval helpers retained:
+  - `refresh_sirio_nnue2_minimal_accumulator(...)`
+  - `evaluate_sirio_nnue2_minimal_accumulator(...)`
+
+## Arithmetic formula
+For each hidden unit `h`:
+- start from existing accumulator pre-activation `A[h]` (already includes `hidden_bias[h]` from refresh)
+- for each removed feature `f`: `A[h] -= input_weights[f.index, h] * f.value`
+- for each added feature `f`: `A[h] += input_weights[f.index, h] * f.value`
+
+This uses the same integer arithmetic and tensor indexing as full refresh, without resizing/padding/reinterpretation.
+
+## Rejection rule for full_refresh_required
+- If `diff.full_refresh_required == true`, delta apply returns `false` with explicit error and does not mutate the accumulator.
+- Invalid accumulator state, dimension mismatch, or out-of-range feature index are also rejected without mutation.
+
+## Equality contract versus full-refresh-after
+For non-king-changing transitions (`full_refresh_required == false`), tests enforce:
+- `refresh(before)` then `apply_delta(before->after)`
+- equals `refresh(after)`
+for both hidden pre-activation vectors and evaluated output score.
+
+## Tests added and position cases used
+Added `tests/nnue_accumulator_delta_v2_tests.cpp` coverage for:
+- quiet non-king move: startpos `e2e4`-equivalent FEN transition
+- capture-like transition
+- promotion-like transition
+- side-to-move-only transition (empty diff, accumulator unchanged)
+- deterministic repeat delta from same before state
+- king-move requires full refresh and is rejected without mutation
+- castling-like king move rejected without mutation
+- invalid accumulator rejected
+- invalid feature diff (out-of-range feature index) rejected without mutation
+
+En-passant-like delta case remains deferred in this step.
+
+## Continuity confirmations
+- Make/unmake stack integration is deferred.
+- SirioNNUE2 remains non-default.
+- Normal evaluate/search/UCI behavior is unchanged.
+- No strength/Elo claims are made.
+
+## Known limitations
+- Delta path depends on externally computed `SirioHalfKAv1FeatureDiff`; it does not yet integrate with runtime move stack make/unmake.
+- En-passant-like incremental contract coverage is deferred.
+
+## Next deferred step
+- Wire safe incremental accumulator lifecycle into move make/unmake stack and runtime routing only after maintaining proven full-refresh parity guarantees.

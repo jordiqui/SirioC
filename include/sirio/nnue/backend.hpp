@@ -237,6 +237,18 @@ private:
 [[nodiscard]] bool decode_nnue2_minimal_layout(const Nnue2NetworkParameters &network,
                                                Nnue2MinimalDecodedLayout &out_layout,
                                                std::string &error_message);
+struct SirioHalfKAv1FeatureDiff;
+
+[[nodiscard]] bool refresh_sirio_nnue2_minimal_accumulator(
+    const Board &board, const Nnue2NetworkParameters &network,
+    SirioNNUE2MinimalAccumulator &accumulator, std::string &error_message);
+[[nodiscard]] bool apply_sirio_nnue2_minimal_accumulator_delta(
+    const Nnue2NetworkParameters &network, const SirioHalfKAv1FeatureDiff &diff,
+    SirioNNUE2MinimalAccumulator &accumulator, std::string &error_message);
+[[nodiscard]] bool evaluate_sirio_nnue2_minimal_accumulator(
+    const SirioNNUE2MinimalAccumulator &accumulator, const Nnue2NetworkParameters &network,
+    std::int32_t &out_score, std::string &error_message);
+
 [[nodiscard]] bool evaluate_loaded_nnue2_minimal_v1(const Board &board,
                                                     const Nnue2NetworkParameters &network,
                                                     std::int32_t &out_score,
