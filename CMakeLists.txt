@@ -88,6 +88,7 @@ add_executable(sirio_tests
     tests/internal_eval_backend_selector_v2_tests.cpp
     tests/evaluation_internal_selector_v2_tests.cpp
     tests/evaluation_cpp_shadow_wrapper_v2_tests.cpp
+    tests/evaluation_initialization_shadow_v2_tests.cpp
     tests/tt_tests.cpp
     tests/history_tests.cpp
     tests/time_manager_tests.cpp

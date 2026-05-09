@@ -29,6 +29,36 @@ ExperimentalSirioNNUE2Runtime::ExperimentalSirioNNUE2Runtime(
     load_from_config(config);
 }
 
+ExperimentalSirioNNUE2RuntimeInitializationResult
+initialize_sirio_nnue2_shadow_runtime_for_tests(
+    const ExperimentalEvaluationConfig &config, ExperimentalSirioNNUE2Runtime &runtime) {
+    ExperimentalSirioNNUE2RuntimeInitializationResult result{};
+    result.load_requested = config.selected_route == EvaluationRoute::ExperimentalSirioNNUE2;
+    if (!result.load_requested) {
+        result.fallback_reason =
+            "runtime initialization not requested: default evaluation route selected";
+        return result;
+    }
+
+    result.load_attempted = true;
+    result.load_succeeded = runtime.load_from_config(config);
+    result.runtime_status = runtime.status();
+    result.fallback_reason = runtime.fallback_reason();
+    return result;
+}
+
+ExperimentalSirioNNUE2RuntimeInitializationResult
+initialize_sirio_nnue2_shadow_runtime_for_tests(const std::string &network_path,
+                                                ExperimentalSirioNNUE2Runtime &runtime) {
+    ExperimentalSirioNNUE2RuntimeInitializationResult result{};
+    result.load_requested = true;
+    result.load_attempted = true;
+    result.load_succeeded = runtime.load_from_file(network_path);
+    result.runtime_status = runtime.status();
+    result.fallback_reason = runtime.fallback_reason();
+    return result;
+}
+
 bool ExperimentalSirioNNUE2Runtime::load_from_config(const ExperimentalEvaluationConfig &config) {
     active_ = config.selected_route == EvaluationRoute::ExperimentalSirioNNUE2;
     loaded_network_.reset();

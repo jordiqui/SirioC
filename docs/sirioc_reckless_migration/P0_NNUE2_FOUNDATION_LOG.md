@@ -1651,3 +1651,76 @@ This task adds an explicit internal selector contract for test/internal runtime 
 
 ## Next deferred step
 - Controlled integration point for selector-aware evaluation routing in search plumbing, still default-safe and explicitly authorized.
+
+# P0-31 SirioNNUE2 Evaluation Initialization Shadow Contract / Explicit Runtime Config Load
+
+This task adds an explicit internal/test-facing initialization shadow contract for SirioNNUE2 runtime loading through the evaluation layer. It preserves default runtime behavior and keeps all public routing unchanged.
+
+## Files changed
+- `include/sirio/evaluation_route.hpp`
+- `src/evaluation_route.cpp`
+- `tests/evaluation_initialization_shadow_v2_tests.cpp`
+- `tests/board_tests.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Evaluation.cpp entry points inspected
+- `make_nnue_evaluation(...)`
+- `ensure_thread_backend()`
+- `initialize_evaluation(...)`
+- `evaluate(...)`
+- `evaluate_with_experimental_selector_shadow_for_tests(...)`
+
+## Helper API/function names
+- `initialize_sirio_nnue2_shadow_runtime_for_tests(const ExperimentalEvaluationConfig&, ExperimentalSirioNNUE2Runtime&)`
+- `initialize_sirio_nnue2_shadow_runtime_for_tests(const std::string&, ExperimentalSirioNNUE2Runtime&)`
+- `ExperimentalSirioNNUE2RuntimeInitializationResult`
+
+## Whether `src/evaluation.cpp` was touched
+- No. `src/evaluation.cpp` was inspected and left unchanged to avoid coupling with normal global/threaded evaluation initialization paths.
+
+## Initialization/load contract
+- Default route config (`EvaluationRoute::DefaultExisting`) does not request or attempt load.
+- Explicit experimental config/path requests and attempts load via existing `ExperimentalSirioNNUE2Runtime` load contracts.
+- No default filename auto-load is performed.
+- No global evaluation backend mutation is performed.
+
+## Metadata/fallback contract
+`ExperimentalSirioNNUE2RuntimeInitializationResult` reports:
+- `load_requested`
+- `load_attempted`
+- `load_succeeded`
+- `runtime_status`
+- `fallback_reason`
+
+This captures unloaded/loaded/rejected outcomes while preserving default-off behavior.
+
+## Tests added and FENs used
+Added `tests/evaluation_initialization_shadow_v2_tests.cpp` coverage for:
+- default config does not load runtime,
+- explicit valid tiny SirioNNUE2-MinimalV1 load,
+- missing and malformed files reject with metadata,
+- deterministic repeated evaluation through P0-30 shadow wrapper,
+- board immutability during evaluation,
+- normal `initialize_evaluation(...)` and `evaluate(...)` stability.
+
+FENs used:
+- `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
+- `8/8/8/8/8/8/6k1/6K1 w - - 0 1`
+- `4k3/8/8/3q4/4N3/8/8/4K3 w - - 0 1`
+
+## Continuity confirmations
+- `initialize_evaluation(...)` normal behavior unchanged.
+- `ensure_thread_backend(...)` normal behavior unchanged.
+- `evaluate()` and `evaluate_for_current_player()` public routing unchanged.
+- Search integration remains deferred.
+- Public UCI options/defaults unchanged.
+- SirioNNUE2 remains non-default.
+- No strength/Elo claim is made.
+
+## Known limitations
+- Initialization helper is internal/test-facing only and does not activate runtime search integration.
+- Experimental route still requires explicitly provided SirioNNUE2-MinimalV1-compatible files.
+
+## Next deferred step
+- Controlled integration of explicit runtime selection into non-default internal evaluation orchestration, still without changing public UCI defaults or search default routing.
