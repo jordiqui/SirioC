@@ -1065,3 +1065,62 @@ En-passant-like delta case remains deferred in this step.
 
 ## Next deferred step
 - Wire safe incremental accumulator lifecycle into move make/unmake stack and runtime routing only after maintaining proven full-refresh parity guarantees.
+
+# P0-21 SirioNNUE2 Accumulator Transition Stack / Make-Unmake No-Drift Contract
+
+## Files changed
+- `include/sirio/nnue/backend.hpp`
+- `src/nnue/backend.cpp`
+- `tests/nnue_accumulator_transition_v2_tests.cpp`
+- `tests/board_tests.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Transition contract names
+- `SirioNNUE2MinimalAccumulatorTransition`
+- `SirioNNUE2MinimalAccumulatorTransitionStatus`
+- `make_sirio_nnue2_minimal_accumulator_transition(...)`
+- `apply_sirio_nnue2_minimal_accumulator_transition(...)`
+- `undo_sirio_nnue2_minimal_accumulator_transition(...)`
+
+## Apply formula
+- Reject transition when `valid == false` or `status != Valid`.
+- Reject on invalid accumulator / dimension mismatch.
+- Arithmetic (same as P0-20): subtract removed rows, add added rows.
+- Transaction rule: compute into a copy and commit only on success.
+
+## Undo formula
+- Reject transition when `valid == false` or `status != Valid`.
+- Reject on invalid accumulator / dimension mismatch.
+- Arithmetic: subtract previously-added rows, add previously-removed rows.
+- Transaction rule: compute into a copy and commit only on success.
+
+## No-drift equality contract
+- Verified `A -> B -> C -> D` apply chain versus full-refresh at each step.
+- Verified reverse undo `D -> C -> B -> A` versus full-refresh at each step.
+- All comparisons use exact equality of `hidden_pre_activation` vectors.
+
+## Tests added and cases
+- New file: `tests/nnue_accumulator_transition_v2_tests.cpp`
+- Cases covered:
+  - single transition apply/undo no drift;
+  - multi-step chain apply/undo no drift;
+  - side-to-move-only no-op apply and no-op undo;
+  - king-move rejection with no accumulator mutation;
+  - invalid transition data rejection with no mutation;
+  - invalid accumulator rejection.
+- FEN families used include quiet transitions and chain transitions on fixed king squares.
+
+## Deferred / unchanged confirmations
+- Search integration with make/unmake stack is deferred.
+- `Board` make/unmake logic is unchanged.
+- Normal `evaluate()` / `evaluate_for_current_player()` behavior is unchanged.
+- UCI options/defaults are unchanged.
+- SirioNNUE2 remains non-default.
+
+## Known limitations
+- Transition tests cover deterministic contract behavior only; runtime search stack wiring remains deferred.
+- En-passant-like transition case is deferred in this step.
+
+## Next deferred step
+- Integrate transition stack into controlled search-time make/unmake path only after isolated no-drift contract is complete.
