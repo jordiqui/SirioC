@@ -32,6 +32,34 @@ sirio::nnue::SirioNNUE2MinimalAccumulatorTransition make_transition(const sirio:
     return transition;
 }
 
+
+void test_en_passant_like_transition_apply_undo_no_drift() {
+    auto net = load_fixture_network();
+    std::string error;
+    const sirio::Board white_before{"4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1"};
+    const sirio::Board white_after{"4k3/8/3P4/8/8/8/8/4K3 b - - 0 1"};
+    const auto white_t = make_transition(white_before, white_after);
+
+    sirio::nnue::SirioNNUE2MinimalAccumulator acc{}, rf{};
+    assert(sirio::nnue::refresh_sirio_nnue2_minimal_accumulator(white_before, net, acc, error));
+    assert(sirio::nnue::apply_sirio_nnue2_minimal_accumulator_transition(net, white_t, acc, error));
+    assert(sirio::nnue::refresh_sirio_nnue2_minimal_accumulator(white_after, net, rf, error));
+    assert(acc.hidden_pre_activation == rf.hidden_pre_activation);
+    assert(sirio::nnue::undo_sirio_nnue2_minimal_accumulator_transition(net, white_t, acc, error));
+    assert(sirio::nnue::refresh_sirio_nnue2_minimal_accumulator(white_before, net, rf, error));
+    assert(acc.hidden_pre_activation == rf.hidden_pre_activation);
+
+    const sirio::Board black_before{"4k3/8/8/8/3Pp3/8/8/4K3 b - d3 0 1"};
+    const sirio::Board black_after{"4k3/8/8/8/8/3p4/8/4K3 w - - 0 1"};
+    const auto black_t = make_transition(black_before, black_after);
+    assert(sirio::nnue::refresh_sirio_nnue2_minimal_accumulator(black_before, net, acc, error));
+    assert(sirio::nnue::apply_sirio_nnue2_minimal_accumulator_transition(net, black_t, acc, error));
+    assert(sirio::nnue::refresh_sirio_nnue2_minimal_accumulator(black_after, net, rf, error));
+    assert(acc.hidden_pre_activation == rf.hidden_pre_activation);
+    assert(sirio::nnue::undo_sirio_nnue2_minimal_accumulator_transition(net, black_t, acc, error));
+    assert(sirio::nnue::refresh_sirio_nnue2_minimal_accumulator(black_before, net, rf, error));
+    assert(acc.hidden_pre_activation == rf.hidden_pre_activation);
+}
 void test_single_transition_apply_undo_no_drift() {
     auto net = load_fixture_network();
     std::string error;
@@ -104,11 +132,20 @@ void test_rejection_and_noop_paths() {
 
     sirio::nnue::SirioNNUE2MinimalAccumulator invalid_acc{};
     assert(!sirio::nnue::apply_sirio_nnue2_minimal_accumulator_transition(net, t, invalid_acc, error));
+
+    sirio::nnue::SirioNNUE2MinimalAccumulatorTransition invalid_ep_like{};
+    invalid_ep_like.valid = true;
+    invalid_ep_like.status = sirio::nnue::SirioNNUE2MinimalAccumulatorTransitionStatus::Valid;
+    invalid_ep_like.white_removed.push_back({0, 1});
+    invalid_ep_like.black_removed.push_back({sirio::nnue::kSirioHalfKAv1FeaturesPerPerspective, 1});
+    assert(!sirio::nnue::apply_sirio_nnue2_minimal_accumulator_transition(net, invalid_ep_like, acc, error));
+    assert(acc.hidden_pre_activation == prior);
 }
 
 }  // namespace
 
 void run_nnue_accumulator_transition_v2_tests() {
+    test_en_passant_like_transition_apply_undo_no_drift();
     test_single_transition_apply_undo_no_drift();
     test_transition_chain_apply_undo_no_drift();
     test_rejection_and_noop_paths();
