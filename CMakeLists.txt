@@ -90,6 +90,7 @@ add_executable(sirio_tests
     tests/evaluation_cpp_shadow_wrapper_v2_tests.cpp
     tests/evaluation_initialization_shadow_v2_tests.cpp
     tests/nnue_api_build_info_v2_tests.cpp
+    tests/nnue_format_detection_v2_tests.cpp
     tests/tt_tests.cpp
     tests/history_tests.cpp
     tests/time_manager_tests.cpp
