@@ -133,10 +133,95 @@ void test_file_harness_fallback_cases() {
     assert(mismatch.fell_back_to_default);
 }
 
+
+void test_experimental_config_state_contract_defaults_and_fallbacks() {
+    sirio::use_classical_evaluation();
+    const std::string fens[] = {
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "8/8/8/8/8/8/6k1/6K1 w - - 0 1",
+        "4k3/8/8/8/3P4/8/8/4K3 b - - 0 1",
+    };
+
+    sirio::ExperimentalEvaluationConfig default_config{};
+    const auto default_state = sirio::prepare_experimental_evaluation_state_for_tests(default_config);
+    assert(default_state.config.selected_route == sirio::EvaluationRoute::DefaultExisting);
+    assert(!default_state.config.network_path.has_value());
+    assert(!default_state.load_attempted);
+    assert(!default_state.load_succeeded);
+    assert(default_state.load_status == sirio::ExperimentalEvaluationLoadStatus::NotAttempted);
+
+    for (const auto &fen : fens) {
+        sirio::Board board{fen};
+        sirio::initialize_evaluation(board);
+        const auto baseline = static_cast<std::int32_t>(sirio::evaluate(board));
+        const auto routed =
+            sirio::evaluate_with_experimental_evaluation_state_for_tests(board, baseline, default_state);
+        assert(routed.score == baseline);
+        assert(routed.actual_route == sirio::EvaluationRoute::DefaultExisting);
+        assert(!routed.attempted_file_load);
+    }
+
+    sirio::ExperimentalEvaluationConfig missing_config{};
+    missing_config.selected_route = sirio::EvaluationRoute::ExperimentalSirioNNUE2;
+    const auto missing_state = sirio::prepare_experimental_evaluation_state_for_tests(missing_config);
+    assert(missing_state.load_attempted);
+    assert(!missing_state.load_succeeded);
+    assert(missing_state.load_status == sirio::ExperimentalEvaluationLoadStatus::LoadRejected);
+}
+
+void test_experimental_state_matches_file_harness_and_is_deterministic() {
+    const auto fixture_path = build_fixture_network();
+    sirio::ExperimentalEvaluationConfig experimental_config{};
+    experimental_config.selected_route = sirio::EvaluationRoute::ExperimentalSirioNNUE2;
+    experimental_config.network_path = fixture_path.string();
+    const auto prepared_state =
+        sirio::prepare_experimental_evaluation_state_for_tests(experimental_config);
+    assert(prepared_state.load_attempted);
+    assert(prepared_state.load_succeeded);
+    assert(prepared_state.load_status == sirio::ExperimentalEvaluationLoadStatus::Loaded);
+    assert(prepared_state.loaded_network.has_value());
+
+    sirio::Board board{"4k3/8/8/8/3P4/8/8/4K3 b - - 0 1"};
+    sirio::use_classical_evaluation();
+    sirio::initialize_evaluation(board);
+    const std::int32_t baseline = sirio::evaluate(board);
+
+    const auto from_state = sirio::evaluate_with_experimental_evaluation_state_for_tests(
+        board, baseline, prepared_state);
+    const auto from_file = sirio::evaluate_with_experimental_backend_file_for_tests(
+        board, baseline, sirio::EvaluationRoute::ExperimentalSirioNNUE2, fixture_path.string());
+
+    assert(from_state.score == from_file.score);
+    assert(from_state.used_experimental_route == from_file.used_experimental_route);
+
+    const auto repeat = sirio::evaluate_with_experimental_evaluation_state_for_tests(
+        board, baseline, prepared_state);
+    assert(repeat.score == from_state.score);
+    assert(repeat.actual_route == from_state.actual_route);
+
+    sirio::ExperimentalEvaluationConfig malformed_config{};
+    malformed_config.selected_route = sirio::EvaluationRoute::ExperimentalSirioNNUE2;
+    const auto bad_path = std::filesystem::temp_directory_path() / "sirio_state_bad.nnue2";
+    {
+        std::ofstream out(bad_path, std::ios::binary);
+        out << "bad_net";
+    }
+    malformed_config.network_path = bad_path.string();
+    const auto malformed_state =
+        sirio::prepare_experimental_evaluation_state_for_tests(malformed_config);
+    assert(malformed_state.load_status == sirio::ExperimentalEvaluationLoadStatus::LoadRejected);
+    const auto malformed_eval = sirio::evaluate_with_experimental_evaluation_state_for_tests(
+        board, baseline, malformed_state);
+    assert(malformed_eval.score == baseline);
+    assert(malformed_eval.fell_back_to_default);
+}
+
 }  // namespace
 
 void run_evaluation_route_harness_tests() {
     test_default_existing_route_matches_evaluate_for_fixed_fens();
     test_experimental_route_matches_p0_14_router();
     test_file_harness_fallback_cases();
+    test_experimental_config_state_contract_defaults_and_fallbacks();
+    test_experimental_state_matches_file_harness_and_is_deterministic();
 }
