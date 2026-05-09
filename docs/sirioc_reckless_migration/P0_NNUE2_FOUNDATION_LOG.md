@@ -1778,3 +1778,65 @@ FENs used:
 
 ## Next deferred step
 - Move from report-only closure to controlled runtime-integration milestones after separate approval gates.
+
+# P0-33 SirioNNUE2 Explicit Network Format Detection / Legacy-Safe Loader Contract
+
+## Files changed
+- `include/sirio/nnue/api.hpp`
+- `src/nnue/api.cpp`
+- `tests/nnue_format_detection_v2_tests.cpp`
+- `tests/board_tests.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Detector types/functions
+- `NnueNetworkFormat`
+- `NnueNetworkFormatInfo`
+- `detect_nnue_network_format(const std::string& path)`
+
+## Classification values
+- `Unknown`
+- `SirioNNUE1Legacy`
+- `SirioNNUE2MinimalV1`
+- `Malformed`
+- `Unsupported`
+
+## Detection rules
+- Detection is content-based; filename alone is never considered authoritative.
+- SirioNNUE2 detection requires successful binary header parsing plus `SirioNNUE2-MinimalV1` layout decode.
+- SirioNNUE1 legacy detection requires text header `SirioNNUE1` and complete legacy parameter table parsing.
+- Missing/unreadable files return safe `Unknown` with diagnostics.
+- Truncated/broken NNUE2 payload/header contracts return `Malformed`.
+- Non-matching binaries (including fake `.nnue` naming/content) are classified as non-compatible (`Unknown`/`Malformed`/`Unsupported` as applicable).
+
+## Fake Stockfish `.nnue` rejection rule
+- Detection must not claim compatibility from `.nnue` naming.
+- Fake Stockfish-style filenames/content are explicitly validated as non-Sirio formats and are never reported as Sirio-compatible.
+- No Stockfish `.nnue` compatibility is claimed.
+
+## SirioNNUE1 legacy handling
+- Legacy SirioNNUE1 remains supported by explicit safe parsing checks.
+- Existing runtime default and legacy continuity are unchanged.
+
+## Tests added / fixtures
+- Added `tests/nnue_format_detection_v2_tests.cpp`.
+- Coverage includes:
+  - valid tiny SirioNNUE2-MinimalV1 binary detection (exported fixture);
+  - malformed binary safe rejection;
+  - missing file safe classification;
+  - fake Stockfish-style `.nnue` name/content non-compatibility;
+  - existing tiny SirioNNUE1 fixture (`tests/data/minimal.nnue`) legacy detection;
+  - detector non-mutation of global NNUE runtime load state.
+
+## Continuity confirmations
+- Runtime/search/UCI/evaluation behaviour is unchanged.
+- SirioNNUE2 remains non-default.
+- No Stockfish `.nnue` compatibility is claimed.
+- No Elo/strength claim is made.
+
+## Known limitations
+- Unsupported SirioNNUE2 variants beyond MinimalV1 are currently classified but not activated.
+- Detector diagnostics are string-based and intentionally minimal for now.
+
+## Next deferred step
+- P0-34 should consume detector metadata in controlled internal reporting paths while still keeping runtime routing and public UCI exposure unchanged.
