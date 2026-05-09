@@ -1124,3 +1124,52 @@ En-passant-like delta case remains deferred in this step.
 
 ## Next deferred step
 - Integrate transition stack into controlled search-time make/unmake path only after isolated no-drift contract is complete.
+
+# P0-22 SirioNNUE2 En-Passant-Like Delta Closure / Captured-Pawn Removal Contract
+
+## Files changed
+- `tests/nnue_feature_diff_v2_tests.cpp`
+- `tests/nnue_accumulator_delta_v2_tests.cpp`
+- `tests/nnue_accumulator_transition_v2_tests.cpp`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Exact scope
+- Added before/after board-state tests for en-passant-like captured-pawn removal in SirioHalfKAv1 feature diff.
+- Added accumulator delta parity tests (delta-apply equals full refresh after).
+- Added transition apply/undo no-drift tests for both white and black en-passant-like transformations.
+- Added invalid en-passant-like transition fixture rejection check to confirm no accumulator mutation.
+- No move generation, Board make/unmake, search, UCI, or runtime evaluation routing changes.
+
+## FENs used
+- White en-passant-like before: `4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1`
+- White en-passant-like after: `4k3/8/3P4/8/8/8/8/4K3 b - - 0 1`
+- Black mirrored before: `4k3/8/8/8/3Pp3/8/8/4K3 b - d3 0 1`
+- Black mirrored after: `4k3/8/8/8/8/3p4/8/4K3 w - - 0 1`
+
+## Feature-diff expectations validated
+- `full_refresh_required == false` for both directions.
+- Removed/added sparse feature lists are non-empty as expected for mover relocation and captured-pawn disappearance on a different square.
+- Side-to-move flips do not alter the feature-diff sets for identical piece-placement transitions.
+- Feature indices are bounded in `[0, 40960)` and sparse values remain `1`.
+
+## Accumulator delta equality contract
+- For both en-passant-like directions: refresh(before) + delta(before->after) equals refresh(after) for hidden pre-activation state.
+- Evaluated score from delta-updated accumulator equals full-refresh accumulator score.
+
+## Transition apply/undo no-drift contract
+- For both en-passant-like directions: transition apply equals full-refresh(after), and transition undo returns exactly to full-refresh(before).
+- Invalid en-passant-like transition fixture (out-of-range captured-side feature index) is rejected and leaves accumulator unchanged.
+
+## Continuity confirmations
+- Board make/unmake and legal en-passant move execution integration remain deferred.
+- Search integration remains deferred.
+- `evaluate()` and `evaluate_for_current_player()` normal routing is unchanged.
+- UCI defaults/options are unchanged.
+- SirioNNUE2 remains non-default.
+
+## Known limitations
+- Coverage validates before/after board-state delta contracts, not legal-move execution plumbing.
+- Runtime/search activation and move-stack integration are still pending later roadmap phases.
+
+## Next deferred step
+- Wire these validated special-move delta/transition contracts into controlled runtime/search integration steps after remaining P0 safety gates are complete.

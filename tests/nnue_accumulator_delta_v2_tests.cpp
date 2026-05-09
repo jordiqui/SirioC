@@ -63,6 +63,13 @@ void test_quiet_move_delta_equals_refresh() {
                                 "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1");
 }
 
+
+void test_en_passant_like_delta_equals_refresh_white_and_black() {
+    verify_delta_equals_refresh("4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1",
+                                "4k3/8/3P4/8/8/8/8/4K3 b - - 0 1");
+    verify_delta_equals_refresh("4k3/8/8/8/3Pp3/8/8/4K3 b - d3 0 1",
+                                "4k3/8/8/8/8/3p4/8/4K3 w - - 0 1");
+}
 void test_capture_like_delta_equals_refresh() {
     verify_delta_equals_refresh("4k3/8/8/3pP3/8/8/8/4K3 w - - 0 1",
                                 "4k3/8/3P4/8/8/8/8/4K3 b - - 0 1");
@@ -150,6 +157,7 @@ void test_invalid_feature_diff_rejected_without_mutation() {
 
 void run_nnue_accumulator_delta_v2_tests() {
     test_quiet_move_delta_equals_refresh();
+    test_en_passant_like_delta_equals_refresh_white_and_black();
     test_capture_like_delta_equals_refresh();
     test_promotion_like_delta_equals_refresh();
     test_side_to_move_only_empty_delta_no_change();

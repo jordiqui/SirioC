@@ -43,6 +43,45 @@ void test_quiet_non_king_move_deterministic() {
     assert(diff1.black_added == diff2.black_added);
 }
 
+
+void test_en_passant_like_white_and_black() {
+    const sirio::Board white_before{"4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1"};
+    const sirio::Board white_after{"4k3/8/3P4/8/8/8/8/4K3 b - - 0 1"};
+    sirio::nnue::SirioHalfKAv1FeatureDiff white_diff;
+    assert(sirio::nnue::compute_sirio_halfka_v1_feature_diff(white_before, white_after, white_diff));
+    assert(!white_diff.full_refresh_required);
+    assert(!white_diff.white_removed.empty());
+    assert(!white_diff.white_added.empty());
+    assert(!white_diff.black_removed.empty());
+    assert(white_diff.black_added.empty());
+    assert_feature_bounds(white_diff.white_removed);
+    assert_feature_bounds(white_diff.white_added);
+    assert_feature_bounds(white_diff.black_removed);
+    assert_feature_bounds(white_diff.black_added);
+
+    const sirio::Board white_before_stm_flip{"4k3/8/8/3pP3/8/8/8/4K3 b - d6 0 1"};
+    const sirio::Board white_after_stm_flip{"4k3/8/3P4/8/8/8/8/4K3 w - - 0 1"};
+    sirio::nnue::SirioHalfKAv1FeatureDiff white_stm_flip_diff;
+    assert(sirio::nnue::compute_sirio_halfka_v1_feature_diff(white_before_stm_flip, white_after_stm_flip,
+                                                              white_stm_flip_diff));
+    assert(white_diff.white_removed == white_stm_flip_diff.white_removed);
+    assert(white_diff.white_added == white_stm_flip_diff.white_added);
+    assert(white_diff.black_removed == white_stm_flip_diff.black_removed);
+    assert(white_diff.black_added == white_stm_flip_diff.black_added);
+
+    const sirio::Board black_before{"4k3/8/8/8/3Pp3/8/8/4K3 b - d3 0 1"};
+    const sirio::Board black_after{"4k3/8/8/8/8/3p4/8/4K3 w - - 0 1"};
+    sirio::nnue::SirioHalfKAv1FeatureDiff black_diff;
+    assert(sirio::nnue::compute_sirio_halfka_v1_feature_diff(black_before, black_after, black_diff));
+    assert(!black_diff.full_refresh_required);
+    assert(!black_diff.white_removed.empty());
+    assert(!black_diff.black_removed.empty());
+    assert(!black_diff.black_added.empty());
+    assert_feature_bounds(black_diff.white_removed);
+    assert_feature_bounds(black_diff.white_added);
+    assert_feature_bounds(black_diff.black_removed);
+    assert_feature_bounds(black_diff.black_added);
+}
 void test_capture_position() {
     const sirio::Board before{"4k3/8/8/3pP3/8/8/8/4K3 w - - 0 1"};
     const sirio::Board after{"4k3/8/3P4/8/8/8/8/4K3 b - - 0 1"};
@@ -108,6 +147,7 @@ void test_feature_ranges_for_all_lists() {
 void run_nnue_feature_diff_v2_tests() {
     test_no_change_position();
     test_quiet_non_king_move_deterministic();
+    test_en_passant_like_white_and_black();
     test_capture_position();
     test_promotion_like_position();
     test_castling_like_position_requires_refresh();
