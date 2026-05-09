@@ -1383,3 +1383,62 @@ En-passant-like delta case remains deferred in this step.
 
 ## Next deferred step
 - Controlled integration planning for optional evaluation routing activation (still gated and non-default).
+
+# P0-27 SirioNNUE2 Evaluation.cpp Shadow Integration / Default Behaviour Preservation Contract
+
+## Files changed
+- `include/sirio/evaluation_route.hpp`
+- `src/evaluation_route.cpp`
+- `tests/evaluation_shadow_integration_v2_tests.cpp`
+- `tests/board_tests.cpp`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Evaluation entry points inspected
+- `evaluate(...)` in `src/evaluation.cpp`
+- `make_nnue_evaluation(...)` overloads in `src/evaluation.cpp`
+- `ensure_thread_backend(...)` in `src/evaluation.cpp`
+- `initialize_evaluation(...)` in `src/evaluation.cpp`
+- `evaluate_for_current_player(...)` in `src/search.cpp` (inspection only)
+
+## Helper API/function names
+- `evaluate_with_sirio_nnue2_shadow_integration_for_tests(...)`
+- `ExperimentalSirioNNUE2EvaluationShadowIntegrationResult`
+
+## evaluation.cpp touch decision
+- `src/evaluation.cpp` was intentionally not modified.
+- Reason: existing evaluation core and thread-backend lifecycle are tightly coupled and already proven by broad tests; P0-27 requirement is shadow-only/default-off integration, so a thin evaluation-layer wrapper around the P0-26 hook in `evaluation_route` is the minimal-risk approach.
+
+## Default behaviour preservation proof
+- `evaluate_with_sirio_nnue2_shadow_integration_for_tests(...)` delegates to the existing P0-26 runtime hook and is called only by explicit tests.
+- No changes were made to `evaluate(...)` routing, backend selection, thread backend lifecycle, or initialization path.
+- Dedicated tests assert unchanged `evaluate(...)` outputs for start/kings-only/asymmetric FENs before vs after shadow helper calls.
+
+## Fallback rule
+- When runtime is inactive/unloaded/rejected, helper returns caller-provided default/classical score and reports fallback metadata.
+- When runtime is loaded, helper returns the same score and route/fallback metadata as P0-26 runtime hook.
+
+## Tests added and FENs used
+- Added `tests/evaluation_shadow_integration_v2_tests.cpp` covering:
+  - unchanged normal `evaluate(...)` output for:
+    - `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
+    - `8/8/8/8/8/8/6k1/6K1 w - - 0 1`
+    - `4k3/8/8/3q4/4N3/8/8/4K3 w - - 0 1`
+  - inactive runtime fallback to provided default score,
+  - loaded runtime parity with P0-26 shadow hook across all three FENs,
+  - deterministic repeated calls,
+  - board immutability via FEN pre/post equality.
+
+## Continuity confirmations
+- Public `evaluate(...)` routing remains unchanged.
+- `evaluate_for_current_player(...)` routing/behaviour remains unchanged.
+- Search integration is still deferred.
+- SirioNNUE2 remains non-default.
+- No UCI option/default was added or changed.
+- No strength/Elo claim is made.
+
+## Known limitations
+- Integration remains test/internal-facing only and requires explicit helper invocation.
+- No production search-path activation or UCI-driven route selection is introduced in this step.
+
+## Next deferred step
+- Controlled, explicitly gated bridge planning between evaluation runtime hooks and higher-level optional routing, still preserving default classical/legacy behaviour.

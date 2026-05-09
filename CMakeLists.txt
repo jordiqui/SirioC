@@ -84,6 +84,7 @@ add_executable(sirio_tests
     tests/nnue_board_shadow_v2_tests.cpp
     tests/nnue_experimental_runtime_v2_tests.cpp
     tests/nnue_evaluation_shadow_hook_v2_tests.cpp
+    tests/evaluation_shadow_integration_v2_tests.cpp
     tests/tt_tests.cpp
     tests/history_tests.cpp
     tests/time_manager_tests.cpp

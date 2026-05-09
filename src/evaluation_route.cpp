@@ -167,6 +167,22 @@ ExperimentalSirioNNUE2ShadowEvaluationResult evaluate_with_sirio_nnue2_runtime_f
     return result;
 }
 
+ExperimentalSirioNNUE2EvaluationShadowIntegrationResult
+evaluate_with_sirio_nnue2_shadow_integration_for_tests(
+    const Board &board, std::int32_t default_score, const ExperimentalSirioNNUE2Runtime &runtime,
+    std::string *diagnostic_message) {
+    const auto shadow_result = evaluate_with_sirio_nnue2_runtime_for_tests(
+        board, default_score, runtime, diagnostic_message);
+
+    ExperimentalSirioNNUE2EvaluationShadowIntegrationResult result{};
+    result.score = shadow_result.score;
+    result.used_experimental_runtime = shadow_result.used_experimental_runtime;
+    result.fell_back_to_default = shadow_result.fell_back_to_default;
+    result.runtime_status = shadow_result.runtime_status;
+    result.fallback_reason = shadow_result.fallback_reason;
+    return result;
+}
+
 EvaluationRouteResult evaluate_with_experimental_evaluation_state_for_tests(
     const Board &board, std::int32_t default_score, const ExperimentalEvaluationState &state,
     std::string *diagnostic_message) {
