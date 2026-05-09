@@ -34,6 +34,47 @@ struct ExperimentalEvaluationState {
     std::optional<nnue::Nnue2NetworkParameters> loaded_network;
 };
 
+
+
+enum class ExperimentalSirioNNUE2RuntimeStatus {
+    Inactive = 0,
+    Loaded = 1,
+    LoadRejected = 2,
+};
+
+struct ExperimentalSirioNNUE2RuntimeResult {
+    std::int32_t score = 0;
+    bool used_experimental_route = false;
+    bool fell_back_to_default = false;
+    bool accumulator_refreshed = false;
+    ExperimentalSirioNNUE2RuntimeStatus status = ExperimentalSirioNNUE2RuntimeStatus::Inactive;
+    std::string fallback_reason;
+};
+
+class ExperimentalSirioNNUE2Runtime {
+public:
+    ExperimentalSirioNNUE2Runtime() = default;
+    explicit ExperimentalSirioNNUE2Runtime(const ExperimentalEvaluationConfig &config);
+
+    bool load_from_config(const ExperimentalEvaluationConfig &config);
+    bool load_from_file(const std::string &network_path);
+
+    [[nodiscard]] bool is_active() const;
+    [[nodiscard]] bool is_loaded() const;
+    [[nodiscard]] ExperimentalSirioNNUE2RuntimeStatus status() const;
+    [[nodiscard]] const std::string &fallback_reason() const;
+    [[nodiscard]] const nnue::Nnue2NetworkParameters *loaded_network() const;
+
+    [[nodiscard]] ExperimentalSirioNNUE2RuntimeResult evaluate_with_fallback(
+        const Board &board, std::int32_t default_score, std::string *diagnostic_message = nullptr) const;
+
+private:
+    ExperimentalSirioNNUE2RuntimeStatus status_ = ExperimentalSirioNNUE2RuntimeStatus::Inactive;
+    bool active_ = false;
+    std::string fallback_reason_;
+    std::optional<nnue::Nnue2NetworkParameters> loaded_network_;
+};
+
 struct EvaluationRouteResult {
     std::int32_t score = 0;
     EvaluationRoute selected_route = EvaluationRoute::DefaultExisting;
