@@ -119,6 +119,22 @@ struct InternalEvalBackendResult {
     std::string fallback_reason;
 };
 
+struct ExperimentalSirioNNUE2RuntimeInitializationResult {
+    bool load_requested = false;
+    bool load_attempted = false;
+    bool load_succeeded = false;
+    ExperimentalSirioNNUE2RuntimeStatus runtime_status = ExperimentalSirioNNUE2RuntimeStatus::Inactive;
+    std::string fallback_reason;
+};
+
+[[nodiscard]] ExperimentalSirioNNUE2RuntimeInitializationResult
+initialize_sirio_nnue2_shadow_runtime_for_tests(
+    const ExperimentalEvaluationConfig &config, ExperimentalSirioNNUE2Runtime &runtime);
+
+[[nodiscard]] ExperimentalSirioNNUE2RuntimeInitializationResult
+initialize_sirio_nnue2_shadow_runtime_for_tests(const std::string &network_path,
+                                                ExperimentalSirioNNUE2Runtime &runtime);
+
 [[nodiscard]] ExperimentalSirioNNUE2ShadowEvaluationResult
 evaluate_with_sirio_nnue2_runtime_for_tests(const Board &board, std::int32_t default_score,
                                             const ExperimentalSirioNNUE2Runtime &runtime,
