@@ -730,3 +730,65 @@ This task adds an explicit, non-default experimental backend routing gate for Si
 
 ## Originality/provenance note
 - Implementation and tests are original SirioC repository work and do not import external engine/trainer source.
+
+# P0-15 SirioNNUE2 Evaluation Layer Integration Harness / Default-Off Contract
+
+This task adds a minimal evaluation-layer integration harness that can explicitly route to the P0-14 experimental SirioNNUE2 gate in tests/internal usage while keeping normal evaluation, search, and UCI behavior unchanged.
+
+## Files changed
+- `include/sirio/evaluation_route.hpp`
+- `src/evaluation_route.cpp`
+- `tests/evaluation_route_harness_tests.cpp`
+- `tests/board_tests.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Harness API/function names
+- `enum class EvaluationRoute { DefaultExisting, ExperimentalSirioNNUE2 }`
+- `struct EvaluationRouteResult`
+- `evaluate_with_experimental_backend_for_tests(const Board&, std::int32_t default_score, EvaluationRoute, const nnue::Nnue2NetworkParameters*, std::string*)`
+- `evaluate_with_experimental_backend_for_tests(const Board&, EvaluationRoute, const nnue::Nnue2NetworkParameters*, std::string*)`
+
+## Backend selection names
+- `EvaluationRoute::DefaultExisting`
+- `EvaluationRoute::ExperimentalSirioNNUE2`
+
+## Default-off contract
+- Harness routing remains opt-in and test/internal only.
+- When `EvaluationRoute::DefaultExisting` is selected, the provided/default score is returned unchanged.
+- No changes were made to the normal `evaluate()` entry point, search routing, or UCI options/defaults.
+- SirioNNUE2 remains non-default.
+
+## Fallback rule
+- Under `EvaluationRoute::ExperimentalSirioNNUE2`, routing delegates to P0-14 gate behavior.
+- Missing network falls back to default score.
+- Invalid/rejected network falls back to default score.
+
+## Route metadata contract
+- `EvaluationRouteResult::used_default_route`
+- `EvaluationRouteResult::used_experimental_route`
+- `EvaluationRouteResult::fell_back_to_default`
+
+## Tests added and FENs used
+- Default route equals normal evaluate score on:
+  - Start position: `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
+  - Kings-only: `8/8/8/8/8/8/6k1/6K1 w - - 0 1`
+  - Asymmetric material/STM case: `4k3/8/8/8/3P4/8/8/4K3 b - - 0 1`
+- Explicit experimental route with valid deterministic exported fixture network matches P0-14 routing output.
+- Missing network fallback verified.
+- Invalid network fallback verified (`hidden_bias` cleared).
+- Metadata flags verified for default, successful experimental, and fallback paths.
+
+## Continuity confirmations
+- Normal `evaluate()` behavior remains unchanged.
+- Search behavior remains unchanged.
+- UCI options/defaults remain unchanged.
+- SirioNNUE1 legacy support remains unchanged.
+- SirioNNUE2 remains non-default.
+
+## Known limitations
+- Harness is not yet wired into production evaluation backend policy; it is explicit-call only.
+- Diagnostic strings remain intended for deterministic internal/test observability.
+
+## Next deferred step
+- Controlled production-side internal selector integration (if authorized), preserving default-off behavior and existing public UCI defaults.

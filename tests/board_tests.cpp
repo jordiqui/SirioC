@@ -17,6 +17,7 @@
 void run_perft_tests();
 void run_tt_tests();
 void run_evaluation_phase_tests();
+void run_evaluation_route_harness_tests();
 void run_search_tests();
 void run_nnue_backend_tests();
 void run_history_tests();
@@ -441,6 +442,7 @@ int main() {
     run_history_tests();
     run_search_tests();
     run_evaluation_phase_tests();
+    run_evaluation_route_harness_tests();
     run_tt_tests();
     run_perft_tests();
     std::cout << "All tests passed.\n";
