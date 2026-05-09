@@ -812,3 +812,68 @@ This task adds a minimal evaluation-layer integration harness that can explicitl
 - **Format compatibility note:** Stockfish `.nnue` compatibility is not claimed and fake `.nnue` content is rejected/fallback.
 - **Known limitations:** no runtime production toggle, no network cache, no global mutable file-backed state in this step.
 - **Next deferred step:** controlled production wiring and option surface remain deferred beyond P0-16.
+
+# P0-17 SirioNNUE2 Experimental Evaluation Config / Runtime State Contract
+
+## Files changed
+- `include/sirio/evaluation_route.hpp`
+- `src/evaluation_route.cpp`
+- `tests/evaluation_route_harness_tests.cpp`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Config/state type names
+- `ExperimentalEvaluationLoadStatus`
+- `ExperimentalEvaluationConfig`
+- `ExperimentalEvaluationState`
+- helper APIs:
+  - `prepare_experimental_evaluation_state_for_tests(...)`
+  - `evaluate_with_experimental_evaluation_state_for_tests(...)`
+
+## Default-off semantics
+- Default construction keeps route at `DefaultExisting`.
+- Default construction has no network path, no load attempt, no loaded SirioNNUE2 network.
+- Default config evaluation preserves existing classical/default result and does not perform file load.
+
+## Network path/loading contract
+- Experimental route requires an explicit network path via `ExperimentalEvaluationConfig::network_path`.
+- `prepare_experimental_evaluation_state_for_tests(...)` performs file-backed loading through existing P0-16 loader (`load_nnue2_network_file`).
+- Successful load stores a validated `Nnue2NetworkParameters` in state.
+- Missing, malformed, or wrong-contract files are rejected with `LoadRejected` status and diagnostic reason.
+
+## State metadata contract
+- Route selection is explicit in `ExperimentalEvaluationConfig::selected_route`.
+- Load metadata is explicit in state/result fields:
+  - `load_attempted`
+  - `load_succeeded`
+  - `load_status`
+  - `fallback_reason`
+- Evaluation result continues to expose route/fallback telemetry through `EvaluationRouteResult`.
+
+## Fallback rule
+- If route is default: evaluate classically and never load from file.
+- If route is experimental but state has no successfully loaded network: hard fallback to classical score with explicit fallback reason.
+- If experimental network is loaded, routing reuses existing P0-14/P0-15/P0-16 experimental evaluation path.
+
+## Tests added and FENs used
+- Extended `tests/evaluation_route_harness_tests.cpp` with config/state contract coverage.
+- Covered FENs:
+  - `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
+  - `8/8/8/8/8/8/6k1/6K1 w - - 0 1`
+  - `4k3/8/8/8/3P4/8/8/4K3 b - - 0 1`
+- Added checks for default no-load behavior, valid file load success, missing/malformed fallback metadata, file-helper equivalence, and deterministic repeat evaluation.
+
+## Continuity confirmations
+- SirioNNUE2 remains non-default.
+- Normal `evaluate()` / `evaluate_for_current_player()` behavior is unchanged.
+- Search routing is unchanged and no search path is invoked by this contract.
+- Public UCI options/defaults are unchanged.
+- SirioNNUE1 legacy support remains unchanged.
+- No Stockfish `.nnue` compatibility is claimed.
+- No Elo/strength claim is made.
+
+## Known limitations
+- Contract is test/internal-only and intentionally not exposed as a public UCI activation path.
+- No global runtime cache was introduced; state must be prepared explicitly by callers.
+
+## Next deferred step
+- Controlled runtime plumbing to pass explicit experimental config/state into an internal evaluation entrypoint while preserving default-off behavior and existing public interfaces.
