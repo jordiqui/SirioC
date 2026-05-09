@@ -60,6 +60,16 @@ struct Nnue2Accumulator {
     }
 };
 
+struct SirioNNUE2MinimalAccumulator {
+    std::vector<std::int32_t> hidden_pre_activation;
+    bool valid = false;
+
+    void clear() {
+        hidden_pre_activation.clear();
+        valid = false;
+    }
+};
+
 struct Nnue2AccumulatorPair {
     std::array<Nnue2Accumulator, kNnue2PerspectiveCount> perspectives{};
 

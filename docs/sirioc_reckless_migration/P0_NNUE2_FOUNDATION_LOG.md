@@ -877,3 +877,60 @@ This task adds a minimal evaluation-layer integration harness that can explicitl
 
 ## Next deferred step
 - Controlled runtime plumbing to pass explicit experimental config/state into an internal evaluation entrypoint while preserving default-off behavior and existing public interfaces.
+
+# P0-18 SirioNNUE2 Accumulator Refresh Baseline / Deterministic Full-Recompute Contract
+
+## Files changed
+- `include/sirio/nnue/backend.hpp`
+- `src/nnue/backend.cpp`
+- `tests/nnue_inference_v2_tests.cpp`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Accumulator type/function names
+- `SirioNNUE2MinimalAccumulator`
+- `refresh_sirio_nnue2_minimal_accumulator(...)`
+- `evaluate_sirio_nnue2_minimal_accumulator(...)`
+
+## Full-refresh formula
+- Encode active sparse features via `encode_sirio_halfka_v1(board, sparse)` for both perspectives.
+- Initialize accumulator hidden pre-activation vector as `hidden_pre_activation[h] = hidden_bias[h]`.
+- For each active feature `f` and hidden index `h`, apply:
+  - `hidden_pre_activation[h] += input_weights[f.index * hidden1_size + h] * f.value`.
+- Validation rejects uninitialized networks, invalid layout, feature index overflow, or tensor size mismatch.
+
+## Accumulator evaluation formula
+- Apply ReLU per hidden element:
+  - `activated[h] = max(0, hidden_pre_activation[h])`.
+- Output accumulation:
+  - `output_accum = output_bias + sum_h(activated[h] * output_weights[h])`.
+- Apply test-only quantization normalization consistent with P0-11:
+  - divide by `quant_input_scale * quant_output_scale` when denominator > 0.
+
+## Equality contract vs P0-11 minimal inference
+- `evaluate_loaded_nnue2_minimal_v1(...)` now routes through full-refresh accumulator + accumulator evaluation.
+- Output remains deterministic and equal to prior direct minimal inference contract for tested positions.
+
+## Tests added and FENs used
+- Equality/direct-vs-accumulator checks:
+  - `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
+  - `8/8/8/8/8/8/6k1/6K1 w - - 0 1`
+  - `4k3/8/8/8/8/8/4P3/4K3 w - - 0 1`
+  - `r3k2r/pp3ppp/2n1bn2/3p4/3P4/2N1PN2/PP3PPP/R3K2R w KQkq - 0 1`
+- Deterministic repeated refresh check for mixed material FEN.
+- Clear/reinitialize semantics check for accumulator state lifecycle.
+- Unvalidated network rejection and malformed tensor size rejection.
+- Side-to-move invariance for White-POV full-refresh accumulator result on identical placement.
+
+## Continuity confirmations
+- Incremental make/unmake accumulator updates are deferred (not implemented in this task).
+- SirioNNUE2 remains non-default.
+- Normal `evaluate()` / `evaluate_for_current_player()` behavior is unchanged.
+- Search routing and UCI defaults/options are unchanged.
+- No Elo/strength claim is made.
+
+## Known limitations
+- Only full recompute refresh is implemented.
+- No incremental update stack or make/unmake delta maintenance yet.
+
+## Next deferred step
+- P0-19: incremental accumulator updates with deterministic parity checks against full-refresh baseline before any search integration.
