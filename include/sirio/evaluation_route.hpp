@@ -86,10 +86,23 @@ struct ExperimentalSirioNNUE2ShadowEvaluationResult {
     std::string fallback_reason;
 };
 
+struct ExperimentalSirioNNUE2EvaluationShadowIntegrationResult {
+    std::int32_t score = 0;
+    bool used_experimental_runtime = false;
+    bool fell_back_to_default = false;
+    ExperimentalSirioNNUE2RuntimeStatus runtime_status = ExperimentalSirioNNUE2RuntimeStatus::Inactive;
+    std::string fallback_reason;
+};
+
 [[nodiscard]] ExperimentalSirioNNUE2ShadowEvaluationResult
 evaluate_with_sirio_nnue2_runtime_for_tests(const Board &board, std::int32_t default_score,
                                             const ExperimentalSirioNNUE2Runtime &runtime,
                                             std::string *diagnostic_message = nullptr);
+
+[[nodiscard]] ExperimentalSirioNNUE2EvaluationShadowIntegrationResult
+evaluate_with_sirio_nnue2_shadow_integration_for_tests(
+    const Board &board, std::int32_t default_score, const ExperimentalSirioNNUE2Runtime &runtime,
+    std::string *diagnostic_message = nullptr);
 
 struct EvaluationRouteResult {
     std::int32_t score = 0;
