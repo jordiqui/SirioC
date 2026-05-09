@@ -81,6 +81,7 @@ add_executable(sirio_tests
     tests/nnue_feature_diff_v2_tests.cpp
     tests/nnue_accumulator_delta_v2_tests.cpp
     tests/nnue_accumulator_transition_v2_tests.cpp
+    tests/nnue_board_shadow_v2_tests.cpp
     tests/tt_tests.cpp
     tests/history_tests.cpp
     tests/time_manager_tests.cpp

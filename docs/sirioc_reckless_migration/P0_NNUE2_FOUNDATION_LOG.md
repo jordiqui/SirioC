@@ -1173,3 +1173,52 @@ En-passant-like delta case remains deferred in this step.
 
 ## Next deferred step
 - Wire these validated special-move delta/transition contracts into controlled runtime/search integration steps after remaining P0 safety gates are complete.
+
+# P0-23 SirioNNUE2 Board Make-Unmake Shadow Harness / Legal Move No-Drift Contract
+
+## Files changed
+- `tests/nnue_board_shadow_v2_tests.cpp`
+- `tests/board_tests.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Board APIs used
+- `sirio::generate_legal_moves(const Board&)` for legal move selection.
+- `sirio::move_to_uci(const Move&)` for deterministic move matching.
+- `Board::make_move(const Move&, UndoState&)` for in-place move application.
+- `Board::undo_move(const Move&, const UndoState&)` for in-place rollback.
+- `Board::to_fen()` for exact position round-trip verification after undo.
+
+## Move cases tested
+- Quiet non-king move: `e2e4` from `4k3/8/8/8/8/8/4P3/4K3 w - - 0 1`.
+- Capture: `e5d6` from `4k3/8/8/3pP3/8/8/8/4K3 w - - 0 1`.
+- Promotion: `g7g8q` from `4k3/6P1/8/8/8/8/8/4K3 w - - 0 1`.
+- En passant: `e5d6` from `4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1`.
+- King move requiring refresh/rejection: `e1e2` from `4k3/8/8/8/8/8/8/4K3 w - - 0 1`.
+- Castling requiring refresh/rejection: `e1g1` from `4k2r/8/8/8/8/8/8/4K2R w Kk - 0 1`.
+
+## No-drift equality contract
+- For non-king-changing legal moves, the harness verifies:
+  - transition apply after `Board::make_move` equals full-refresh accumulator(after),
+  - transition undo after `Board::undo_move` equals full-refresh accumulator(before),
+  - repeated apply/undo cycles do not drift and restore exact baseline each cycle.
+- For king-changing legal moves, the harness verifies:
+  - transition creation rejects incremental path (`FullRefreshRequired`),
+  - incremental apply returns false,
+  - accumulator pre-activation vector remains unchanged on rejection.
+
+## Deferred special cases
+- None deferred in this step: required move classes were covered using existing legal move generation and existing move/undo APIs.
+
+## Continuity confirmations
+- Search integration remains deferred; this step is test-only shadow validation.
+- Board move logic was not modified in this patch.
+- SirioNNUE2 remains non-default.
+- Normal `evaluate()` / search / UCI options/defaults behavior is unchanged.
+
+## Known limitations
+- Harness validates transition contract compatibility against Board make/unmake semantics only; it does not activate NNUE2 incremental state inside runtime search nodes.
+- Coverage is deterministic for chosen legal positions; broader randomized legal-sequence fuzzing is deferred.
+
+## Next deferred step
+- Controlled runtime integration of the validated transition lifecycle into search-node make/unmake state, guarded by full-refresh fallback and parity checks.
