@@ -1,5 +1,7 @@
 #include "sirio/evaluation.hpp"
 
+#include "sirio/evaluation_route.hpp"
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -1781,5 +1783,12 @@ int evaluate(const Board &board) {
     return thread_state().backend->evaluate(board);
 }
 
-}  // namespace sirio
+InternalEvalBackendResult evaluate_with_experimental_selector_shadow_for_tests(
+    const Board &board, const InternalEvalBackendSelection &selection,
+    const ExperimentalSirioNNUE2Runtime &runtime, std::string *diagnostic_message) {
+    const std::int32_t default_score = evaluate(board);
+    return evaluate_with_internal_eval_backend_for_tests(board, default_score, selection, runtime,
+                                                         diagnostic_message);
+}
 
+}  // namespace sirio
