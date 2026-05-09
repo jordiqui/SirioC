@@ -36,6 +36,7 @@ void run_internal_eval_backend_selector_v2_tests();
 void run_evaluation_internal_selector_v2_tests();
 void run_evaluation_cpp_shadow_wrapper_v2_tests();
 void run_evaluation_initialization_shadow_v2_tests();
+void run_nnue_api_build_info_v2_tests();
 
 namespace {
 int square_index(char file, int rank) {
@@ -461,6 +462,7 @@ int main() {
     run_evaluation_internal_selector_v2_tests();
     run_evaluation_cpp_shadow_wrapper_v2_tests();
     run_evaluation_initialization_shadow_v2_tests();
+    run_nnue_api_build_info_v2_tests();
     run_history_tests();
     run_search_tests();
     run_evaluation_phase_tests();

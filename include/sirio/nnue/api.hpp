@@ -9,6 +9,7 @@ struct NetworkInfo {
     std::string path;
     std::size_t bytes = 0;
     std::string dims;
+    std::string format_report;
 };
 
 // Initialize the NNUE backend from the file located at `path`.
@@ -26,4 +27,3 @@ bool is_loaded();
 std::optional<NetworkInfo> info();
 
 }  // namespace sirio::nnue
-
