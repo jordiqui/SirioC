@@ -129,6 +129,17 @@ struct Nnue2MinimalDecodedLayout {
     std::string activation = "relu";
 };
 
+enum class ExperimentalEvalBackend {
+    Classical = 0,
+    ExperimentalSirioNNUE2 = 1,
+};
+
+struct ExperimentalEvalRoutingResult {
+    std::int32_t score = 0;
+    bool used_experimental_backend = false;
+    bool fell_back_to_classical = false;
+};
+
 enum class NetworkSelectionPolicy { Material, Depth };
 
 struct MultiNetworkConfig {
@@ -223,6 +234,9 @@ private:
 [[nodiscard]] bool evaluate_loaded_nnue2_minimal_v1_probe_stm_pov(
     const Board &board, const Nnue2NetworkParameters &network, std::int32_t &out_stm_pov_score,
     std::string &error_message);
+[[nodiscard]] ExperimentalEvalRoutingResult route_experimental_nnue2_evaluation(
+    const Board &board, ExperimentalEvalBackend backend, std::int32_t classical_score,
+    const Nnue2NetworkParameters *network, std::string *diagnostic_message = nullptr);
 [[nodiscard]] SparseFeatureState compute_sparse_feature_state(const Board &board);
 void incremental_update_sparse_state(SparseFeatureState &state, const Board &current,
                                      const Move &move, Color mover);

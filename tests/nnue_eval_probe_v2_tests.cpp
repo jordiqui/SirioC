@@ -144,6 +144,70 @@ void test_normal_evaluate_unchanged_by_probe_call() {
     assert(before == after);
 }
 
+void test_experimental_gate_default_keeps_classical_eval() {
+    const auto net = load_fixture_network();
+    const std::string fen = "4k3/8/8/8/3P4/8/8/4K3 b - - 0 1";
+    sirio::Board board{fen};
+
+    sirio::use_classical_evaluation();
+    sirio::initialize_evaluation(board);
+    const int classical_score = sirio::evaluate(board);
+
+    std::string diagnostic;
+    const auto routed = sirio::nnue::route_experimental_nnue2_evaluation(
+        board, sirio::nnue::ExperimentalEvalBackend::Classical, classical_score, &net, &diagnostic);
+    assert(routed.score == classical_score);
+    assert(!routed.used_experimental_backend);
+    assert(!routed.fell_back_to_classical);
+}
+
+void test_experimental_gate_uses_stm_probe_when_enabled() {
+    const auto net = load_fixture_network();
+    const std::string fen = "4k3/8/8/8/3P4/8/8/4K3 b - - 0 1";
+    sirio::Board board{fen};
+    std::string error;
+    std::int32_t stm_score = 0;
+    assert(sirio::nnue::evaluate_loaded_nnue2_minimal_v1_probe_stm_pov(board, net, stm_score, error));
+
+    std::string diagnostic;
+    const auto routed = sirio::nnue::route_experimental_nnue2_evaluation(
+        board, sirio::nnue::ExperimentalEvalBackend::ExperimentalSirioNNUE2, 1234, &net, &diagnostic);
+    assert(routed.score == stm_score);
+    assert(routed.used_experimental_backend);
+    assert(!routed.fell_back_to_classical);
+}
+
+void test_experimental_gate_invalid_network_falls_back_to_classical() {
+    auto net = load_fixture_network();
+    net.output_weights.clear();
+
+    const std::string fen = "8/8/8/8/8/8/6k1/6K1 w - - 0 1";
+    sirio::Board board{fen};
+    constexpr std::int32_t classical_score = -77;
+
+    std::string diagnostic;
+    const auto routed = sirio::nnue::route_experimental_nnue2_evaluation(
+        board, sirio::nnue::ExperimentalEvalBackend::ExperimentalSirioNNUE2, classical_score, &net,
+        &diagnostic);
+    assert(routed.score == classical_score);
+    assert(!routed.used_experimental_backend);
+    assert(routed.fell_back_to_classical);
+}
+
+void test_experimental_gate_missing_network_falls_back_to_classical() {
+    const std::string fen = "8/8/8/8/8/8/6k1/6K1 w - - 0 1";
+    sirio::Board board{fen};
+    constexpr std::int32_t classical_score = 41;
+
+    std::string diagnostic;
+    const auto routed = sirio::nnue::route_experimental_nnue2_evaluation(
+        board, sirio::nnue::ExperimentalEvalBackend::ExperimentalSirioNNUE2, classical_score, nullptr,
+        &diagnostic);
+    assert(routed.score == classical_score);
+    assert(!routed.used_experimental_backend);
+    assert(routed.fell_back_to_classical);
+}
+
 }  // namespace
 
 void run_nnue_eval_probe_v2_tests() {
@@ -155,4 +219,8 @@ void run_nnue_eval_probe_v2_tests() {
     test_probe_deterministic_repeated_output();
     test_probe_rejects_unvalidated_network();
     test_normal_evaluate_unchanged_by_probe_call();
+    test_experimental_gate_default_keeps_classical_eval();
+    test_experimental_gate_uses_stm_probe_when_enabled();
+    test_experimental_gate_invalid_network_falls_back_to_classical();
+    test_experimental_gate_missing_network_falls_back_to_classical();
 }
