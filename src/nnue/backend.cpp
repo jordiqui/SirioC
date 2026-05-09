@@ -248,6 +248,90 @@ bool load_nnue2_network_file(const std::string &path, Nnue2NetworkParameters &ou
     return true;
 }
 
+bool decode_nnue2_minimal_layout(const Nnue2NetworkParameters &network,
+                                 Nnue2MinimalDecodedLayout &out_layout,
+                                 std::string &error_message) {
+    if (!network.is_initialized()) {
+        error_message = "SirioNNUE2 network is not initialized";
+        return false;
+    }
+
+    const auto &header = network.header;
+    out_layout.features_per_perspective = header.features_per_perspective;
+    out_layout.accumulator_size = header.accumulator_size;
+    out_layout.hidden1_size = header.hidden_dimensions;
+    out_layout.hidden2_size = 0;
+    out_layout.output_size = header.output_dimensions;
+
+    if (header.version != 2 || header.feature_set_id != 1) {
+        error_message = "Unsupported SirioNNUE2 metadata contract";
+        return false;
+    }
+    if (out_layout.features_per_perspective != kSirioHalfKAv1FeaturesPerPerspective ||
+        out_layout.accumulator_size != kNnue2AccumulatorSize ||
+        out_layout.hidden1_size != kNnue2AccumulatorSize || out_layout.output_size != 1) {
+        error_message = "SirioNNUE2-MinimalV1 dimensions do not match required contract";
+        return false;
+    }
+    if (network.input_weights.size() !=
+            static_cast<std::size_t>(out_layout.features_per_perspective) * out_layout.hidden1_size ||
+        network.hidden_bias.size() != out_layout.hidden1_size ||
+        network.output_weights.size() != out_layout.hidden1_size) {
+        error_message = "SirioNNUE2-MinimalV1 tensor payload size mismatch";
+        return false;
+    }
+    return true;
+}
+
+bool evaluate_loaded_nnue2_minimal_v1(const Board &board, const Nnue2NetworkParameters &network,
+                                      std::int32_t &out_score, std::string &error_message) {
+    out_score = 0;
+    Nnue2MinimalDecodedLayout layout{};
+    if (!decode_nnue2_minimal_layout(network, layout, error_message)) {
+        return false;
+    }
+
+    SparseFeatureState sparse{};
+    if (!encode_sirio_halfka_v1(board, sparse)) {
+        error_message = "Failed to encode SirioHalfKAv1 features";
+        return false;
+    }
+
+    std::vector<std::int32_t> hidden(layout.hidden1_size, 0);
+    for (std::size_t perspective = 0; perspective < kNnue2PerspectiveCount; ++perspective) {
+        const auto &perspective_state = sparse.perspectives[perspective];
+        for (std::size_t idx = 0; idx < perspective_state.count; ++idx) {
+            const auto feature = perspective_state.active[idx];
+            if (feature.index >= layout.features_per_perspective) {
+                error_message = "Feature index exceeds SirioHalfKAv1 dimensions";
+                return false;
+            }
+            const std::size_t row_offset = static_cast<std::size_t>(feature.index) * layout.hidden1_size;
+            for (std::size_t h = 0; h < layout.hidden1_size; ++h) {
+                hidden[h] += static_cast<std::int32_t>(network.input_weights[row_offset + h]) *
+                             static_cast<std::int32_t>(feature.value);
+            }
+        }
+    }
+
+    std::int64_t output_accum = network.output_bias;
+    for (std::size_t h = 0; h < layout.hidden1_size; ++h) {
+        const std::int32_t pre_relu = hidden[h] + network.hidden_bias[h];
+        const std::int32_t activated = std::max<std::int32_t>(0, pre_relu);
+        output_accum += static_cast<std::int64_t>(activated) * network.output_weights[h];
+    }
+
+    // Test-only scaling contract: exported placeholders currently use integer scales;
+    // we normalize by quant_input_scale*quant_output_scale when both are non-zero.
+    const std::int64_t denom =
+        static_cast<std::int64_t>(network.header.quant_input_scale) * network.header.quant_output_scale;
+    if (denom > 0) {
+        output_accum /= denom;
+    }
+    out_score = static_cast<std::int32_t>(output_accum);
+    return true;
+}
+
 SparseFeatureState compute_sparse_feature_state(const Board &board) {
     SparseFeatureState state{};
     for (int perspective = 0; perspective < 2; ++perspective) {

@@ -507,3 +507,74 @@ The bridge now requires all of:
 ## Known limitations
 - Production-grade quantization remains deferred; current path remains deterministic placeholder quantization/scaling.
 - This closure validates layout/export/loader contract alignment; it does not introduce runtime SirioNNUE2 evaluation routing.
+
+# P0-11 SirioNNUE2 C++ Minimal Inference / Loaded-Network Evaluation Contract
+
+This task adds a deterministic, test-only C++ inference path for loaded `SirioNNUE2-MinimalV1` binaries while keeping engine runtime routing unchanged.
+
+## Files changed
+- `include/sirio/nnue/backend.hpp`
+- `src/nnue/backend.cpp`
+- `tests/nnue_inference_v2_tests.cpp`
+- `tests/board_tests.cpp`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Decoded layout contract
+- `model_layout_name`: `SirioNNUE2-MinimalV1` (decoded contract label)
+- `model_layout_version`: `1`
+- `feature_set`: `SirioHalfKAv1`
+- `features_per_perspective`: `40960`
+- `accumulator_size`: `256`
+- `hidden1_size`: `256`
+- `hidden2_size`: `0` placeholder
+- `output_size`: `1`
+- `activation`: `relu`
+
+## Tensor/section interpretation (P0-10 order)
+1. `input_weights` (`int16`, `[features_per_perspective, hidden1_size]`)
+2. `hidden_bias` (`int16`, `[hidden1_size]`)
+3. `output_weights` (`int16`, `[hidden1_size]`)
+4. `output_bias` (`int32`, scalar)
+
+The decoder performs explicit size checks and rejects malformed tensors instead of truncating/padding.
+
+## Inference formula (test-only minimal contract)
+- Encode active sparse features via existing C++ `encode_sirio_halfka_v1(...)` for both perspectives.
+- Hidden pre-activation per neuron `h`:
+  - `pre[h] = hidden_bias[h] + sum_{active features f from both perspectives}(input_weights[f, h] * f.value)`
+- Activation:
+  - `act[h] = max(0, pre[h])` (ReLU)
+- Output accumulator:
+  - `raw = output_bias + sum_h(act[h] * output_weights[h])`
+- Returned scalar:
+  - If `quant_input_scale * quant_output_scale > 0`, return `raw / (quant_input_scale * quant_output_scale)` as integer division.
+  - Otherwise return unscaled `raw`.
+
+## Scaling / quantization status
+- Scaling is explicitly marked as **test-only inference scaling** based on current placeholder quantization fields in the exported v2 binary.
+- No production-strength quantization calibration is claimed in this step.
+
+## Tests added
+- Added `tests/nnue_inference_v2_tests.cpp` with:
+  - layout decode contract checks,
+  - deterministic repeat-eval checks,
+  - malformed section-size rejection.
+
+## FEN cases tested
+- Kings-only: `8/8/8/8/8/8/6k1/6K1 w - - 0 1`
+- Starting position: `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
+- Simple material: `4k3/8/8/8/8/8/4P3/4K3 w - - 0 1`
+
+## Continuity confirmations
+- SirioNNUE2 remains non-default.
+- Evaluation/search/UCI routing is unchanged.
+- Legacy SirioNNUE1 runtime behavior is unchanged.
+- No strength/Elo claim is made.
+
+## Known limitations
+- This is deterministic contract validation, not production NNUE2 integration.
+- Inference currently assumes fixed `SirioNNUE2-MinimalV1` dimensions and one-output topology.
+- Quantization/scaling semantics remain placeholder-level until later roadmap steps.
+
+## Next deferred step
+- Wire validated NNUE2 inference into a guarded runtime path only after finalizing quantization semantics, incremental accumulators, and explicit backend-selection policy gates.

@@ -117,6 +117,18 @@ struct Nnue2NetworkParameters {
     void clear();
 };
 
+struct Nnue2MinimalDecodedLayout {
+    std::string model_layout_name = "SirioNNUE2-MinimalV1";
+    std::uint32_t model_layout_version = 1;
+    std::string feature_set = "SirioHalfKAv1";
+    std::uint32_t features_per_perspective = 0;
+    std::uint32_t accumulator_size = 0;
+    std::uint32_t hidden1_size = 0;
+    std::uint32_t hidden2_size = 0;
+    std::uint32_t output_size = 0;
+    std::string activation = "relu";
+};
+
 enum class NetworkSelectionPolicy { Material, Depth };
 
 struct MultiNetworkConfig {
@@ -198,6 +210,13 @@ private:
 [[nodiscard]] Nnue2BinaryHeader make_default_nnue2_header();
 [[nodiscard]] bool load_nnue2_network_file(const std::string &path, Nnue2NetworkParameters &out_network,
                                            std::string &error_message);
+[[nodiscard]] bool decode_nnue2_minimal_layout(const Nnue2NetworkParameters &network,
+                                               Nnue2MinimalDecodedLayout &out_layout,
+                                               std::string &error_message);
+[[nodiscard]] bool evaluate_loaded_nnue2_minimal_v1(const Board &board,
+                                                    const Nnue2NetworkParameters &network,
+                                                    std::int32_t &out_score,
+                                                    std::string &error_message);
 [[nodiscard]] SparseFeatureState compute_sparse_feature_state(const Board &board);
 void incremental_update_sparse_state(SparseFeatureState &state, const Board &current,
                                      const Move &move, Color mover);
