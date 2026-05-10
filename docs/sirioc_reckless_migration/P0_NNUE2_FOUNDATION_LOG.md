@@ -1,3 +1,12 @@
+# P0-47 MovePicker Scoring Baseline Audit
+
+- MovePicker baseline audit added.
+- Documentation-only patch.
+- No search behaviour changed.
+- No NNUE behaviour changed.
+- SirioNNUE2 remains non-default.
+- No strength/Elo claim.
+
 
 # P0-46 Search P0 Re-Entry Baseline
 
