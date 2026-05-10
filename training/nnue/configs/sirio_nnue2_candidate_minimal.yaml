@@ -1,0 +1,14 @@
+feature_set: SirioHalfKAv1
+model_layout_name: SirioNNUE2-MinimalV1
+model_layout_version: 1
+accumulator_size: 256
+hidden1_size: 256
+hidden2_size: 0
+output_size: 1
+activation: relu
+seed: 7
+epochs: 1
+batch_size: 4
+learning_rate: 0.001
+device: cpu
+candidate_intent: test_minimal_only_no_strength_claim

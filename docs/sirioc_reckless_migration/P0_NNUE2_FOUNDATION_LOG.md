@@ -1840,3 +1840,68 @@ FENs used:
 
 ## Next deferred step
 - P0-34 should consume detector metadata in controlled internal reporting paths while still keeping runtime routing and public UCI exposure unchanged.
+
+# P0-34 SirioNNUE2 Minimal Functional Net Candidate / Reproducible Artifact Contract
+
+This step adds an additive reproducible artifact-builder contract for a minimal SirioNNUE2 candidate (dataset-v2 -> train_v2 checkpoint -> export_to_engine_v2 net -> metadata/checksums). It is artifact-only and does not activate SirioNNUE2 in normal runtime routing.
+
+## Files changed
+- `training/nnue/scripts/build_candidate_v2.py`
+- `training/nnue/configs/sirio_nnue2_candidate_minimal.yaml`
+- `tests/nnue_candidate_v2_artifact_test.py`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Helper script path
+- `training/nnue/scripts/build_candidate_v2.py`
+
+## Config path
+- `training/nnue/configs/sirio_nnue2_candidate_minimal.yaml` (additive; `training/nnue/configs/default.yaml` left unchanged)
+
+## Generated artifact names
+- `checkpoint.pt`
+- `candidate.nnue2`
+- `CANDIDATE_MANIFEST.json`
+- `MODEL_CARD.json`
+
+## Manifest/model-card fields
+- Script identity/version and generated timestamp.
+- Feature/layout contract fields (`feature_set`, `features_per_perspective`, `model_layout_name`, `model_layout_version`).
+- Model shape/activation contract.
+- Training parameters (`epochs`, `batch_size`, `learning_rate`, `seed`, `device`).
+- Dataset path and dataset `MANIFEST.json` hash when present.
+- Export mode/stats from `export_to_engine_v2`.
+- Artifact hashes for checkpoint and engine binary.
+- Explicit statements: test/minimal candidate only, no Elo/strength claim; SirioNNUE2 remains non-default.
+
+## Checksum policy
+- SHA-256 is recorded for `checkpoint.pt`, `candidate.nnue2`, and dataset `MANIFEST.json` when available.
+
+## CPU / no-GPU policy
+- Helper defaults to `--device cpu` and supports `auto` only as optional override.
+- No GPU is required by the candidate contract.
+
+## Deterministic limitations
+- For fixed dataset ordering and seed, checkpoint and exported candidate hashes are stable in this environment.
+- `generated_at_utc` is intentionally non-deterministic metadata.
+
+## Tests added
+- `tests/nnue_candidate_v2_artifact_test.py`
+  - Creates deterministic tiny dataset-v2 fixture in a temp dir.
+  - Runs candidate builder on CPU with tiny parameters.
+  - Asserts presence of checkpoint/net/manifest/model-card artifacts.
+  - Verifies required metadata fields and hash correctness.
+  - Verifies runtime acceptance path using existing NNUE runtime smoke contract binary.
+  - Verifies hash stability across two fixed-seed runs.
+
+## Continuity confirmations
+- SirioNNUE2 remains non-default.
+- Normal evaluate/search/UCI behavior remains unchanged.
+- No integration with self-play/teacher engines/OpenBench/fastchess/cutechess/ORDO added.
+- No strength claim is made.
+
+## Known limitations
+- This is still a minimal functional candidate artifact flow, not production search integration.
+- Format detection assertion is covered through existing runtime smoke acceptance path in this test workflow.
+
+## Next deferred step
+- Promote from candidate artifact reproducibility toward controlled runtime gating/instrumentation (still non-default) with additional compatibility and safety tests.
