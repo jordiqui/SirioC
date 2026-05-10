@@ -2073,3 +2073,9 @@ it for the primary NNUE development flow.
 - No Stockfish `.nnue` compatibility claim is introduced.
 - No Elo/strength claim is made.
 
+
+## P0-40 SirioNNUE2 Legacy Runtime Alias Audit / No-Behaviour-Change Contract
+
+- Added `docs/sirioc_reckless_migration/P0_RUNTIME_NNUE_ALIAS_AUDIT.md` with a precise audit of runtime-visible NNUE option names, aliases, default filenames, and reporting surfaces.
+- Confirmed this step is documentation-only and does not change UCI options/defaults, loader semantics, search routing, or evaluation behaviour.
+- Reaffirmed that SirioC does not claim Stockfish `.nnue` compatibility and that SirioNNUE2 remains non-default.
