@@ -2079,3 +2079,34 @@ it for the primary NNUE development flow.
 - Added `docs/sirioc_reckless_migration/P0_RUNTIME_NNUE_ALIAS_AUDIT.md` with a precise audit of runtime-visible NNUE option names, aliases, default filenames, and reporting surfaces.
 - Confirmed this step is documentation-only and does not change UCI options/defaults, loader semantics, search routing, or evaluation behaviour.
 - Reaffirmed that SirioC does not claim Stockfish `.nnue` compatibility and that SirioNNUE2 remains non-default.
+
+# P0-41 SirioNNUE2 Runtime Alias Reporting Clarification / No-Default-Change Contract
+
+This task adds reporting-only NNUE clarification strings. It does not change loaders, runtime defaults, UCI option names, or search/evaluation routing.
+
+## Files changed
+- `src/nnue/api.cpp`
+- `tests/nnue_api_build_info_v2_tests.cpp`
+- `docs/sirioc_reckless_migration/P0_RUNTIME_NNUE_ALIAS_AUDIT.md`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Reporting strings/fields added
+- `stockfish_nnue_compatibility=not_claimed`
+- `sirio_nnue1_nnue_names=legacy_sirio_format`
+- `sirio_nnue2_runtime_status=non_default`
+
+These are emitted through existing `NetworkInfo::format_report` surfaces only.
+
+## Confirmations
+- No UCI option name/default changed (`UseNNUE`, `EvalFile`, `EvalFileSmall`, `NNUEFile` unchanged).
+- No loader/runtime behaviour changed.
+- SirioNNUE2 remains non-default.
+- No Stockfish `.nnue` compatibility is claimed.
+- No strength/Elo claim is made.
+
+## Known limitations
+- Clarification is metadata/reporting-only; it does not enforce migration policy.
+- Legacy `.nnue` naming surfaces remain runtime-visible by design in this stage.
+
+## Next deferred step
+- Consider a later approved stage to add canonical/legacy labeling in user-facing UCI docs and eventual alias deprecation planning, without changing runtime behaviour until explicitly authorized.

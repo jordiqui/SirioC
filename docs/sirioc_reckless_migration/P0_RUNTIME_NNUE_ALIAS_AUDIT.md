@@ -128,3 +128,10 @@ This deliverable is a runtime-surface **audit/documentation task only** for NNUE
 
 ## 8) Strength/Elo claim statement
 This patch is audit/documentation only and makes **no Elo or strength claim**.
+
+## P0-41 follow-up note
+- Reporting clarification has been added on existing NNUE `format_report` surfaces:
+  - `stockfish_nnue_compatibility=not_claimed`
+  - `sirio_nnue1_nnue_names=legacy_sirio_format`
+  - `sirio_nnue2_runtime_status=non_default`
+- This is reporting-only; no UCI option/default, loader semantic, or runtime activation/default change was made.

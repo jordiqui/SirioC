@@ -29,6 +29,9 @@ void test_nnue2_build_info_format_report_contract() {
     assert(meta.has_value());
     assert(meta->dims.find("SirioNNUE2-MinimalV1") != std::string::npos);
     assert(meta->format_report.find("support_present=true") != std::string::npos);
+    assert(meta->format_report.find("stockfish_nnue_compatibility=not_claimed") != std::string::npos);
+    assert(meta->format_report.find("sirio_nnue1_nnue_names=legacy_sirio_format") != std::string::npos);
+    assert(meta->format_report.find("sirio_nnue2_runtime_status=non_default") != std::string::npos);
     assert(meta->format_report.find("model_layout_name=SirioNNUE2-MinimalV1") != std::string::npos);
     assert(meta->format_report.find("model_layout_version=1") != std::string::npos);
     assert(meta->format_report.find("feature_set=SirioHalfKAv1") != std::string::npos);
