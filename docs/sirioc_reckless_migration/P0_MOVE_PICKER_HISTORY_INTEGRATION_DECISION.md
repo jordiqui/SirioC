@@ -155,3 +155,29 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
   - bounded bonus/clamp preservation,
   - deterministic repeated update behaviour.
 - Future integration of real search update calls remains explicitly deferred.
+
+## 10) P0-60 search update shadow harness (no runtime integration)
+- Added test-only capture/noisy shadow search-update event harness:
+  - `CaptureNoisyHistoryUpdateEvent`
+  - `make_capture_noisy_history_update_event_for_tests(...)`
+  - `apply_capture_noisy_history_update_event_for_tests(...)`
+- Event fields are explicit and deterministic:
+  - update target (`None` / `Capture` / `Noisy`),
+  - optional capture key,
+  - optional noisy key,
+  - depth,
+  - success/failure sign,
+  - optional reason/status string.
+- Harness application contract:
+  - event helper resolves updates via `make_capture_noisy_history_update(...)`,
+  - update effects are applied only through `apply_capture_noisy_history_update_for_tests(...)`,
+  - no live search-node dependency,
+  - no global mutable-state dependency.
+- Added shadow-harness tests for:
+  - capture success/failure update direction,
+  - noisy promotion success updates,
+  - quiet/non-target and invalid-event no-op behavior,
+  - deterministic repeated sequence behavior,
+  - reset/clear removing event-applied updates,
+  - no runtime negamax/qsearch wiring.
+- Explicitly deferred: any real negamax/qsearch integration of capture/noisy updates.

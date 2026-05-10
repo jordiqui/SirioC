@@ -703,6 +703,90 @@ void test_capture_noisy_update_policy_invalid_key_clamp_and_determinism() {
     assert(history.capture_history().score(capture, sirio::Color::White) == sirio::search_params::history_max);
 }
 
+
+void test_capture_noisy_shadow_event_capture_success_failure_and_reset() {
+    sirio::SearchHistory history;
+    sirio::Board board{"8/8/8/3p4/4P3/8/8/8 w - - 0 1"};
+    const sirio::Move capture = sirio::move_from_uci(board, "e4d5");
+    const auto capture_key = sirio::make_capture_history_key_for_tests(board, capture);
+    assert(capture_key.has_value());
+
+    const auto success_event = sirio::make_capture_noisy_history_update_event_for_tests(
+        sirio::CaptureNoisyHistoryUpdateTarget::Capture, capture_key, std::nullopt, 3, true,
+        "simulated beta cutoff capture");
+    sirio::apply_capture_noisy_history_update_event_for_tests(history, success_event);
+    const int after_success = history.capture_history().score(capture, sirio::Color::White);
+    assert(after_success > 0);
+
+    const auto failure_event = sirio::make_capture_noisy_history_update_event_for_tests(
+        sirio::CaptureNoisyHistoryUpdateTarget::Capture, capture_key, std::nullopt, 3, false,
+        "simulated fail-low capture");
+    sirio::apply_capture_noisy_history_update_event_for_tests(history, failure_event);
+    assert(history.capture_history().score(capture, sirio::Color::White) < after_success);
+
+    history.clear();
+    assert(history.capture_history().score(capture, sirio::Color::White) == 0);
+}
+
+void test_capture_noisy_shadow_event_noisy_success_quiet_and_invalid_reject() {
+    sirio::SearchHistory history;
+    sirio::Board noisy_board{"4k3/6P1/8/8/8/8/8/4K3 w - - 0 1"};
+    sirio::Board quiet_board;
+    const sirio::Move noisy = sirio::move_from_uci(noisy_board, "g7g8q");
+    const sirio::Move quiet = sirio::move_from_uci(quiet_board, "e2e4");
+
+    const auto noisy_key = sirio::make_noisy_history_key_for_tests(noisy_board, noisy);
+    const auto noisy_event = sirio::make_capture_noisy_history_update_event_for_tests(
+        sirio::CaptureNoisyHistoryUpdateTarget::Noisy, std::nullopt, noisy_key, 2, true,
+        "simulated promotion success");
+    sirio::apply_capture_noisy_history_update_event_for_tests(history, noisy_event);
+    assert(history.noisy_history().score(noisy, sirio::Color::White) > 0);
+
+    const auto quiet_noisy_key = sirio::make_noisy_history_key_for_tests(quiet_board, quiet);
+    const auto quiet_event = sirio::make_capture_noisy_history_update_event_for_tests(
+        sirio::CaptureNoisyHistoryUpdateTarget::Noisy, std::nullopt, quiet_noisy_key, 2, true,
+        "quiet should be ignored");
+    sirio::apply_capture_noisy_history_update_event_for_tests(history, quiet_event);
+    assert(quiet_noisy_key == std::nullopt);
+
+    const sirio::CaptureHistoryKey invalid_capture{sirio::Color::White, sirio::PieceType::Pawn, sirio::PieceType::Pawn, 99};
+    const auto invalid_event = sirio::make_capture_noisy_history_update_event_for_tests(
+        sirio::CaptureNoisyHistoryUpdateTarget::Capture, invalid_capture, std::nullopt, 3, true,
+        "invalid square");
+    const int before_invalid = history.noisy_history().score(noisy, sirio::Color::White);
+    sirio::apply_capture_noisy_history_update_event_for_tests(history, invalid_event);
+    assert(history.noisy_history().score(noisy, sirio::Color::White) == before_invalid);
+}
+
+void test_capture_noisy_shadow_event_sequence_deterministic_and_no_search_invocation() {
+    sirio::SearchHistory first;
+    sirio::SearchHistory second;
+    sirio::Board board{"8/8/8/3p4/4P3/8/8/8 w - - 0 1"};
+    const std::string before = board.to_fen();
+    const sirio::Move capture = sirio::move_from_uci(board, "e4d5");
+    const auto capture_key = sirio::make_capture_history_key_for_tests(board, capture);
+
+    std::array<sirio::CaptureNoisyHistoryUpdateEvent, 3> events{
+        sirio::make_capture_noisy_history_update_event_for_tests(
+            sirio::CaptureNoisyHistoryUpdateTarget::Capture, capture_key, std::nullopt, 4, true,
+            "seq-1"),
+        sirio::make_capture_noisy_history_update_event_for_tests(
+            sirio::CaptureNoisyHistoryUpdateTarget::Capture, capture_key, std::nullopt, 4, false,
+            "seq-2"),
+        sirio::make_capture_noisy_history_update_event_for_tests(
+            sirio::CaptureNoisyHistoryUpdateTarget::Capture, capture_key, std::nullopt, 4, true,
+            "seq-3")};
+
+    for (const auto &event : events) {
+        sirio::apply_capture_noisy_history_update_event_for_tests(first, event);
+        sirio::apply_capture_noisy_history_update_event_for_tests(second, event);
+    }
+
+    assert(first.capture_history().score(capture, sirio::Color::White) ==
+           second.capture_history().score(capture, sirio::Color::White));
+    assert(board.to_fen() == before);
+}
+
 void run_history_tests() {
     test_initial_state_neutral_and_empty_killers();
     test_is_quiet_move_predicate();
@@ -740,4 +824,7 @@ void run_history_tests() {
     test_capture_noisy_update_policy_capture_success_and_failure();
     test_capture_noisy_update_policy_noisy_success_and_quiet_rejection();
     test_capture_noisy_update_policy_invalid_key_clamp_and_determinism();
+    test_capture_noisy_shadow_event_capture_success_failure_and_reset();
+    test_capture_noisy_shadow_event_noisy_success_quiet_and_invalid_reject();
+    test_capture_noisy_shadow_event_sequence_deterministic_and_no_search_invocation();
 }
