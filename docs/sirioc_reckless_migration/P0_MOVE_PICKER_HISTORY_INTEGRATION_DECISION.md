@@ -201,3 +201,9 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - No LMR/pruning/selectivity policy changes were made.
 - No TT probe/store policy changes were made.
 - No MovePicker scoring changes were made in this step (P0-58 scoring remains as-is).
+
+## 13) P0-63 observability checkpoint
+- P0-62 runtime capture/noisy update point is now deterministic and test-observable through history-level counters and a constrained test helper.
+- Coverage explicitly validates that only main-negamax tactical beta-cutoff is allowed to apply this runtime update contract.
+- No new MovePicker behaviour was added.
+- No new search behaviour was added beyond observability of the existing P0-62 single update point.
