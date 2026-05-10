@@ -31,6 +31,11 @@ struct ContinuationHistoryKey {
     int current_to_square = 0;
 };
 
+struct CorrectionHistoryKey {
+    Color mover_color = Color::White;
+    std::size_t bucket = 0;
+};
+
 class SearchHistory {
 public:
     class CaptureHistory {
@@ -118,6 +123,7 @@ private:
 [[nodiscard]] std::optional<ContinuationHistoryKey> make_continuation_history_key(
     const Board &previous_board, const std::optional<Move> &previous_move, const Board &current_board,
     const Move &current_move);
+[[nodiscard]] std::optional<CorrectionHistoryKey> make_correction_history_key(Color mover_color, std::size_t bucket);
 
 [[nodiscard]] inline std::optional<CaptureHistoryKey> make_capture_history_key_for_tests(const Board &board,
                                                                                           const Move &move) {
@@ -133,6 +139,11 @@ private:
     const Board &previous_board, const std::optional<Move> &previous_move, const Board &current_board,
     const Move &current_move) {
     return make_continuation_history_key(previous_board, previous_move, current_board, current_move);
+}
+
+[[nodiscard]] inline std::optional<CorrectionHistoryKey> make_correction_history_key_for_tests(
+    Color mover_color, std::size_t bucket) {
+    return make_correction_history_key(mover_color, bucket);
 }
 
 }  // namespace sirio

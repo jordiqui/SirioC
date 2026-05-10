@@ -2273,3 +2273,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No search behaviour changed.
 - No NNUE behaviour changed.
 - No strength/Elo claim.
+
+# P0-55 Correction History Key Extraction Contract
+
+- Added deterministic correction-history key extraction contract helpers.
+- No search behaviour changed.
+- No evaluation behaviour changed.
+- No NNUE behaviour changed.
+- No strength/Elo claim.

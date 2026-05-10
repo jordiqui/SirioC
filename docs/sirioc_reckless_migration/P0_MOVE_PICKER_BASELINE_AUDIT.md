@@ -404,3 +404,35 @@ Coverage confirms:
 ## Limitations / deferred
 - No MovePicker/search integration in P0-54.
 - No continuation-history update policy changes.
+
+# P0-55 — Correction History Key Extraction Contract
+
+## Scope
+- Added deterministic correction-history key extraction helpers only.
+- No MovePicker/search/evaluation integration in this patch.
+
+## Added helper names
+- `CorrectionHistoryKey`
+- `make_correction_history_key(...)`
+- `make_correction_history_key_for_tests(...)`
+
+## Key fields
+- `mover_color`
+- `bucket`
+
+## Bucket normalization contract
+- Helper normalizes bucket using existing correction table modulo scheme: `bucket % 1024`.
+- Alias contract: `bucket` and `bucket + 1024` map to the same normalized key bucket.
+- Distinct non-alias buckets remain distinct after normalization.
+
+## Tests added
+- Valid key extraction for white and black mover color.
+- Bucket normalization and modulo alias behavior.
+- Invalid color/context explicit failure (`std::nullopt`).
+- Deterministic repeated key extraction.
+- Key-targeted correction history update/read reaches expected normalized bucket.
+- `SearchHistory::clear()` correction-history reset contract remains covered.
+
+## Deferred/limitations
+- No pawn-hash/material-hash-derived correction keying yet.
+- No search/evaluation/MovePicker correction-history reads or writes yet.
