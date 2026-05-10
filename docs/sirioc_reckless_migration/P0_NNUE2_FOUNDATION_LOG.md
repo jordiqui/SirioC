@@ -2281,3 +2281,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No evaluation behaviour changed.
 - No NNUE behaviour changed.
 - No strength/Elo claim.
+
+# P0-56 SearchHistory Key Contract Aggregate Audit
+
+- Added aggregate SearchHistory key-contract audit coverage across capture/noisy, continuation, and correction key families.
+- No search behaviour changed.
+- No NNUE behaviour changed.
+- No strength/Elo claim.

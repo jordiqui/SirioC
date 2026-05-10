@@ -540,6 +540,96 @@ void test_search_history_aggregate_key_isolation_and_deterministic_cycles() {
         assert(history.correction_history().score(sirio::Color::White, bucket_a) == 4);
     }
 }
+
+void test_search_history_aggregate_key_contract_audit_no_search_use() {
+    sirio::SearchHistory history;
+
+    sirio::Board capture_board{"8/8/8/3p4/4P3/8/8/8 w - - 0 1"};
+    const std::string capture_before = capture_board.to_fen();
+    const sirio::Move capture_move = sirio::move_from_uci(capture_board, "e4d5");
+    const auto capture_key_a = sirio::make_capture_history_key_for_tests(capture_board, capture_move);
+    const auto capture_key_b = sirio::make_capture_history_key_for_tests(capture_board, capture_move);
+    assert(capture_key_a.has_value() && capture_key_b.has_value());
+    assert(capture_key_a->mover == capture_key_b->mover);
+    assert(capture_key_a->attacker == capture_key_b->attacker);
+    assert(capture_key_a->captured == capture_key_b->captured);
+    assert(capture_key_a->to == capture_key_b->to);
+    assert(capture_board.to_fen() == capture_before);
+
+    sirio::Board promo_board{"4k3/6P1/8/8/8/8/8/4K3 w - - 0 1"};
+    const std::string noisy_before = promo_board.to_fen();
+    const sirio::Move noisy_move = sirio::move_from_uci(promo_board, "g7g8q");
+    const auto noisy_key_a = sirio::make_noisy_history_key_for_tests(promo_board, noisy_move);
+    const auto noisy_key_b = sirio::make_noisy_history_key_for_tests(promo_board, noisy_move);
+    assert(noisy_key_a.has_value() && noisy_key_b.has_value());
+    assert(noisy_key_a->mover == noisy_key_b->mover);
+    assert(noisy_key_a->mover_piece == noisy_key_b->mover_piece);
+    assert(noisy_key_a->to == noisy_key_b->to);
+    assert(promo_board.to_fen() == noisy_before);
+
+    const sirio::Board previous_board;
+    const auto previous_move = sirio::move_from_uci(previous_board, "e2e4");
+    const sirio::Board current_board = previous_board.apply_move(previous_move);
+    const auto current_move = sirio::move_from_uci(current_board, "e7e5");
+    const std::string previous_before = previous_board.to_fen();
+    const std::string current_before = current_board.to_fen();
+    const auto continuation_key_a = sirio::make_continuation_history_key_for_tests(
+        previous_board, previous_move, current_board, current_move);
+    const auto continuation_key_b = sirio::make_continuation_history_key_for_tests(
+        previous_board, previous_move, current_board, current_move);
+    assert(continuation_key_a.has_value() && continuation_key_b.has_value());
+    assert(continuation_key_a->previous_mover_color == continuation_key_b->previous_mover_color);
+    assert(continuation_key_a->current_mover_color == continuation_key_b->current_mover_color);
+    assert(continuation_key_a->previous_moving_piece == continuation_key_b->previous_moving_piece);
+    assert(continuation_key_a->previous_to_square == continuation_key_b->previous_to_square);
+    assert(continuation_key_a->current_moving_piece == continuation_key_b->current_moving_piece);
+    assert(continuation_key_a->current_to_square == continuation_key_b->current_to_square);
+    assert(previous_board.to_fen() == previous_before);
+    assert(current_board.to_fen() == current_before);
+
+    const auto correction_key_a = sirio::make_correction_history_key_for_tests(sirio::Color::White, 2049);
+    const auto correction_key_b = sirio::make_correction_history_key_for_tests(sirio::Color::White, 2049);
+    assert(correction_key_a.has_value() && correction_key_b.has_value());
+    assert(correction_key_a->mover_color == correction_key_b->mover_color);
+    assert(correction_key_a->bucket == correction_key_b->bucket);
+
+    sirio::Board quiet_board;
+    const sirio::Move quiet_move = sirio::move_from_uci(quiet_board, "g1f3");
+    assert(!sirio::make_capture_history_key_for_tests(quiet_board, quiet_move).has_value());
+    assert(!sirio::make_noisy_history_key_for_tests(quiet_board, quiet_move).has_value());
+    assert(!sirio::make_continuation_history_key_for_tests(previous_board, std::nullopt, current_board, current_move).has_value());
+    const auto invalid_color = static_cast<sirio::Color>(99);
+    assert(!sirio::make_correction_history_key_for_tests(invalid_color, 12).has_value());
+
+    history.capture_history().update(capture_key_a->mover, capture_move, 2, true);
+    history.noisy_history().update(noisy_key_a->mover, noisy_move, 2, true);
+    history.continuation_history().update(continuation_key_a->previous_mover_color,
+                                          previous_move,
+                                          continuation_key_a->current_mover_color,
+                                          current_move,
+                                          2,
+                                          true);
+    history.correction_history().update(correction_key_a->mover_color, correction_key_a->bucket, 2, true);
+
+    assert(history.capture_history().score(capture_move, capture_key_a->mover) == 4);
+    assert(history.noisy_history().score(noisy_move, noisy_key_a->mover) == 4);
+    assert(history.continuation_history().score(continuation_key_a->previous_mover_color,
+                                                previous_move,
+                                                continuation_key_a->current_mover_color,
+                                                current_move) == 4);
+    assert(history.correction_history().score(correction_key_a->mover_color, correction_key_a->bucket) == 4);
+
+    history.clear();
+
+    assert(history.capture_history().score(capture_move, capture_key_a->mover) == 0);
+    assert(history.noisy_history().score(noisy_move, noisy_key_a->mover) == 0);
+    assert(history.continuation_history().score(continuation_key_a->previous_mover_color,
+                                                previous_move,
+                                                continuation_key_a->current_mover_color,
+                                                current_move) == 0);
+    assert(history.correction_history().score(correction_key_a->mover_color, correction_key_a->bucket) == 0);
+}
+
 void test_search_history_clear_resets_continuation_history() {
     sirio::SearchHistory history;
     sirio::Board start;
@@ -568,6 +658,7 @@ void run_history_tests() {
     test_continuation_history_clamp_indexing_and_determinism();
     test_search_history_aggregate_lifecycle_contract();
     test_search_history_aggregate_key_isolation_and_deterministic_cycles();
+    test_search_history_aggregate_key_contract_audit_no_search_use();
     test_search_history_clear_resets_continuation_history();
     test_correction_history_default_update_clamp_and_clear();
     test_correction_history_bucket_indexing_and_determinism();

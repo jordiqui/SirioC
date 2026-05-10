@@ -436,3 +436,29 @@ Coverage confirms:
 ## Deferred/limitations
 - No pawn-hash/material-hash-derived correction keying yet.
 - No search/evaluation/MovePicker correction-history reads or writes yet.
+
+# P0-56 — SearchHistory Key Contract Aggregate Audit
+
+## Scope
+- Added aggregate key-contract readiness tests in `tests/history_tests.cpp`.
+- Coverage is test/docs only; no MovePicker/search integration.
+
+## Key families covered together
+- CaptureHistoryKey -> CaptureHistory
+- NoisyHistoryKey -> NoisyHistory
+- ContinuationHistoryKey -> ContinuationHistory
+- CorrectionHistoryKey -> CorrectionHistory
+
+## Aggregate guarantees asserted
+- Deterministic repeated key extraction for all key families.
+- Board FEN immutability before/after key helper invocation.
+- Invalid-input failure paths for each key family.
+- Key-driven table updates target expected family table entries.
+- `SearchHistory::clear()` resets all key-driven history updates.
+
+## Integration status
+- No MovePicker scoring change.
+- No search-side history read/write integration added for new key families.
+
+## Next step
+- First controlled MovePicker integration decision (single signal at a time under deterministic ordering coverage).
