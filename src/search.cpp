@@ -898,7 +898,14 @@ public:
             if (move.captured.has_value() || move.is_en_passant) {
                 int see_score = static_exchange_score(board_, move);
                 int mvv_score = mvv_lva_score(move);
-                int priority = (see_score << 10) + mvv_score;
+                int history_score = 0;
+                if (auto capture_key = make_capture_history_key(board_, move); capture_key.has_value()) {
+                    history_score += context_.history.capture_history().score(move, mover_);
+                }
+                if (auto noisy_key = make_noisy_history_key(board_, move); noisy_key.has_value()) {
+                    history_score += context_.history.noisy_history().score(move, mover_);
+                }
+                int priority = (see_score << 10) + mvv_score + history_score;
                 if (see_score >= 0) {
                     good_captures_.emplace_back(priority, move);
                 } else {
@@ -909,7 +916,11 @@ public:
 
             if (move.promotion.has_value()) {
                 int promo_score = search_params::mvv_values[static_cast<std::size_t>(*move.promotion)] * 100;
-                promotions_.emplace_back(promo_score, move);
+                int noisy_score = 0;
+                if (auto noisy_key = make_noisy_history_key(board_, move); noisy_key.has_value()) {
+                    noisy_score = context_.history.noisy_history().score(move, mover_);
+                }
+                promotions_.emplace_back(promo_score + noisy_score, move);
                 continue;
             }
 
@@ -2328,7 +2339,8 @@ std::vector<Move> move_picker_order_snapshot_for_tests(const Board &board, int p
                                                        const std::optional<Move> &tt_move,
                                                        bool tactical_only,
                                                        const std::optional<Move> &killer0,
-                                                       const std::optional<Move> &killer1) {
+                                                       const std::optional<Move> &killer1,
+                                                       const SearchHistory *history_override) {
     Board board_copy = board;
     SearchSharedState shared_state{};
     SearchContext context{};
@@ -2338,6 +2350,9 @@ std::vector<Move> move_picker_order_snapshot_for_tests(const Board &board, int p
     }
     if (killer1.has_value()) {
         context.history.store_killer(*killer1, ply);
+    }
+    if (history_override != nullptr) {
+        context.history = *history_override;
     }
     auto moves = generate_legal_moves(board_copy);
     MovePicker picker(board_copy, std::move(moves), context, ply, tt_move, board_copy.side_to_move(),

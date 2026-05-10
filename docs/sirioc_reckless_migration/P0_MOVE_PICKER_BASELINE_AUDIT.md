@@ -471,3 +471,9 @@ Coverage confirms:
 - No search behaviour changed in this P0-57 patch.
 - No NNUE behaviour changed.
 - No strength/Elo claim.
+
+# P0-58 — Capture/NoisyHistory Read-Only MovePicker Scoring
+
+- First behavioural MovePicker change added: read-only CaptureHistory/NoisyHistory tactical scoring inside `MovePicker`.
+- Zero-history equivalence preserved: existing P0-48 snapshot expectations remain unchanged when history tables are default/zero.
+- TT priority preserved: TT move remains first when provided and legal, including under non-zero tactical history conditions.

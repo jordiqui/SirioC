@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "sirio/board.hpp"
+#include "sirio/history.hpp"
 #include "sirio/move.hpp"
 #include "sirio/movegen.hpp"
 
@@ -14,7 +15,8 @@ std::vector<Move> move_picker_order_snapshot_for_tests(const Board &board, int p
                                                        const std::optional<Move> &tt_move,
                                                        bool tactical_only,
                                                        const std::optional<Move> &killer0,
-                                                       const std::optional<Move> &killer1);
+                                                       const std::optional<Move> &killer1,
+                                                       const SearchHistory *history_override = nullptr);
 }
 
 namespace {
@@ -48,6 +50,17 @@ void assert_all_legal(const sirio::Board &board, const std::vector<std::string> 
     }
 }
 
+sirio::Move legal_move_by_uci(const sirio::Board &board, const std::string &uci) {
+    auto legal = sirio::generate_legal_moves(board);
+    for (const auto &move : legal) {
+        if (sirio::move_to_uci(move) == uci) {
+            return move;
+        }
+    }
+    assert(false && "expected legal UCI move not found");
+    return legal.front();
+}
+
 void run_snapshot_case(const std::string &fen, const std::vector<std::string> &expected, int ply = 0,
                        const std::optional<std::string> &tt_move_uci = std::nullopt,
                        bool tactical_only = false) {
@@ -59,9 +72,9 @@ void run_snapshot_case(const std::string &fen, const std::vector<std::string> &e
     }
 
     auto ordered1 = sirio::move_picker_order_snapshot_for_tests(board, ply, tt_move, tactical_only,
-                                                                std::nullopt, std::nullopt);
+                                                                std::nullopt, std::nullopt, nullptr);
     auto ordered2 = sirio::move_picker_order_snapshot_for_tests(board, ply, tt_move, tactical_only,
-                                                                std::nullopt, std::nullopt);
+                                                                std::nullopt, std::nullopt, nullptr);
     auto uci1 = moves_to_uci(ordered1);
     auto uci2 = moves_to_uci(ordered2);
 
@@ -91,9 +104,9 @@ void test_quiet_middlegame_snapshot() {
     const std::string fen = "r2q1rk1/pp2bppp/2n1pn2/2bp4/2P5/2NP1NP1/PP2PPBP/R1BQ1RK1 w - - 0 1";
     sirio::Board board{fen};
     auto ordered1 = sirio::move_picker_order_snapshot_for_tests(board, 0, std::nullopt, false,
-                                                                std::nullopt, std::nullopt);
+                                                                std::nullopt, std::nullopt, nullptr);
     auto ordered2 = sirio::move_picker_order_snapshot_for_tests(board, 0, std::nullopt, false,
-                                                                std::nullopt, std::nullopt);
+                                                                std::nullopt, std::nullopt, nullptr);
     auto uci1 = moves_to_uci(ordered1);
     auto uci2 = moves_to_uci(ordered2);
     assert(uci1 == uci2);
@@ -113,6 +126,58 @@ void test_tt_move_priority_snapshot() {
                       std::optional<std::string>{"d2e3"});
 }
 
+void test_capture_history_signal_reorders_capture_candidates_only() {
+    const std::string fen = "4k3/8/8/2p5/3P4/8/8/4K3 w - - 0 1";
+    sirio::Board board{fen};
+    auto baseline = moves_to_uci(sirio::move_picker_order_snapshot_for_tests(
+        board, 0, std::nullopt, false, std::nullopt, std::nullopt, nullptr));
+
+    sirio::SearchHistory history;
+    const sirio::Move d4c5 = legal_move_by_uci(board, "d4c5");
+    history.capture_history().update(sirio::Color::White, d4c5, 4, true);
+
+    auto boosted = moves_to_uci(sirio::move_picker_order_snapshot_for_tests(
+        board, 0, std::nullopt, false, std::nullopt, std::nullopt, &history));
+
+    assert(boosted.size() == baseline.size());
+    assert_no_duplicates(boosted);
+    assert_all_legal(board, boosted);
+    assert(boosted[0] == "d4c5");
+    assert(boosted != baseline);
+}
+
+void test_noisy_history_signal_reorders_promotions() {
+    const std::string fen = "4k3/6P1/8/8/8/8/8/4K3 w - - 0 1";
+    sirio::Board board{fen};
+    auto baseline = moves_to_uci(sirio::move_picker_order_snapshot_for_tests(
+        board, 0, std::nullopt, false, std::nullopt, std::nullopt, nullptr));
+
+    sirio::SearchHistory history;
+    const sirio::Move g7g8n = legal_move_by_uci(board, "g7g8n");
+    history.noisy_history().update(sirio::Color::White, g7g8n, 4, true);
+
+    auto boosted = moves_to_uci(sirio::move_picker_order_snapshot_for_tests(
+        board, 0, std::nullopt, false, std::nullopt, std::nullopt, &history));
+
+    assert(boosted.size() == baseline.size());
+    assert_no_duplicates(boosted);
+    assert_all_legal(board, boosted);
+    assert(boosted[0] == "g7g8n");
+    assert(boosted != baseline);
+}
+
+void test_tt_move_priority_preserved_with_nonzero_history() {
+    const std::string fen = "8/8/3k4/3p4/3P4/8/3K4/8 w - - 0 1";
+    sirio::Board board{fen};
+    sirio::SearchHistory history;
+    const sirio::Move d4d5 = legal_move_by_uci(board, "d4d5");
+    history.capture_history().update(sirio::Color::White, d4d5, 8, true);
+    auto ordered = moves_to_uci(sirio::move_picker_order_snapshot_for_tests(
+        board, 0, legal_move_by_uci(board, "d2e3"), false, std::nullopt, std::nullopt, &history));
+    assert(!ordered.empty());
+    assert(ordered.front() == "d2e3");
+}
+
 }  // namespace
 
 void run_move_picker_snapshot_tests() {
@@ -121,4 +186,7 @@ void run_move_picker_snapshot_tests() {
     test_quiet_middlegame_snapshot();
     test_promotion_snapshot();
     test_tt_move_priority_snapshot();
+    test_capture_history_signal_reorders_capture_candidates_only();
+    test_noisy_history_signal_reorders_promotions();
+    test_tt_move_priority_preserved_with_nonzero_history();
 }
