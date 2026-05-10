@@ -2339,3 +2339,13 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No continuation-history or correction-history runtime integration was added.
 - No NNUE runtime behaviour was changed.
 - No strength/Elo claim is made.
+
+# P0-63 Capture/Noisy runtime update observability (no NNUE/search behavioural expansion)
+
+- Added deterministic observability for the existing P0-62 capture/noisy runtime update contract.
+- Scope is test/inspection only: counters + constrained helper validation for allowed/excluded update sites.
+- No new search update points were introduced beyond P0-62.
+- No qsearch or failed tactical capture/noisy updates were introduced.
+- No continuation/correction integration was introduced.
+- No NNUE behaviour changed.
+- No strength/Elo claim.

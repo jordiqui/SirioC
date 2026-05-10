@@ -176,3 +176,23 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
   - no extra root-only update path.
 - **Tests added/extended:** history tests include runtime apply no-op validation for invalid/none target updates; existing capture/noisy policy + shadow-event tests remain active.
 - **Limitations:** current coverage is unit-level and deterministic; qsearch exclusion is enforced by search-code inspection and unchanged qsearch implementation (no tactical history write path added there).
+
+## 10) P0-63 observability/test contract for P0-62 runtime update
+- Added deterministic, test-only observability for capture/noisy runtime updates through `SearchHistory` counters and a constrained helper API:
+  - `CaptureNoisyRuntimeUpdateCounters` (non-production, inspection-only state),
+  - `apply_capture_noisy_runtime_update_for_tests(...)` gate helper.
+- Observability mechanism confirms the P0-62 trigger contract in one place:
+  - applies only when site is `MainNegamaxTacticalBetaCutoff` and update policy resolves a valid capture/noisy target.
+- Added deterministic unit coverage for:
+  - main tactical beta cutoff applies exactly one capture/noisy runtime update,
+  - quiet beta cutoff excluded,
+  - qsearch tactical cutoff excluded,
+  - failed tactical move excluded,
+  - repeated application is deterministic.
+- Confirmed excluded paths remain excluded:
+  - no qsearch runtime update wiring introduced,
+  - no failed tactical runtime update wiring introduced,
+  - no additional runtime update point introduced.
+- Limitations:
+  - this patch provides deterministic contract-level observability via helper+counter tests;
+  - full end-to-end node-path orchestration in live negamax/qsearch is still intentionally constrained to avoid brittle position-dependent tests.

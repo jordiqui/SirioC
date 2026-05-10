@@ -204,10 +204,35 @@ void apply_capture_noisy_history_update(SearchHistory &history, const CaptureNoi
         case CaptureNoisyHistoryUpdateTarget::None:
             break;
     }
+    if (update.target != CaptureNoisyHistoryUpdateTarget::None) {
+        history.record_capture_noisy_runtime_update_applied();
+    }
 }
 
 void apply_capture_noisy_history_update_for_tests(SearchHistory &history, const CaptureNoisyHistoryUpdate &update) {
     apply_capture_noisy_history_update(history, update);
+}
+
+bool apply_capture_noisy_runtime_update_for_tests(SearchHistory &history, CaptureNoisyRuntimeUpdateSite site,
+                                                  const std::optional<CaptureHistoryKey> &capture_key,
+                                                  const std::optional<NoisyHistoryKey> &noisy_key, int depth) {
+    if (site != CaptureNoisyRuntimeUpdateSite::MainNegamaxTacticalBetaCutoff) {
+        return false;
+    }
+    const auto update = make_capture_noisy_history_update(capture_key, noisy_key, true, depth);
+    if (update.target == CaptureNoisyHistoryUpdateTarget::None) {
+        return false;
+    }
+    apply_capture_noisy_history_update(history, update);
+    return true;
+}
+
+void SearchHistory::reset_capture_noisy_runtime_update_counters() {
+    capture_noisy_runtime_update_counters_ = {};
+}
+
+void SearchHistory::record_capture_noisy_runtime_update_applied() {
+    ++capture_noisy_runtime_update_counters_.applied;
 }
 
 int SearchHistory::quiet_history_score(const Move &move, Color mover) const {
@@ -326,6 +351,7 @@ void SearchHistory::clear() {
     noisy_history_.clear();
     continuation_history_.clear();
     correction_history_.clear();
+    reset_capture_noisy_runtime_update_counters();
 }
 
 }  // namespace sirio

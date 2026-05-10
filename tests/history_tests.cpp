@@ -801,6 +801,75 @@ void test_capture_noisy_shadow_event_sequence_deterministic_and_no_search_invoca
     assert(board.to_fen() == before);
 }
 
+void test_capture_noisy_runtime_observability_applies_once_for_main_tactical_cutoff() {
+    sirio::SearchHistory history;
+    sirio::Board board{"8/8/8/3p4/4P3/8/8/8 w - - 0 1"};
+    const sirio::Move capture = sirio::move_from_uci(board, "e4d5");
+    const auto capture_key = sirio::make_capture_history_key_for_tests(board, capture);
+    const auto noisy_key = sirio::make_noisy_history_key_for_tests(board, capture);
+    assert(capture_key.has_value());
+    assert(noisy_key.has_value());
+
+    const bool applied = sirio::apply_capture_noisy_runtime_update_for_tests(
+        history, sirio::CaptureNoisyRuntimeUpdateSite::MainNegamaxTacticalBetaCutoff, capture_key, noisy_key, 3);
+    assert(applied);
+    assert(history.capture_noisy_runtime_update_counters().applied == 1);
+    assert(history.capture_history().score(capture, sirio::Color::White) > 0);
+}
+
+void test_capture_noisy_runtime_observability_excluded_paths_do_not_apply() {
+    sirio::SearchHistory history;
+    sirio::Board tactical_board{"8/8/8/3p4/4P3/8/8/8 w - - 0 1"};
+    const sirio::Move tactical = sirio::move_from_uci(tactical_board, "e4d5");
+    const auto capture_key = sirio::make_capture_history_key_for_tests(tactical_board, tactical);
+    const auto noisy_key = sirio::make_noisy_history_key_for_tests(tactical_board, tactical);
+    assert(capture_key.has_value());
+    assert(noisy_key.has_value());
+
+    sirio::Board quiet_board;
+    const sirio::Move quiet = sirio::move_from_uci(quiet_board, "e2e4");
+    const auto quiet_capture_key = sirio::make_capture_history_key_for_tests(quiet_board, quiet);
+    const auto quiet_noisy_key = sirio::make_noisy_history_key_for_tests(quiet_board, quiet);
+    assert(!quiet_capture_key.has_value());
+    assert(!quiet_noisy_key.has_value());
+
+    assert(!sirio::apply_capture_noisy_runtime_update_for_tests(
+        history, sirio::CaptureNoisyRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, capture_key, noisy_key, 3));
+    assert(!sirio::apply_capture_noisy_runtime_update_for_tests(
+        history, sirio::CaptureNoisyRuntimeUpdateSite::QuiescenceTacticalBetaCutoff, capture_key, noisy_key, 3));
+    assert(!sirio::apply_capture_noisy_runtime_update_for_tests(
+        history, sirio::CaptureNoisyRuntimeUpdateSite::FailedTacticalMove, capture_key, noisy_key, 3));
+    assert(!sirio::apply_capture_noisy_runtime_update_for_tests(
+        history, sirio::CaptureNoisyRuntimeUpdateSite::MainNegamaxTacticalBetaCutoff, quiet_capture_key,
+        quiet_noisy_key, 3));
+
+    assert(history.capture_noisy_runtime_update_counters().applied == 0);
+    assert(history.capture_history().score(tactical, sirio::Color::White) == 0);
+}
+
+void test_capture_noisy_runtime_observability_deterministic_repeated_sequence() {
+    sirio::SearchHistory first;
+    sirio::SearchHistory second;
+    sirio::Board board{"8/8/8/3p4/4P3/8/8/8 w - - 0 1"};
+    const sirio::Move capture = sirio::move_from_uci(board, "e4d5");
+    const auto capture_key = sirio::make_capture_history_key_for_tests(board, capture);
+    const auto noisy_key = sirio::make_noisy_history_key_for_tests(board, capture);
+    assert(capture_key.has_value());
+    assert(noisy_key.has_value());
+
+    for (int i = 0; i < 3; ++i) {
+        assert(sirio::apply_capture_noisy_runtime_update_for_tests(
+            first, sirio::CaptureNoisyRuntimeUpdateSite::MainNegamaxTacticalBetaCutoff, capture_key, noisy_key, 4));
+        assert(sirio::apply_capture_noisy_runtime_update_for_tests(
+            second, sirio::CaptureNoisyRuntimeUpdateSite::MainNegamaxTacticalBetaCutoff, capture_key, noisy_key, 4));
+    }
+
+    assert(first.capture_noisy_runtime_update_counters().applied == 3);
+    assert(second.capture_noisy_runtime_update_counters().applied == 3);
+    assert(first.capture_history().score(capture, sirio::Color::White) ==
+           second.capture_history().score(capture, sirio::Color::White));
+}
+
 void run_history_tests() {
     test_initial_state_neutral_and_empty_killers();
     test_is_quiet_move_predicate();
@@ -842,4 +911,7 @@ void run_history_tests() {
     test_capture_noisy_shadow_event_capture_success_failure_and_reset();
     test_capture_noisy_shadow_event_noisy_success_quiet_and_invalid_reject();
     test_capture_noisy_shadow_event_sequence_deterministic_and_no_search_invocation();
+    test_capture_noisy_runtime_observability_applies_once_for_main_tactical_cutoff();
+    test_capture_noisy_runtime_observability_excluded_paths_do_not_apply();
+    test_capture_noisy_runtime_observability_deterministic_repeated_sequence();
 }
