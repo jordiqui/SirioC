@@ -116,6 +116,12 @@ add_executable(sirio_nnue_runtime_smoke_contract
 
 target_link_libraries(sirio_nnue_runtime_smoke_contract PRIVATE sirio_core)
 
+add_executable(sirio_nnue_format_detect_contract
+    tests/nnue_format_detect_contract.cpp
+)
+
+target_link_libraries(sirio_nnue_format_detect_contract PRIVATE sirio_core)
+
 
 if (WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "MSYS")
     if (MSVC)
@@ -129,7 +135,7 @@ if (WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "MSYS")
             -lwinpthread
             -Wl,-Bdynamic
         )
-        foreach(target_name IN ITEMS sirio sirio_tests sirio_bench sirio_nnue_runtime_smoke_contract)
+        foreach(target_name IN ITEMS sirio sirio_tests sirio_bench sirio_nnue_runtime_smoke_contract sirio_nnue_format_detect_contract)
             target_link_options(${target_name} PRIVATE ${_sirio_static_link_opts})
         endforeach()
     endif()

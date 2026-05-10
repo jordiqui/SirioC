@@ -1905,3 +1905,62 @@ This step adds an additive reproducible artifact-builder contract for a minimal 
 
 ## Next deferred step
 - Promote from candidate artifact reproducibility toward controlled runtime gating/instrumentation (still non-default) with additional compatibility and safety tests.
+
+# P0-35 SirioNNUE2 Candidate Manifest Runtime Verification / Artifact Integrity Contract
+
+This task adds deterministic candidate-artifact verification before any SirioNNUE2 runtime-use workflow. Scope is integrity/traceability only.
+
+## Files changed
+- `training/nnue/scripts/verify_candidate_v2.py`
+- `tests/nnue_candidate_v2_verify_test.py`
+- `tests/nnue_format_detect_contract.cpp`
+- `CMakeLists.txt`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Verification helper path
+- `training/nnue/scripts/verify_candidate_v2.py`
+
+## Manifest/model-card fields verified
+- manifest: `feature_set=SirioHalfKAv1`
+- manifest: `features_per_perspective=40960`
+- manifest: `model_layout_name=SirioNNUE2-MinimalV1`
+- manifest: `model_layout_version=1`
+- manifest: no-Elo/no-strength statement (`candidate_intent`)
+- manifest: non-default statement (`sirio_nnue2_default_status`)
+- model card: no-strength statement (`status`)
+- model card: non-default statement (`non_default_confirmation`)
+- model card `training` and `dataset` blocks must match manifest blocks
+
+## Hash policy
+- Computes SHA-256 of `candidate.nnue2` and compares with manifest `artifacts.candidate.sha256`.
+- Computes SHA-256 of `checkpoint.pt` (when present) and compares with manifest `artifacts.checkpoint.sha256`.
+- Missing required files and hash mismatches are hard failures.
+
+## Format detection policy
+- Reuses existing P0-33 detector by adding a minimal helper binary:
+  - `sirio_nnue_format_detect_contract`
+  - Calls `sirio::nnue::detect_nnue_network_format(...)`
+- Python verifier requires detected format `SirioNNUE2MinimalV1`; any other format fails.
+
+## Failure cases tested
+- corrupted `candidate.nnue2` bytes
+- corrupted manifest candidate hash
+- missing `MODEL_CARD.json`
+- fake Stockfish-style payload not compatible with Sirio format contract
+
+## CPU/no-GPU confirmation
+- Verification and tests are CPU-only and do not require GPU.
+
+## Continuity confirmations
+- SirioNNUE2 remains non-default.
+- Normal `evaluate()`, `initialize_evaluation()`, `ensure_thread_backend()`, and `evaluate_for_current_player()` behavior remains unchanged.
+- Search/UCI routing and public UCI defaults/options are unchanged.
+- No self-play, teacher engines, OpenBench, fastchess, cutechess, or ORDO integration was added.
+- No Elo/strength claim is made.
+
+## Known limitations
+- Format verification shell-outs to the local helper binary under `build/`; helper must be built first.
+- Current no-strength/non-default checks are explicit text-contract checks and intentionally strict.
+
+## Next deferred step
+- Integrate this verifier as a mandatory precondition gate in future candidate activation/gauntlet orchestration scripts (outside this task scope).
