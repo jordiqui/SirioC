@@ -2250,3 +2250,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No evaluation behaviour changed.
 - No NNUE behaviour changed.
 - No strength/Elo claim.
+
+# P0-52 SearchHistory Aggregate Lifecycle Audit
+
+- Added aggregate `SearchHistory` lifecycle tests covering quiet/killer/capture/noisy/continuation/correction state.
+- No search behavior changed.
+- No NNUE behavior changed.
+- No strength/Elo claim.

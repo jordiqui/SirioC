@@ -271,6 +271,98 @@ void test_search_history_clear_resets_correction_history() {
     assert(history.correction_history().score(sirio::Color::White, bucket) == 0);
 }
 
+
+void test_search_history_aggregate_lifecycle_contract() {
+    sirio::SearchHistory history;
+    sirio::Board start;
+    sirio::Board capture_board{"8/8/8/3p4/4P3/8/8/8 w - - 0 1"};
+    sirio::Board promotion_board{"4k3/6P1/8/8/8/8/8/4K3 w - - 0 1"};
+
+    const sirio::Move quiet = sirio::move_from_uci(start, "e2e4");
+    const sirio::Move killer = sirio::move_from_uci(start, "d2d4");
+    const sirio::Move capture = sirio::move_from_uci(capture_board, "e4d5");
+    const sirio::Move noisy = sirio::move_from_uci(promotion_board, "g7g8q");
+    const sirio::Move prev = sirio::move_from_uci(start, "g1f3");
+    constexpr std::size_t correction_bucket = 77;
+
+    assert(history.quiet_history_score(quiet, sirio::Color::White) == 0);
+    assert(!history.killer_slots(2)[0].has_value());
+    assert(!history.killer_slots(2)[1].has_value());
+    assert(history.capture_history().score(capture, sirio::Color::White) == 0);
+    assert(history.noisy_history().score(noisy, sirio::Color::White) == 0);
+    assert(history.continuation_history().score(sirio::Color::White, prev, sirio::Color::White, quiet) == 0);
+    assert(history.correction_history().score(sirio::Color::White, correction_bucket) == 0);
+
+    history.update_quiet_history(sirio::Color::White, quiet, 3, true);
+    history.store_killer(killer, 2);
+    history.capture_history().update(sirio::Color::White, capture, 3, true);
+    history.noisy_history().update(sirio::Color::White, noisy, 3, true);
+    history.continuation_history().update(sirio::Color::White, prev, sirio::Color::White, quiet, 3, true);
+    history.correction_history().update(sirio::Color::White, correction_bucket, 3, true);
+
+    assert(history.quiet_history_score(quiet, sirio::Color::White) > 0);
+    assert(history.killer_slots(2)[0].has_value());
+    assert(history.capture_history().score(capture, sirio::Color::White) > 0);
+    assert(history.noisy_history().score(noisy, sirio::Color::White) > 0);
+    assert(history.continuation_history().score(sirio::Color::White, prev, sirio::Color::White, quiet) > 0);
+    assert(history.correction_history().score(sirio::Color::White, correction_bucket) > 0);
+
+    history.clear();
+
+    assert(history.quiet_history_score(quiet, sirio::Color::White) == 0);
+    assert(!history.killer_slots(2)[0].has_value());
+    assert(!history.killer_slots(2)[1].has_value());
+    assert(history.capture_history().score(capture, sirio::Color::White) == 0);
+    assert(history.noisy_history().score(noisy, sirio::Color::White) == 0);
+    assert(history.continuation_history().score(sirio::Color::White, prev, sirio::Color::White, quiet) == 0);
+    assert(history.correction_history().score(sirio::Color::White, correction_bucket) == 0);
+}
+
+void test_search_history_aggregate_key_isolation_and_deterministic_cycles() {
+    sirio::SearchHistory history;
+    sirio::Board start;
+    sirio::Board capture_board{"8/8/8/3p4/4P3/8/8/8 w - - 0 1"};
+    sirio::Board promotion_board{"4k3/6P1/8/8/8/8/8/4K3 w - - 0 1"};
+
+    const sirio::Move quiet_a = sirio::move_from_uci(start, "e2e4");
+    const sirio::Move quiet_b = sirio::move_from_uci(start, "d2d4");
+    const sirio::Move capture_a = sirio::move_from_uci(capture_board, "e4d5");
+    const sirio::Move noisy_a = sirio::move_from_uci(promotion_board, "g7g8q");
+    const sirio::Move prev = sirio::move_from_uci(start, "g1f3");
+    constexpr std::size_t bucket_a = 9;
+    constexpr std::size_t bucket_b = 10;
+
+    history.update_quiet_history(sirio::Color::White, quiet_a, 2, true);
+    history.store_killer(quiet_a, 4);
+    history.capture_history().update(sirio::Color::White, capture_a, 2, true);
+    history.noisy_history().update(sirio::Color::White, noisy_a, 2, true);
+    history.continuation_history().update(sirio::Color::White, prev, sirio::Color::White, quiet_a, 2, true);
+    history.correction_history().update(sirio::Color::White, bucket_a, 2, true);
+
+    assert(history.quiet_history_score(quiet_b, sirio::Color::White) == 0);
+    assert(!history.killer_slots(3)[0].has_value());
+    assert(history.capture_history().score(capture_a, sirio::Color::Black) == 0);
+    assert(history.noisy_history().score(noisy_a, sirio::Color::Black) == 0);
+    assert(history.continuation_history().score(sirio::Color::White, quiet_a, sirio::Color::White, prev) == 0);
+    assert(history.correction_history().score(sirio::Color::White, bucket_b) == 0);
+
+    for (int i = 0; i < 3; ++i) {
+        history.clear();
+        history.update_quiet_history(sirio::Color::White, quiet_a, 2, true);
+        history.store_killer(quiet_a, 4);
+        history.capture_history().update(sirio::Color::White, capture_a, 2, true);
+        history.noisy_history().update(sirio::Color::White, noisy_a, 2, true);
+        history.continuation_history().update(sirio::Color::White, prev, sirio::Color::White, quiet_a, 2, true);
+        history.correction_history().update(sirio::Color::White, bucket_a, 2, true);
+
+        assert(history.quiet_history_score(quiet_a, sirio::Color::White) == 4);
+        assert(history.killer_slots(4)[0].has_value());
+        assert(history.capture_history().score(capture_a, sirio::Color::White) == 4);
+        assert(history.noisy_history().score(noisy_a, sirio::Color::White) == 4);
+        assert(history.continuation_history().score(sirio::Color::White, prev, sirio::Color::White, quiet_a) == 4);
+        assert(history.correction_history().score(sirio::Color::White, bucket_a) == 4);
+    }
+}
 void test_search_history_clear_resets_continuation_history() {
     sirio::SearchHistory history;
     sirio::Board start;
@@ -297,6 +389,8 @@ void run_history_tests() {
     test_history_clear_resets_quiet_killer_capture_and_noisy();
     test_continuation_history_default_update_and_clear();
     test_continuation_history_clamp_indexing_and_determinism();
+    test_search_history_aggregate_lifecycle_contract();
+    test_search_history_aggregate_key_isolation_and_deterministic_cycles();
     test_search_history_clear_resets_continuation_history();
     test_correction_history_default_update_clamp_and_clear();
     test_correction_history_bucket_indexing_and_determinism();
