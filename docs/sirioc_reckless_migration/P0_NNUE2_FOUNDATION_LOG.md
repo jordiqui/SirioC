@@ -2013,3 +2013,13 @@ This task adds an internal/test-facing verified-only runtime-load contract: cand
 
 ## Originality/provenance note
 - Implementation and tests are original SirioC repository work and do not import external engine/trainer source code.
+
+## P0-37R Revert/Quarantine Failed Corpus Report Work
+
+- P0-37 fixed-FEN corpus report workflow is deferred.
+- Reason: the corpus helper path failed to load an otherwise verified candidate with `Invalid SirioNNUE2 header contract`.
+- Stable branch continuity remains at P0-36 verified-only candidate runtime load.
+- No validation contracts were weakened by this revert/quarantine action.
+- No search/UCI/evaluation-default behavior changed.
+- SirioNNUE2 remains non-default.
+- Deferred corpus reporting should be revisited later with explicit local path/hash parity diagnostics between verified-load and corpus helper paths.
