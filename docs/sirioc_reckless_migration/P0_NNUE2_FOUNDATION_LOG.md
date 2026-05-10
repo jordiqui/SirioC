@@ -2322,3 +2322,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No runtime search behaviour changed.
 - No NNUE behaviour changed.
 - No strength/Elo claim.
+
+# P0-61 Capture/NoisyHistory Runtime Update Integration-Point Audit
+
+- Added `docs/sirioc_reckless_migration/P0_CAPTURE_NOISY_RUNTIME_UPDATE_AUDIT.md`.
+- Documentation-only patch.
+- No search behaviour changed.
+- No NNUE behaviour changed.
+- No strength/Elo claim.

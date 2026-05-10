@@ -181,3 +181,15 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
   - reset/clear removing event-applied updates,
   - no runtime negamax/qsearch wiring.
 - Explicitly deferred: any real negamax/qsearch integration of capture/noisy updates.
+
+## 11) P0-61 runtime update integration-point audit (no runtime wiring yet)
+- Added `docs/sirioc_reckless_migration/P0_CAPTURE_NOISY_RUNTIME_UPDATE_AUDIT.md` to audit exact runtime search integration points for future capture/noisy history updates.
+- Audit confirms current state remains:
+  - P0-58 read-only MovePicker tactical scoring,
+  - P0-59 update-policy scaffold,
+  - P0-60 test-only shadow harness,
+  - no real runtime negamax/qsearch capture/noisy updates.
+- Recommended conservative first behavioural runtime step for future P0-62:
+  - **one integration point only**: update Capture/NoisyHistory on **negamax tactical beta cutoff**,
+  - exclude qsearch in first step,
+  - preserve deterministic snapshot guardrails and avoid LMR/pruning/TT/eval/UCI changes.
