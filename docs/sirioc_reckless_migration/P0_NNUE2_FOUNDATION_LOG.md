@@ -2288,3 +2288,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No search behaviour changed.
 - No NNUE behaviour changed.
 - No strength/Elo claim.
+
+# P0-57 MovePicker History Integration Decision Matrix
+
+- MovePicker history integration decision matrix added.
+- Documentation-only patch.
+- No search behaviour changed.
+- No NNUE behaviour changed.
+- No strength/Elo claim.
