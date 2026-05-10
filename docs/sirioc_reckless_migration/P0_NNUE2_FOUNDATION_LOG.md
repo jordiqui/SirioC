@@ -1,3 +1,13 @@
+
+# P0-46 Search P0 Re-Entry Baseline
+
+- Added `docs/sirioc_reckless_migration/P0_SEARCH_REENTRY_BASELINE.md`.
+- Documentation-only patch.
+- No search behaviour changed.
+- No NNUE behaviour changed.
+- SirioNNUE2 remains non-default.
+- No strength/Elo claim.
+
 # P0-03 SirioNNUE2 Backend Contract / Sparse Feature Foundation
 
 This task introduces the **architectural basis only** for SirioNNUE2 backend work. It does not switch the default evaluation path, does not replace classical fallback, and does not claim strength improvements.
