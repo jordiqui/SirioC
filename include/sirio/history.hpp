@@ -22,6 +22,15 @@ struct NoisyHistoryKey {
     int to = 0;
 };
 
+struct ContinuationHistoryKey {
+    Color previous_mover_color = Color::White;
+    Color current_mover_color = Color::White;
+    PieceType previous_moving_piece = PieceType::Pawn;
+    int previous_to_square = 0;
+    PieceType current_moving_piece = PieceType::Pawn;
+    int current_to_square = 0;
+};
+
 class SearchHistory {
 public:
     class CaptureHistory {
@@ -106,6 +115,10 @@ private:
 [[nodiscard]] std::optional<CaptureHistoryKey> make_capture_history_key(const Board &board, const Move &move);
 [[nodiscard]] std::optional<NoisyHistoryKey> make_noisy_history_key(const Board &board, const Move &move);
 
+[[nodiscard]] std::optional<ContinuationHistoryKey> make_continuation_history_key(
+    const Board &previous_board, const std::optional<Move> &previous_move, const Board &current_board,
+    const Move &current_move);
+
 [[nodiscard]] inline std::optional<CaptureHistoryKey> make_capture_history_key_for_tests(const Board &board,
                                                                                           const Move &move) {
     return make_capture_history_key(board, move);
@@ -114,6 +127,12 @@ private:
 [[nodiscard]] inline std::optional<NoisyHistoryKey> make_noisy_history_key_for_tests(const Board &board,
                                                                                        const Move &move) {
     return make_noisy_history_key(board, move);
+}
+
+[[nodiscard]] inline std::optional<ContinuationHistoryKey> make_continuation_history_key_for_tests(
+    const Board &previous_board, const std::optional<Move> &previous_move, const Board &current_board,
+    const Move &current_move) {
+    return make_continuation_history_key(previous_board, previous_move, current_board, current_move);
 }
 
 }  // namespace sirio

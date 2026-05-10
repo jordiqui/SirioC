@@ -335,6 +335,73 @@ void test_capture_history_key_extraction_for_invalid_move_fails() {
 }
 
 
+
+void test_continuation_history_key_extraction_valid_quiet_sequence_succeeds() {
+    const sirio::Board previous_board;
+    const auto previous_move = sirio::move_from_uci(previous_board, "e2e4");
+    const sirio::Board current_board = previous_board.apply_move(previous_move);
+    const auto current_move = sirio::move_from_uci(current_board, "e7e5");
+
+    const std::string previous_before = previous_board.to_fen();
+    const std::string current_before = current_board.to_fen();
+    const auto key = sirio::make_continuation_history_key_for_tests(previous_board, previous_move, current_board, current_move);
+    assert(key.has_value());
+    assert(key->previous_mover_color == sirio::Color::White);
+    assert(key->current_mover_color == sirio::Color::Black);
+    assert(key->previous_moving_piece == sirio::PieceType::Pawn);
+    assert(key->previous_to_square == previous_move.to);
+    assert(key->current_moving_piece == sirio::PieceType::Pawn);
+    assert(key->current_to_square == current_move.to);
+    assert(previous_board.to_fen() == previous_before);
+    assert(current_board.to_fen() == current_before);
+}
+
+void test_continuation_history_key_extraction_valid_capture_then_quiet_succeeds() {
+    const sirio::Board previous_board{"4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1"};
+    const auto previous_move = sirio::move_from_uci(previous_board, "e4d5");
+    const sirio::Board current_board = previous_board.apply_move(previous_move);
+    const auto current_move = sirio::move_from_uci(current_board, "e8e7");
+
+    const auto key = sirio::make_continuation_history_key_for_tests(previous_board, previous_move, current_board, current_move);
+    assert(key.has_value());
+}
+
+void test_continuation_history_key_extraction_missing_previous_context_fails() {
+    const sirio::Board previous_board;
+    const sirio::Board current_board;
+    const auto current_move = sirio::move_from_uci(current_board, "e2e4");
+    const auto key = sirio::make_continuation_history_key_for_tests(previous_board, std::nullopt, current_board, current_move);
+    assert(!key.has_value());
+}
+
+void test_continuation_history_key_extraction_invalid_current_move_fails() {
+    const sirio::Board previous_board;
+    const auto previous_move = sirio::move_from_uci(previous_board, "e2e4");
+    const sirio::Board current_board = previous_board.apply_move(previous_move);
+    sirio::Move invalid_current{0, 56, sirio::PieceType::Knight};
+    const auto key = sirio::make_continuation_history_key_for_tests(previous_board, previous_move, current_board, invalid_current);
+    assert(!key.has_value());
+}
+
+void test_continuation_history_key_extraction_is_deterministic_and_context_sensitive() {
+    const sirio::Board previous_board;
+    const auto prev_a = sirio::move_from_uci(previous_board, "e2e4");
+    const auto prev_b = sirio::move_from_uci(previous_board, "d2d4");
+    const sirio::Board current_board_a = previous_board.apply_move(prev_a);
+    const auto current_move_a = sirio::move_from_uci(current_board_a, "e7e5");
+    const auto first = sirio::make_continuation_history_key_for_tests(previous_board, prev_a, current_board_a, current_move_a);
+    const auto second = sirio::make_continuation_history_key_for_tests(previous_board, prev_a, current_board_a, current_move_a);
+    assert(first.has_value() && second.has_value());
+    assert(first->previous_to_square == second->previous_to_square);
+    assert(first->current_to_square == second->current_to_square);
+
+    const sirio::Board current_board_b = previous_board.apply_move(prev_b);
+    const auto current_move_b = sirio::move_from_uci(current_board_b, "e7e5");
+    const auto different = sirio::make_continuation_history_key_for_tests(previous_board, prev_b, current_board_b, current_move_b);
+    assert(different.has_value());
+    assert(first->previous_to_square != different->previous_to_square);
+}
+
 void test_search_history_aggregate_lifecycle_contract() {
     sirio::SearchHistory history;
     sirio::Board start;
@@ -463,4 +530,9 @@ void run_history_tests() {
     test_capture_history_key_extraction_for_non_capture_fails();
     test_noisy_history_key_extraction_for_promotion_succeeds_and_is_deterministic();
     test_capture_history_key_extraction_for_invalid_move_fails();
+    test_continuation_history_key_extraction_valid_quiet_sequence_succeeds();
+    test_continuation_history_key_extraction_valid_capture_then_quiet_succeeds();
+    test_continuation_history_key_extraction_missing_previous_context_fails();
+    test_continuation_history_key_extraction_invalid_current_move_fails();
+    test_continuation_history_key_extraction_is_deterministic_and_context_sensitive();
 }
