@@ -2161,3 +2161,13 @@ These are emitted through existing `NetworkInfo::format_report` surfaces only.
 
 ## Next deferred step
 - After roadmap approval, add a controlled non-default runtime activation surface that still preserves mandatory verified-candidate gating and no-default-change policy.
+
+# P0-43R Revert/Quarantine Failed Static Eval Compare Work
+
+- P0-43 static evaluation comparison is deferred.
+- Reason: static compare helper failed to load an otherwise verified runtime artifact with `Invalid SirioNNUE2 header contract`.
+- Stable branch state remains at P0-42 internal activation candidate workflow.
+- No validation was weakened.
+- No search/UCI/evaluation-default behavior changed.
+- SirioNNUE2 remains non-default.
+- Deferred static comparison should be revisited only after the helper/header-contract discrepancy is diagnosed locally.
