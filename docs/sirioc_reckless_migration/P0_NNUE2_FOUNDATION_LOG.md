@@ -2183,3 +2183,17 @@ These are emitted through existing `NetworkInfo::format_report` surfaces only.
 - Stable branch remains at P0-42.
 - SirioNNUE2 remains non-default.
 - No strength/Elo claim is made.
+
+# P0-45 — Stable P0 Evaluation Track Closure / Readiness Gate
+
+This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINESS_GATE.md` as a documentation-only closure artifact for the stable SirioNNUE2 P0 evaluation track.
+
+## Scope
+- Documentation only.
+- No behaviour change.
+- No runtime/UCI/search activation change.
+- SirioNNUE2 remains non-default.
+- No Elo/strength claim.
+
+## Link
+- `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINESS_GATE.md`
