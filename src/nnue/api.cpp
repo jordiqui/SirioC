@@ -51,6 +51,9 @@ NetworkInfo build_info(const std::string &path) {
         if (decode_nnue2_minimal_layout(network, layout, error)) {
             std::ostringstream report;
             report << "support_present=true"
+                   << ";stockfish_nnue_compatibility=not_claimed"
+                   << ";sirio_nnue1_nnue_names=legacy_sirio_format"
+                   << ";sirio_nnue2_runtime_status=non_default"
                    << ";model_layout_name=" << layout.model_layout_name
                    << ";model_layout_version=" << layout.model_layout_version
                    << ";feature_set=" << layout.feature_set
@@ -77,7 +80,9 @@ NetworkInfo build_info(const std::string &path) {
     } else {
         result.dims = "SirioNNUE1 PieceCounts[2x6]";
         result.format_report =
-            "support_present=false;legacy_sirio_nnue1_status=legacy_test_baseline;checksum=unavailable";
+            "support_present=false;stockfish_nnue_compatibility=not_claimed;"
+            "sirio_nnue1_nnue_names=legacy_sirio_format;sirio_nnue2_runtime_status=non_default;"
+            "legacy_sirio_nnue1_status=legacy_test_baseline;checksum=unavailable";
     }
     std::error_code ec;
     auto size = std::filesystem::file_size(path, ec);
