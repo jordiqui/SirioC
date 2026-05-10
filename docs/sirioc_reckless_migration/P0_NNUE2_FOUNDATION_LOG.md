@@ -2042,3 +2042,34 @@ This task adds an internal/test-facing verified-only runtime-load contract: cand
 - SirioNNUE2 remains non-default.
 - No Stockfish `.nnue` compatibility claim is made.
 - No Elo/strength claim is made.
+
+
+# P0-39 Legacy NNUE Deprecation Markers / Docs-Only User-Facing Warning Contract
+
+This task adds non-behaviour-changing deprecation markers for the legacy
+SirioNNUE1/PieceCountModel training/export path so contributors do not mistake
+it for the primary NNUE development flow.
+
+## Files changed
+- `training/nnue/scripts/features.py`
+- `training/nnue/scripts/prepare_dataset.py`
+- `training/nnue/scripts/train.py`
+- `training/nnue/scripts/export_to_engine.py`
+- `training/nnue/configs/default.yaml`
+- `training/nnue/README.md`
+- `docs/sirioc_reckless_migration/P0_LEGACY_NNUE_DEPRECATION_MAP.md`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Scope
+- Added comments/documentation only.
+- Legacy pipeline remains available for compatibility/test baseline.
+- Directed new work to v2 scripts (`*_v2.py`, candidate build/verify/runtime-load scripts).
+
+## Continuity confirmations
+- No executable logic changes.
+- No import/CLI/script-output changes.
+- No runtime evaluation/search/UCI behaviour changes.
+- SirioNNUE2 remains non-default.
+- No Stockfish `.nnue` compatibility claim is introduced.
+- No Elo/strength claim is made.
+

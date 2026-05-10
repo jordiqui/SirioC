@@ -1,3 +1,10 @@
+# LEGACY NOTICE (P0-39): This default config targets the legacy SirioNNUE1
+# PieceCountModel pipeline and is kept for compatibility/test-baseline use.
+# New NNUE development should use the SirioNNUE2 v2 scripts/config flow:
+# features_v2.py, prepare_dataset_v2.py, train_v2.py, export_to_engine_v2.py,
+# build_candidate_v2.py, verify_candidate_v2.py, verified_runtime_load_v2.py.
+# Stockfish .nnue compatibility is not claimed.
+
 seed: 20240511
 
 dataset:

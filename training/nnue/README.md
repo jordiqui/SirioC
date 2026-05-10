@@ -14,6 +14,22 @@ The pipeline is organised into three layers:
 3. **Validation and export** – Evaluate the trained parameters on a holdout set
    and export them to the text format expected by `src/nnue/backend.cpp`.
 
+## Legacy vs v2 workflow status (P0-39)
+
+- `training/nnue/scripts/features.py`, `prepare_dataset.py`, `train.py`, and
+  `export_to_engine.py` are **legacy SirioNNUE1 / PieceCountModel** tooling.
+- These legacy scripts are retained for compatibility and test-baseline
+  continuity; they are not the preferred path for new NNUE development.
+- New work should use the SirioNNUE2 v2 flow:
+  - `features_v2.py`
+  - `prepare_dataset_v2.py`
+  - `train_v2.py`
+  - `export_to_engine_v2.py`
+  - `build_candidate_v2.py`
+  - `verify_candidate_v2.py`
+  - `verified_runtime_load_v2.py`
+- No Stockfish `.nnue` compatibility is claimed by filename or extension.
+
 ## Quick start
 
 ```bash
