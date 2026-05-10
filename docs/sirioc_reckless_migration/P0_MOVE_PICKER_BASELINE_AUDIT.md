@@ -186,3 +186,38 @@ P0-47 is documentation-only. Search behaviour is unchanged. NNUE behaviour is un
 - No MovePicker scoring change.
 - No search/negamax/quiescence/LMR/TT/eval/UCI/NNUE runtime change.
 - No strength/Elo claim.
+
+# P0-49 — Capture/Noisy History Data Structure Scaffold / No-Behaviour-Change Contract
+
+## Scope
+- Added capture/noisy history scaffolding inside `SearchHistory`.
+- No MovePicker scoring changes.
+- No search-side read/write integration yet.
+
+## Added structures
+- `SearchHistory::CaptureHistory`
+  - Indexing dimensions: `[mover_color][attacker_piece][captured_piece][to_square]`.
+  - Intended for capture-class moves only (`move.captured.has_value()`).
+- `SearchHistory::NoisyHistory`
+  - Indexing dimensions: `[mover_color][moving_piece][to_square]`.
+  - Intended for non-quiet moves (`!is_quiet_move(move)`), including promotions/captures/castling/en-passant.
+
+Both scaffolds provide:
+- zero-initialized default state,
+- deterministic indexing from `Move` + mover color only,
+- bounded update with existing history limits (`history_bonus_limit`, `history_min`, `history_max`),
+- `clear()` reset to zero.
+
+## Tests added
+- Extended `tests/history_tests.cpp` with isolated scaffold coverage:
+  - zero-default checks,
+  - positive and negative updates,
+  - bonus clamping and saturation,
+  - clear/reset behavior,
+  - deterministic indexing behavior and non-collision checks for distinct capture keys,
+  - deterministic repeated updates.
+
+## Deferred integration
+- Capture/noisy history is **not** read in MovePicker.
+- Capture/noisy history is **not** updated from `negamax` or `quiescence`.
+- Future integration into ordering/search is deferred to later P0 steps.
