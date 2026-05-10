@@ -169,6 +169,64 @@ void test_history_clear_resets_quiet_killer_capture_and_noisy() {
     assert(history.noisy_history().score(noisy, sirio::Color::White) == 0);
 }
 
+void test_continuation_history_default_update_and_clear() {
+    sirio::SearchHistory history;
+    sirio::Board start;
+    const sirio::Move e2e4 = sirio::move_from_uci(start, "e2e4");
+    const sirio::Move g1f3 = sirio::move_from_uci(start, "g1f3");
+
+    assert(history.continuation_history().score(sirio::Color::White, e2e4, sirio::Color::White, g1f3) == 0);
+
+    history.continuation_history().update(sirio::Color::White, e2e4, sirio::Color::White, g1f3, 3, true);
+    assert(history.continuation_history().score(sirio::Color::White, e2e4, sirio::Color::White, g1f3) == 9);
+
+    history.continuation_history().update(sirio::Color::White, e2e4, sirio::Color::White, g1f3, 3, false);
+    assert(history.continuation_history().score(sirio::Color::White, e2e4, sirio::Color::White, g1f3) == 0);
+
+    history.continuation_history().clear();
+    assert(history.continuation_history().score(sirio::Color::White, e2e4, sirio::Color::White, g1f3) == 0);
+}
+
+void test_continuation_history_clamp_indexing_and_determinism() {
+    sirio::SearchHistory history;
+    sirio::Board start;
+    const sirio::Move e2e4 = sirio::move_from_uci(start, "e2e4");
+    const sirio::Move g1f3 = sirio::move_from_uci(start, "g1f3");
+    const sirio::Move d2d4 = sirio::move_from_uci(start, "d2d4");
+
+    for (int i = 0; i < 5000; ++i) {
+        history.continuation_history().update(sirio::Color::White, e2e4, sirio::Color::White, g1f3, 1000, true);
+    }
+    assert(history.continuation_history().score(sirio::Color::White, e2e4, sirio::Color::White, g1f3) ==
+           sirio::search_params::history_max);
+
+    for (int i = 0; i < 10000; ++i) {
+        history.continuation_history().update(sirio::Color::White, e2e4, sirio::Color::White, g1f3, 1000, false);
+    }
+    assert(history.continuation_history().score(sirio::Color::White, e2e4, sirio::Color::White, g1f3) ==
+           sirio::search_params::history_min);
+
+    assert(history.continuation_history().score(sirio::Color::White, e2e4, sirio::Color::White, d2d4) == 0);
+    assert(history.continuation_history().score(sirio::Color::White, d2d4, sirio::Color::White, g1f3) == 0);
+    assert(history.continuation_history().score(sirio::Color::Black, e2e4, sirio::Color::White, g1f3) == 0);
+
+    history.continuation_history().update(sirio::Color::White, d2d4, sirio::Color::White, g1f3, 2, true);
+    history.continuation_history().update(sirio::Color::White, d2d4, sirio::Color::White, g1f3, 2, true);
+    assert(history.continuation_history().score(sirio::Color::White, d2d4, sirio::Color::White, g1f3) == 8);
+}
+
+void test_search_history_clear_resets_continuation_history() {
+    sirio::SearchHistory history;
+    sirio::Board start;
+    const sirio::Move e2e4 = sirio::move_from_uci(start, "e2e4");
+    const sirio::Move g1f3 = sirio::move_from_uci(start, "g1f3");
+
+    history.continuation_history().update(sirio::Color::White, e2e4, sirio::Color::White, g1f3, 3, true);
+    assert(history.continuation_history().score(sirio::Color::White, e2e4, sirio::Color::White, g1f3) > 0);
+    history.clear();
+    assert(history.continuation_history().score(sirio::Color::White, e2e4, sirio::Color::White, g1f3) == 0);
+}
+
 }  // namespace
 
 void run_history_tests() {
@@ -181,4 +239,7 @@ void run_history_tests() {
     test_capture_history_clamp_and_indexing();
     test_noisy_history_scaffold_basics_and_determinism();
     test_history_clear_resets_quiet_killer_capture_and_noisy();
+    test_continuation_history_default_update_and_clear();
+    test_continuation_history_clamp_indexing_and_determinism();
+    test_search_history_clear_resets_continuation_history();
 }

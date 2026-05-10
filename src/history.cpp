@@ -115,11 +115,30 @@ void SearchHistory::NoisyHistory::clear() {
     table_ = {};
 }
 
+int SearchHistory::ContinuationHistory::score(Color previous_mover, const Move &previous_move, Color current_mover,
+                                              const Move &current_move) const {
+    return table_[color_to_index(previous_mover)][color_to_index(current_mover)][piece_to_index(previous_move.piece)]
+                 [previous_move.to][piece_to_index(current_move.piece)][current_move.to];
+}
+
+void SearchHistory::ContinuationHistory::update(Color previous_mover, const Move &previous_move, Color current_mover,
+                                                const Move &current_move, int depth, bool success) {
+    auto &entry = table_[color_to_index(previous_mover)][color_to_index(current_mover)]
+                        [piece_to_index(previous_move.piece)][previous_move.to][piece_to_index(current_move.piece)]
+                        [current_move.to];
+    apply_history_delta(entry, history_bonus_for_depth(depth), success);
+}
+
+void SearchHistory::ContinuationHistory::clear() {
+    table_ = {};
+}
+
 void SearchHistory::clear() {
     killer_moves_ = {};
     quiet_history_ = {};
     capture_history_.clear();
     noisy_history_.clear();
+    continuation_history_.clear();
 }
 
 }  // namespace sirio
