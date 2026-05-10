@@ -15,6 +15,14 @@
 - No NNUE behaviour changed.
 - No strength/Elo claim.
 
+# P0-50 Continuation History Data Structure Scaffold
+
+- Added continuation-history scaffolding in the search-history module with isolated tests.
+- No MovePicker/search integration in this step.
+- No search behaviour changed.
+- No NNUE behaviour changed.
+- No strength/Elo claim.
+
 
 # P0-46 Search P0 Re-Entry Baseline
 

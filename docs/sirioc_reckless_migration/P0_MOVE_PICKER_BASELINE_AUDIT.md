@@ -221,3 +221,36 @@ Both scaffolds provide:
 - Capture/noisy history is **not** read in MovePicker.
 - Capture/noisy history is **not** updated from `negamax` or `quiescence`.
 - Future integration into ordering/search is deferred to later P0 steps.
+
+# P0-50 — Continuation History Data Structure Scaffold / No-Behaviour-Change Contract
+
+## Scope
+- Added continuation history scaffolding inside `SearchHistory`.
+- No MovePicker scoring changes.
+- No search-side read/write integration.
+
+## Added structure
+- `SearchHistory::ContinuationHistory`
+  - Indexing dimensions: `[previous_mover_color][current_mover_color][previous_moving_piece][previous_to_square][current_moving_piece][current_to_square]`.
+  - Minimal explicit scaffold keyed only from move-context pairs and mover colors.
+  - No dependency on global mutable state.
+
+Provided APIs:
+- `score(...)` query.
+- `update(...)` bounded by existing history controls (`history_bonus_limit`, `history_min`, `history_max`).
+- `clear()` reset to zero.
+
+## Tests added
+- Extended `tests/history_tests.cpp` for continuation-history scaffold coverage:
+  - zero-default checks,
+  - positive/negative updates,
+  - saturation/clamping,
+  - reset via `ContinuationHistory::clear()`,
+  - deterministic indexing and non-collision checks across distinct keys,
+  - deterministic repeated updates,
+  - `SearchHistory::clear()` resetting continuation history.
+
+## Deferred integration
+- Continuation history is **not** read in MovePicker.
+- Continuation history is **not** updated from `negamax` or `quiescence`.
+- Integration into ordering/search remains deferred to later P0 steps.
