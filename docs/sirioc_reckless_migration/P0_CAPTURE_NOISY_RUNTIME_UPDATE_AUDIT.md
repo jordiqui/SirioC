@@ -163,3 +163,16 @@ Reject P0-62 if any of the following occurs:
 ---
 
 P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour changed. No strength/Elo claim is made.
+
+## 9) P0-62 runtime integration (single-point behavioural patch)
+- **Exact integration point:** `src/search.cpp`, `negamax(...)` move loop, inside the `if (alpha >= beta)` cutoff block after score integration.
+- **Trigger condition:** main-search cutoff where the cutting move is tactical (`!quiet_move`) and a valid capture/noisy key can be resolved by `make_capture_history_key(...)`/`make_noisy_history_key(...)`.
+- **Update target:** one `CaptureNoisyHistoryUpdate` built via `make_capture_noisy_history_update(...)` and applied via `apply_capture_noisy_history_update(...)`.
+- **Depth/bonus source:** existing `history_depth` from negamax move-loop flow (same source used in local quiet-history updates).
+- **Excluded paths (unchanged):**
+  - no qsearch runtime update calls;
+  - no failed tactical capture/noisy updates;
+  - no quiet cutoff capture/noisy updates;
+  - no extra root-only update path.
+- **Tests added/extended:** history tests include runtime apply no-op validation for invalid/none target updates; existing capture/noisy policy + shadow-event tests remain active.
+- **Limitations:** current coverage is unit-level and deterministic; qsearch exclusion is enforced by search-code inspection and unchanged qsearch implementation (no tactical history write path added there).

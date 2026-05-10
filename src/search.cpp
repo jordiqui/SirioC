@@ -1370,8 +1370,13 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
             }
         }
         if (alpha >= beta) {
-            if (is_quiet_move(move)) {
+            if (quiet_move) {
                 context.history.store_killer(move, ply);
+            } else {
+                const auto capture_key = make_capture_history_key(board, move);
+                const auto noisy_key = make_noisy_history_key(board, move);
+                const auto update = make_capture_noisy_history_update(capture_key, noisy_key, true, history_depth);
+                apply_capture_noisy_history_update(context.history, update);
             }
             break;
         }

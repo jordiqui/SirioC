@@ -187,7 +187,7 @@ void apply_capture_noisy_history_update_event_for_tests(SearchHistory &history,
     apply_capture_noisy_history_update_for_tests(history, update);
 }
 
-void apply_capture_noisy_history_update_for_tests(SearchHistory &history, const CaptureNoisyHistoryUpdate &update) {
+void apply_capture_noisy_history_update(SearchHistory &history, const CaptureNoisyHistoryUpdate &update) {
     switch (update.target) {
         case CaptureNoisyHistoryUpdateTarget::Capture:
             if (update.capture_key.has_value()) {
@@ -204,6 +204,10 @@ void apply_capture_noisy_history_update_for_tests(SearchHistory &history, const 
         case CaptureNoisyHistoryUpdateTarget::None:
             break;
     }
+}
+
+void apply_capture_noisy_history_update_for_tests(SearchHistory &history, const CaptureNoisyHistoryUpdate &update) {
+    apply_capture_noisy_history_update(history, update);
 }
 
 int SearchHistory::quiet_history_score(const Move &move, Color mover) const {

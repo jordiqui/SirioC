@@ -193,3 +193,11 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
   - **one integration point only**: update Capture/NoisyHistory on **negamax tactical beta cutoff**,
   - exclude qsearch in first step,
   - preserve deterministic snapshot guardrails and avoid LMR/pruning/TT/eval/UCI changes.
+
+## 12) P0-62 runtime capture/noisy update integration
+- First runtime capture/noisy search update is now wired at one point only: negamax tactical beta-cutoff in main search.
+- Signal scope remains intentionally narrow: one success signal only, no failed tactical updates.
+- No qsearch integration was added.
+- No LMR/pruning/selectivity policy changes were made.
+- No TT probe/store policy changes were made.
+- No MovePicker scoring changes were made in this step (P0-58 scoring remains as-is).
