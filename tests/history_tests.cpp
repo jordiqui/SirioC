@@ -271,6 +271,69 @@ void test_search_history_clear_resets_correction_history() {
     assert(history.correction_history().score(sirio::Color::White, bucket) == 0);
 }
 
+void test_noisy_history_key_extraction_for_quiet_move_fails() {
+    sirio::Board board;
+    const std::string before = board.to_fen();
+    const sirio::Move quiet = sirio::move_from_uci(board, "e2e4");
+
+    const auto key = sirio::make_noisy_history_key_for_tests(board, quiet);
+    assert(!key.has_value());
+    assert(board.to_fen() == before);
+}
+
+void test_capture_history_key_extraction_for_capture_succeeds() {
+    sirio::Board board{"8/8/8/3p4/4P3/8/8/8 w - - 0 1"};
+    const std::string before = board.to_fen();
+    const sirio::Move capture = sirio::move_from_uci(board, "e4d5");
+
+    const auto key = sirio::make_capture_history_key_for_tests(board, capture);
+    assert(key.has_value());
+    assert(key->mover == sirio::Color::White);
+    assert(key->attacker == sirio::PieceType::Pawn);
+    assert(key->captured == sirio::PieceType::Pawn);
+    assert(key->to == capture.to);
+    assert(board.to_fen() == before);
+}
+
+void test_capture_history_key_extraction_for_non_capture_fails() {
+    sirio::Board board;
+    const std::string before = board.to_fen();
+    const sirio::Move quiet = sirio::move_from_uci(board, "g1f3");
+
+    const auto key = sirio::make_capture_history_key_for_tests(board, quiet);
+    assert(!key.has_value());
+    assert(board.to_fen() == before);
+}
+
+void test_noisy_history_key_extraction_for_promotion_succeeds_and_is_deterministic() {
+    sirio::Board board{"4k3/6P1/8/8/8/8/8/4K3 w - - 0 1"};
+    const std::string before = board.to_fen();
+    const sirio::Move promotion = sirio::move_from_uci(board, "g7g8q");
+
+    const auto first = sirio::make_noisy_history_key_for_tests(board, promotion);
+    const auto second = sirio::make_noisy_history_key_for_tests(board, promotion);
+    assert(first.has_value());
+    assert(second.has_value());
+    assert(first->mover == sirio::Color::White);
+    assert(first->mover_piece == sirio::PieceType::Pawn);
+    assert(first->to == promotion.to);
+    assert(first->mover == second->mover);
+    assert(first->mover_piece == second->mover_piece);
+    assert(first->to == second->to);
+    assert(board.to_fen() == before);
+}
+
+void test_capture_history_key_extraction_for_invalid_move_fails() {
+    sirio::Board board;
+    const std::string before = board.to_fen();
+    sirio::Move invalid{0, 63, sirio::PieceType::Pawn};
+    invalid.captured = sirio::PieceType::Queen;
+
+    const auto key = sirio::make_capture_history_key_for_tests(board, invalid);
+    assert(!key.has_value());
+    assert(board.to_fen() == before);
+}
+
 
 void test_search_history_aggregate_lifecycle_contract() {
     sirio::SearchHistory history;
@@ -395,4 +458,9 @@ void run_history_tests() {
     test_correction_history_default_update_clamp_and_clear();
     test_correction_history_bucket_indexing_and_determinism();
     test_search_history_clear_resets_correction_history();
+    test_noisy_history_key_extraction_for_quiet_move_fails();
+    test_capture_history_key_extraction_for_capture_succeeds();
+    test_capture_history_key_extraction_for_non_capture_fails();
+    test_noisy_history_key_extraction_for_promotion_succeeds_and_is_deterministic();
+    test_capture_history_key_extraction_for_invalid_move_fails();
 }

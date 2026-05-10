@@ -9,6 +9,19 @@
 
 namespace sirio {
 
+struct CaptureHistoryKey {
+    Color mover = Color::White;
+    PieceType attacker = PieceType::Pawn;
+    PieceType captured = PieceType::Pawn;
+    int to = 0;
+};
+
+struct NoisyHistoryKey {
+    Color mover = Color::White;
+    PieceType mover_piece = PieceType::Pawn;
+    int to = 0;
+};
+
 class SearchHistory {
 public:
     class CaptureHistory {
@@ -90,5 +103,17 @@ private:
 };
 
 [[nodiscard]] bool is_quiet_move(const Move &move);
+[[nodiscard]] std::optional<CaptureHistoryKey> make_capture_history_key(const Board &board, const Move &move);
+[[nodiscard]] std::optional<NoisyHistoryKey> make_noisy_history_key(const Board &board, const Move &move);
+
+[[nodiscard]] inline std::optional<CaptureHistoryKey> make_capture_history_key_for_tests(const Board &board,
+                                                                                          const Move &move) {
+    return make_capture_history_key(board, move);
+}
+
+[[nodiscard]] inline std::optional<NoisyHistoryKey> make_noisy_history_key_for_tests(const Board &board,
+                                                                                       const Move &move) {
+    return make_noisy_history_key(board, move);
+}
 
 }  // namespace sirio

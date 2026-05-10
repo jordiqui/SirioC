@@ -41,6 +41,44 @@ bool is_quiet_move(const Move &move) {
            !move.is_en_passant;
 }
 
+std::optional<CaptureHistoryKey> make_capture_history_key(const Board &board, const Move &move) {
+    const auto mover_piece = board.piece_at(move.from);
+    if (!mover_piece.has_value() || mover_piece->first != board.side_to_move()) {
+        return std::nullopt;
+    }
+
+    if (!move.captured.has_value()) {
+        return std::nullopt;
+    }
+
+    const int capture_square = move.is_en_passant
+                                   ? (board.side_to_move() == Color::White ? move.to - 8 : move.to + 8)
+                                   : move.to;
+    const auto captured_piece = board.piece_at(capture_square);
+    if (!captured_piece.has_value() || captured_piece->first == board.side_to_move()) {
+        return std::nullopt;
+    }
+
+    if (captured_piece->second != *move.captured) {
+        return std::nullopt;
+    }
+
+    return CaptureHistoryKey{board.side_to_move(), move.piece, *move.captured, move.to};
+}
+
+std::optional<NoisyHistoryKey> make_noisy_history_key(const Board &board, const Move &move) {
+    const auto mover_piece = board.piece_at(move.from);
+    if (!mover_piece.has_value() || mover_piece->first != board.side_to_move()) {
+        return std::nullopt;
+    }
+
+    if (is_quiet_move(move)) {
+        return std::nullopt;
+    }
+
+    return NoisyHistoryKey{board.side_to_move(), move.piece, move.to};
+}
+
 int SearchHistory::quiet_history_score(const Move &move, Color mover) const {
     if (!is_quiet_move(move)) {
         return 0;

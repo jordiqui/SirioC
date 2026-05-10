@@ -2257,3 +2257,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No search behavior changed.
 - No NNUE behavior changed.
 - No strength/Elo claim.
+
+# P0-53 Capture/Noisy History Key Extraction Contract
+
+- Added deterministic capture/noisy history key extraction helpers and key structs in the history module with isolated tests.
+- No MovePicker/search integration in this step.
+- No search behaviour changed.
+- No NNUE behaviour changed.
+- No strength/Elo claim.
