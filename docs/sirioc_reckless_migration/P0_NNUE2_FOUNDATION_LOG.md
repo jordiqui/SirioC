@@ -2296,3 +2296,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No search behaviour changed.
 - No NNUE behaviour changed.
 - No strength/Elo claim.
+
+# P0-58 Capture/NoisyHistory Read-Only MovePicker Scoring
+
+- Added CaptureHistory/NoisyHistory read-only scoring in MovePicker tactical ordering.
+- Search behaviour change is limited to this single ordering surface.
+- No NNUE behaviour changed.
+- No strength/Elo claim.

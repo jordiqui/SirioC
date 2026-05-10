@@ -127,3 +127,14 @@ The future behavioural integration patch must be rejected if any of the followin
 ---
 
 P0-57 is documentation-only. No search behaviour is changed in this patch. No NNUE runtime behaviour is changed in this patch. No strength/Elo claim is made.
+
+## 8) P0-58 implementation update
+- CaptureHistory/NoisyHistory read-only scoring is now integrated in `MovePicker` for tactical candidates.
+- One-signal-only behavioural patch confirmation: only capture/noisy history signal was added to MovePicker scoring.
+- No search update path was added (no negamax/quiescence/beta-cutoff history updates for these tables in this patch).
+- Tests were extended to validate:
+  - strict zero-history snapshot equivalence continuity,
+  - TT move priority preservation with non-zero history,
+  - bounded reordering effects for non-zero capture/noisy history.
+- Snapshot impact: baseline P0-48 snapshots remain unchanged under default/zero history state.
+- Deferred work remains unchanged: search-side history updates, continuation history integration, correction history integration, and any LMR/pruning changes.
