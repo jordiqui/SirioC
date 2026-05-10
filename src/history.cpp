@@ -133,12 +133,30 @@ void SearchHistory::ContinuationHistory::clear() {
     table_ = {};
 }
 
+void SearchHistory::CorrectionHistory::clear() {
+    table_ = {};
+}
+
+std::size_t SearchHistory::CorrectionHistory::normalize_bucket(std::size_t bucket) {
+    return bucket % bucket_count_;
+}
+
+int SearchHistory::CorrectionHistory::score(Color mover, std::size_t bucket) const {
+    return table_[color_to_index(mover)][normalize_bucket(bucket)];
+}
+
+void SearchHistory::CorrectionHistory::update(Color mover, std::size_t bucket, int depth, bool success) {
+    auto &entry = table_[color_to_index(mover)][normalize_bucket(bucket)];
+    apply_history_delta(entry, history_bonus_for_depth(depth), success);
+}
+
 void SearchHistory::clear() {
     killer_moves_ = {};
     quiet_history_ = {};
     capture_history_.clear();
     noisy_history_.clear();
     continuation_history_.clear();
+    correction_history_.clear();
 }
 
 }  // namespace sirio
