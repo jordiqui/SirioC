@@ -34,6 +34,18 @@ public:
         std::array<std::array<std::array<int, 64>, static_cast<std::size_t>(PieceType::Count)>, 2> table_{};
     };
 
+    class CorrectionHistory {
+    public:
+        [[nodiscard]] int score(Color mover, std::size_t bucket) const;
+        void update(Color mover, std::size_t bucket, int depth, bool success);
+        void clear();
+
+    private:
+        static constexpr std::size_t bucket_count_ = 1024;
+        [[nodiscard]] static std::size_t normalize_bucket(std::size_t bucket);
+        std::array<std::array<int, bucket_count_>, 2> table_{};
+    };
+
     class ContinuationHistory {
     public:
         [[nodiscard]] int score(Color previous_mover, const Move &previous_move, Color current_mover,
@@ -65,6 +77,8 @@ public:
     [[nodiscard]] NoisyHistory &noisy_history() { return noisy_history_; }
     [[nodiscard]] const ContinuationHistory &continuation_history() const { return continuation_history_; }
     [[nodiscard]] ContinuationHistory &continuation_history() { return continuation_history_; }
+    [[nodiscard]] const CorrectionHistory &correction_history() const { return correction_history_; }
+    [[nodiscard]] CorrectionHistory &correction_history() { return correction_history_; }
 
 private:
     std::array<std::array<std::optional<Move>, 2>, search_params::max_search_depth> killer_moves_{};
@@ -72,6 +86,7 @@ private:
     CaptureHistory capture_history_{};
     NoisyHistory noisy_history_{};
     ContinuationHistory continuation_history_{};
+    CorrectionHistory correction_history_{};
 };
 
 [[nodiscard]] bool is_quiet_move(const Move &move);

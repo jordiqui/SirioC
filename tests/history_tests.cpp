@@ -215,6 +215,62 @@ void test_continuation_history_clamp_indexing_and_determinism() {
     assert(history.continuation_history().score(sirio::Color::White, d2d4, sirio::Color::White, g1f3) == 8);
 }
 
+
+void test_correction_history_default_update_clamp_and_clear() {
+    sirio::SearchHistory history;
+    constexpr std::size_t bucket = 7;
+
+    assert(history.correction_history().score(sirio::Color::White, bucket) == 0);
+    assert(history.correction_history().score(sirio::Color::Black, bucket) == 0);
+
+    history.correction_history().update(sirio::Color::White, bucket, 3, true);
+    assert(history.correction_history().score(sirio::Color::White, bucket) == 9);
+
+    history.correction_history().update(sirio::Color::White, bucket, 3, false);
+    assert(history.correction_history().score(sirio::Color::White, bucket) == 0);
+
+    for (int i = 0; i < 5000; ++i) {
+        history.correction_history().update(sirio::Color::White, bucket, 1000, true);
+    }
+    assert(history.correction_history().score(sirio::Color::White, bucket) == sirio::search_params::history_max);
+
+    for (int i = 0; i < 10000; ++i) {
+        history.correction_history().update(sirio::Color::White, bucket, 1000, false);
+    }
+    assert(history.correction_history().score(sirio::Color::White, bucket) == sirio::search_params::history_min);
+
+    history.correction_history().clear();
+    assert(history.correction_history().score(sirio::Color::White, bucket) == 0);
+}
+
+void test_correction_history_bucket_indexing_and_determinism() {
+    sirio::SearchHistory history;
+
+    constexpr std::size_t bucket_a = 12;
+    constexpr std::size_t bucket_b = 13;
+    constexpr std::size_t wrapped_bucket = 12 + 1024;
+
+    history.correction_history().update(sirio::Color::White, bucket_a, 2, true);
+    history.correction_history().update(sirio::Color::White, bucket_a, 2, true);
+
+    assert(history.correction_history().score(sirio::Color::White, bucket_a) == 8);
+    assert(history.correction_history().score(sirio::Color::White, bucket_b) == 0);
+    assert(history.correction_history().score(sirio::Color::Black, bucket_a) == 0);
+    assert(history.correction_history().score(sirio::Color::White, wrapped_bucket) ==
+           history.correction_history().score(sirio::Color::White, bucket_a));
+}
+
+void test_search_history_clear_resets_correction_history() {
+    sirio::SearchHistory history;
+    constexpr std::size_t bucket = 29;
+
+    history.correction_history().update(sirio::Color::White, bucket, 4, true);
+    assert(history.correction_history().score(sirio::Color::White, bucket) > 0);
+
+    history.clear();
+    assert(history.correction_history().score(sirio::Color::White, bucket) == 0);
+}
+
 void test_search_history_clear_resets_continuation_history() {
     sirio::SearchHistory history;
     sirio::Board start;
@@ -242,4 +298,7 @@ void run_history_tests() {
     test_continuation_history_default_update_and_clear();
     test_continuation_history_clamp_indexing_and_determinism();
     test_search_history_clear_resets_continuation_history();
+    test_correction_history_default_update_clamp_and_clear();
+    test_correction_history_bucket_indexing_and_determinism();
+    test_search_history_clear_resets_correction_history();
 }

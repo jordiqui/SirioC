@@ -254,3 +254,37 @@ Provided APIs:
 - Continuation history is **not** read in MovePicker.
 - Continuation history is **not** updated from `negamax` or `quiescence`.
 - Integration into ordering/search remains deferred to later P0 steps.
+
+# P0-51 — Correction History Data Structure Scaffold / No-Behaviour-Change Contract
+
+## Scope
+- Added correction-history scaffolding inside `SearchHistory`.
+- No MovePicker scoring changes.
+- No search-side or evaluation-side read/write integration.
+
+## Added structure
+- `SearchHistory::CorrectionHistory`
+  - Indexing dimensions: `[mover_color][bucket]`.
+  - Current scaffold key scheme uses an explicit fixed bucket index (`bucket % 1024`) plus mover color.
+  - This is intentionally a minimal deterministic placeholder until safe pawn/material hash keys are wired for later integration.
+
+Provided APIs:
+- `score(Color mover, std::size_t bucket)` query.
+- `update(Color mover, std::size_t bucket, int depth, bool success)` bounded by existing history controls (`history_bonus_limit`, `history_min`, `history_max`).
+- `clear()` reset to zero.
+
+## Tests added
+- Extended `tests/history_tests.cpp` for correction-history scaffold coverage:
+  - zero-default checks,
+  - positive/negative updates,
+  - saturation/clamping,
+  - reset via `CorrectionHistory::clear()`,
+  - deterministic indexing, bucket-isolation, and wrap behavior (`bucket + 1024` aliasing by modulo),
+  - deterministic repeated updates,
+  - `SearchHistory::clear()` resetting correction history.
+
+## Deferred integration
+- Correction history is **not** read in MovePicker.
+- Correction history is **not** read in evaluation.
+- Correction history is **not** read or updated from `negamax` or `quiescence`.
+- Integration into ordering/eval/search remains deferred to later P0 steps.

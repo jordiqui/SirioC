@@ -2241,3 +2241,12 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE behaviour changed.
 - SirioNNUE2 default/runtime behaviour unchanged.
 - No strength/Elo claim.
+
+# P0-51 Correction History Data Structure Scaffold
+
+- Added correction-history scaffolding in the search-history module with isolated tests.
+- No MovePicker/search/evaluation integration in this step.
+- No search behaviour changed.
+- No evaluation behaviour changed.
+- No NNUE behaviour changed.
+- No strength/Elo claim.
