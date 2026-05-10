@@ -122,7 +122,6 @@ add_executable(sirio_nnue_format_detect_contract
 
 target_link_libraries(sirio_nnue_format_detect_contract PRIVATE sirio_core)
 
-
 if (WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "MSYS")
     if (MSVC)
         set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
