@@ -10,6 +10,10 @@ constexpr std::size_t color_to_index(Color color) {
     return color == Color::White ? 0u : 1u;
 }
 
+bool is_valid_color(Color color) {
+    return color == Color::White || color == Color::Black;
+}
+
 bool moves_match(const Move &lhs, const Move &rhs) {
     return lhs.from == rhs.from && lhs.to == rhs.to && lhs.piece == rhs.piece &&
            lhs.captured == rhs.captured && lhs.promotion == rhs.promotion &&
@@ -100,6 +104,13 @@ std::optional<ContinuationHistoryKey> make_continuation_history_key(
 
     return ContinuationHistoryKey{previous_board.side_to_move(), current_board.side_to_move(), previous_move->piece,
                                   previous_move->to, current_move.piece, current_move.to};
+}
+
+std::optional<CorrectionHistoryKey> make_correction_history_key(Color mover_color, std::size_t bucket) {
+    if (!is_valid_color(mover_color)) {
+        return std::nullopt;
+    }
+    return CorrectionHistoryKey{mover_color, bucket % 1024};
 }
 
 int SearchHistory::quiet_history_score(const Move &move, Color mover) const {

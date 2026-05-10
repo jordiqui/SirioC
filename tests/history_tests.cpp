@@ -271,6 +271,53 @@ void test_search_history_clear_resets_correction_history() {
     assert(history.correction_history().score(sirio::Color::White, bucket) == 0);
 }
 
+void test_correction_history_key_extraction_valid_white_and_black() {
+    const auto white_key = sirio::make_correction_history_key_for_tests(sirio::Color::White, 17);
+    const auto black_key = sirio::make_correction_history_key_for_tests(sirio::Color::Black, 23);
+    assert(white_key.has_value());
+    assert(black_key.has_value());
+    assert(white_key->mover_color == sirio::Color::White);
+    assert(white_key->bucket == 17);
+    assert(black_key->mover_color == sirio::Color::Black);
+    assert(black_key->bucket == 23);
+}
+
+void test_correction_history_key_extraction_bucket_normalization_and_aliases() {
+    const auto bucket_base = sirio::make_correction_history_key_for_tests(sirio::Color::White, 12);
+    const auto bucket_alias = sirio::make_correction_history_key_for_tests(sirio::Color::White, 12 + 1024);
+    const auto bucket_distinct = sirio::make_correction_history_key_for_tests(sirio::Color::White, 13);
+    assert(bucket_base.has_value());
+    assert(bucket_alias.has_value());
+    assert(bucket_distinct.has_value());
+    assert(bucket_base->bucket == bucket_alias->bucket);
+    assert(bucket_base->bucket != bucket_distinct->bucket);
+}
+
+void test_correction_history_key_extraction_invalid_color_fails() {
+    const auto invalid_color = static_cast<sirio::Color>(99);
+    const auto key = sirio::make_correction_history_key_for_tests(invalid_color, 5);
+    assert(!key.has_value());
+}
+
+void test_correction_history_key_extraction_is_deterministic() {
+    const auto first = sirio::make_correction_history_key_for_tests(sirio::Color::Black, 2049);
+    const auto second = sirio::make_correction_history_key_for_tests(sirio::Color::Black, 2049);
+    assert(first.has_value());
+    assert(second.has_value());
+    assert(first->mover_color == second->mover_color);
+    assert(first->bucket == second->bucket);
+}
+
+void test_correction_history_key_targets_expected_bucket_for_update_and_read() {
+    sirio::SearchHistory history;
+    const auto key = sirio::make_correction_history_key_for_tests(sirio::Color::White, 7 + 1024);
+    assert(key.has_value());
+    history.correction_history().update(key->mover_color, key->bucket, 2, true);
+
+    assert(history.correction_history().score(sirio::Color::White, 7) == 4);
+    assert(history.correction_history().score(sirio::Color::White, 7 + 1024) == 4);
+}
+
 void test_noisy_history_key_extraction_for_quiet_move_fails() {
     sirio::Board board;
     const std::string before = board.to_fen();
@@ -525,6 +572,11 @@ void run_history_tests() {
     test_correction_history_default_update_clamp_and_clear();
     test_correction_history_bucket_indexing_and_determinism();
     test_search_history_clear_resets_correction_history();
+    test_correction_history_key_extraction_valid_white_and_black();
+    test_correction_history_key_extraction_bucket_normalization_and_aliases();
+    test_correction_history_key_extraction_invalid_color_fails();
+    test_correction_history_key_extraction_is_deterministic();
+    test_correction_history_key_targets_expected_bucket_for_update_and_read();
     test_noisy_history_key_extraction_for_quiet_move_fails();
     test_capture_history_key_extraction_for_capture_succeeds();
     test_capture_history_key_extraction_for_non_capture_fails();
