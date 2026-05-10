@@ -145,3 +145,15 @@ Physical Syzygy tablebase files (**WDL/DTZ data blobs**) must **not** be committ
 
 ## 10) Elo/strength claim statement
 This task is documentation/audit only and makes **no Elo or strength claim**.
+## 11) P0-39 markers added (docs/comments only)
+- Added top-of-file legacy deprecation markers to:
+  - `training/nnue/scripts/features.py`
+  - `training/nnue/scripts/prepare_dataset.py`
+  - `training/nnue/scripts/train.py`
+  - `training/nnue/scripts/export_to_engine.py`
+- Added a legacy marker block to `training/nnue/configs/default.yaml`.
+- Added `training/nnue/README.md` legacy-vs-v2 workflow clarification.
+
+These markers are documentation/comment-only and do not change runtime, CLI,
+script output, or model/search/UCI behaviour.
+

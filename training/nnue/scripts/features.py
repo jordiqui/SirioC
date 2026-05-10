@@ -1,3 +1,10 @@
+# LEGACY NOTICE (P0-39): SirioNNUE1 / PieceCountModel pipeline.
+# This module is retained for compatibility and test-baseline continuity only.
+# New NNUE work should use v2 scripts: features_v2.py, prepare_dataset_v2.py,
+# train_v2.py, export_to_engine_v2.py, build_candidate_v2.py,
+# verify_candidate_v2.py, and verified_runtime_load_v2.py.
+# Stockfish .nnue compatibility is not claimed.
+
 """Feature extraction helpers for the Sirio NNUE training pipeline."""
 from __future__ import annotations
 
