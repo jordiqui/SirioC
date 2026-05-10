@@ -316,3 +316,48 @@ Coverage confirms:
 - No new history table is updated from `negamax`/`quiescence`.
 - No MovePicker scoring change in this step.
 - Future behavioral integration remains deferred.
+
+# P0-53 — Capture/Noisy History Key Extraction Contract / No-Behaviour-Change
+
+## Scope
+- Added deterministic helper-level key extraction for capture/noisy history indexing.
+- No MovePicker read-path integration.
+- No search write-path integration.
+- No MovePicker scoring or stage changes.
+
+## Added helper contracts
+- `CaptureHistoryKey`
+- `NoisyHistoryKey`
+- `make_capture_history_key(...)` and `make_capture_history_key_for_tests(...)`
+- `make_noisy_history_key(...)` and `make_noisy_history_key_for_tests(...)`
+
+## Key fields
+- Capture key maps to existing capture table dimensions:
+  - mover color,
+  - attacker/moving piece,
+  - captured piece,
+  - destination square.
+- Noisy key maps to existing noisy table dimensions:
+  - mover color,
+  - moving piece,
+  - destination square.
+
+## Tests added
+- Added isolated history key extraction tests in `tests/history_tests.cpp`:
+  - quiet move does not produce noisy key under this contract (separation by current `is_quiet_move`/noisy predicate),
+  - capture move produces capture key with expected fields,
+  - non-capture does not produce capture key,
+  - promotion move produces noisy key,
+  - invalid synthetic capture-like move fails key extraction,
+  - board FEN unchanged before/after extraction calls,
+  - repeated extraction deterministic.
+
+## Limitations/deferred
+- En-passant capture-key extraction is supported only when `Move` and board occupancy agree (`move.captured`, `is_en_passant`, and target pawn presence on derived capture square).
+- No search integration in this step by design.
+
+## Behavioural continuity confirmation
+- No MovePicker/search use yet.
+- No search behaviour changes.
+- No NNUE runtime changes.
+- No strength/Elo claim.
