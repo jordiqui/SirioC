@@ -462,3 +462,12 @@ Coverage confirms:
 
 ## Next step
 - First controlled MovePicker integration decision (single signal at a time under deterministic ordering coverage).
+
+# P0-57 — MovePicker History Integration Decision Matrix
+
+- Added decision matrix: `docs/sirioc_reckless_migration/P0_MOVE_PICKER_HISTORY_INTEGRATION_DECISION.md`.
+- Documentation-only patch.
+- Selects first controlled behavioural candidate as capture/noisy-history read-only scoring in MovePicker (for future P0-58), with explicit guardrails and rejection conditions.
+- No search behaviour changed in this P0-57 patch.
+- No NNUE behaviour changed.
+- No strength/Elo claim.
