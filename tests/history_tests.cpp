@@ -644,6 +644,65 @@ void test_search_history_clear_resets_continuation_history() {
 
 }  // namespace
 
+
+void test_capture_noisy_update_policy_capture_success_and_failure() {
+    sirio::SearchHistory history;
+    sirio::Board board{"8/8/8/3p4/4P3/8/8/8 w - - 0 1"};
+    const sirio::Move capture = sirio::move_from_uci(board, "e4d5");
+    const auto capture_key = sirio::make_capture_history_key_for_tests(board, capture);
+
+    const auto success = sirio::make_capture_noisy_history_update(capture_key, std::nullopt, true, 3);
+    assert(success.target == sirio::CaptureNoisyHistoryUpdateTarget::Capture);
+    assert(success.capture_key.has_value());
+    assert(success.bonus == 9);
+    sirio::apply_capture_noisy_history_update_for_tests(history, success);
+    const int after_success = history.capture_history().score(capture, sirio::Color::White);
+    assert(after_success > 0);
+
+    const auto failure = sirio::make_capture_noisy_history_update(capture_key, std::nullopt, false, 3);
+    assert(failure.target == sirio::CaptureNoisyHistoryUpdateTarget::Capture);
+    sirio::apply_capture_noisy_history_update_for_tests(history, failure);
+    assert(history.capture_history().score(capture, sirio::Color::White) < after_success);
+}
+
+void test_capture_noisy_update_policy_noisy_success_and_quiet_rejection() {
+    sirio::SearchHistory history;
+    sirio::Board noisy_board{"4k3/6P1/8/8/8/8/8/4K3 w - - 0 1"};
+    sirio::Board quiet_board;
+    const sirio::Move noisy = sirio::move_from_uci(noisy_board, "g7g8q");
+    const sirio::Move quiet = sirio::move_from_uci(quiet_board, "e2e4");
+
+    const auto noisy_key = sirio::make_noisy_history_key_for_tests(noisy_board, noisy);
+    const auto noisy_update = sirio::make_capture_noisy_history_update(std::nullopt, noisy_key, true, 2);
+    assert(noisy_update.target == sirio::CaptureNoisyHistoryUpdateTarget::Noisy);
+    sirio::apply_capture_noisy_history_update_for_tests(history, noisy_update);
+    assert(history.noisy_history().score(noisy, sirio::Color::White) > 0);
+
+    const auto quiet_noisy_key = sirio::make_noisy_history_key_for_tests(quiet_board, quiet);
+    const auto quiet_update = sirio::make_capture_noisy_history_update(std::nullopt, quiet_noisy_key, true, 2);
+    assert(quiet_update.target == sirio::CaptureNoisyHistoryUpdateTarget::None);
+}
+
+void test_capture_noisy_update_policy_invalid_key_clamp_and_determinism() {
+    sirio::SearchHistory history;
+    const sirio::CaptureHistoryKey invalid_capture{sirio::Color::White, sirio::PieceType::Pawn, sirio::PieceType::Pawn, 99};
+    const auto invalid = sirio::make_capture_noisy_history_update(invalid_capture, std::nullopt, true, 3);
+    assert(invalid.target == sirio::CaptureNoisyHistoryUpdateTarget::None);
+
+    sirio::Board board{"8/8/8/3p4/4P3/8/8/8 w - - 0 1"};
+    const sirio::Move capture = sirio::move_from_uci(board, "e4d5");
+    const auto key = sirio::make_capture_history_key_for_tests(board, capture);
+    const auto first = sirio::make_capture_noisy_history_update(key, std::nullopt, true, 100000);
+    const auto second = sirio::make_capture_noisy_history_update(key, std::nullopt, true, 100000);
+    assert(first.bonus == sirio::search_params::history_bonus_limit);
+    assert(first.bonus == second.bonus);
+
+    for (int i = 0; i < 2000; ++i) {
+        sirio::apply_capture_noisy_history_update_for_tests(history, first);
+    }
+    assert(history.capture_history().score(capture, sirio::Color::White) == sirio::search_params::history_max);
+}
+
 void run_history_tests() {
     test_initial_state_neutral_and_empty_killers();
     test_is_quiet_move_predicate();
@@ -678,4 +737,7 @@ void run_history_tests() {
     test_continuation_history_key_extraction_missing_previous_context_fails();
     test_continuation_history_key_extraction_invalid_current_move_fails();
     test_continuation_history_key_extraction_is_deterministic_and_context_sensitive();
+    test_capture_noisy_update_policy_capture_success_and_failure();
+    test_capture_noisy_update_policy_noisy_success_and_quiet_rejection();
+    test_capture_noisy_update_policy_invalid_key_clamp_and_determinism();
 }

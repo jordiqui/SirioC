@@ -2303,3 +2303,12 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - Search behaviour change is limited to this single ordering surface.
 - No NNUE behaviour changed.
 - No strength/Elo claim.
+
+# P0-59 Capture/NoisyHistory Search Update-Policy Scaffold
+
+- Added capture/noisy update-policy scaffold helper(s) and isolated tests.
+- No real search runtime integration in negamax/quiescence yet.
+- MovePicker scoring remains unchanged from P0-58 in this step.
+- No search behaviour claim beyond isolated helper/test scaffold.
+- No NNUE behaviour changed.
+- No strength/Elo claim.

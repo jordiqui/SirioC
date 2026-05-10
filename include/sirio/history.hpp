@@ -36,6 +36,20 @@ struct CorrectionHistoryKey {
     std::size_t bucket = 0;
 };
 
+enum class CaptureNoisyHistoryUpdateTarget {
+    None,
+    Capture,
+    Noisy,
+};
+
+struct CaptureNoisyHistoryUpdate {
+    CaptureNoisyHistoryUpdateTarget target = CaptureNoisyHistoryUpdateTarget::None;
+    bool success = false;
+    int bonus = 0;
+    std::optional<CaptureHistoryKey> capture_key;
+    std::optional<NoisyHistoryKey> noisy_key;
+};
+
 class SearchHistory {
 public:
     class CaptureHistory {
@@ -124,6 +138,10 @@ private:
     const Board &previous_board, const std::optional<Move> &previous_move, const Board &current_board,
     const Move &current_move);
 [[nodiscard]] std::optional<CorrectionHistoryKey> make_correction_history_key(Color mover_color, std::size_t bucket);
+[[nodiscard]] CaptureNoisyHistoryUpdate make_capture_noisy_history_update(
+    const std::optional<CaptureHistoryKey> &capture_key, const std::optional<NoisyHistoryKey> &noisy_key,
+    bool success, int depth);
+void apply_capture_noisy_history_update_for_tests(SearchHistory &history, const CaptureNoisyHistoryUpdate &update);
 
 [[nodiscard]] inline std::optional<CaptureHistoryKey> make_capture_history_key_for_tests(const Board &board,
                                                                                           const Move &move) {

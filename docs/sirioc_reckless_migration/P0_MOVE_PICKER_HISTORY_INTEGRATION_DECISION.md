@@ -138,3 +138,20 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
   - bounded reordering effects for non-zero capture/noisy history.
 - Snapshot impact: baseline P0-48 snapshots remain unchanged under default/zero history state.
 - Deferred work remains unchanged: search-side history updates, continuation history integration, correction history integration, and any LMR/pruning changes.
+
+## 9) P0-59 update-policy scaffold (capture/noisy search-side contract prep)
+- Added isolated capture/noisy update-policy helper contract:
+  - `CaptureNoisyHistoryUpdate`
+  - `make_capture_noisy_history_update(...)`
+  - `apply_capture_noisy_history_update_for_tests(...)` (test-only adapter)
+- Scope remains scaffold-only:
+  - no `negamax` runtime wiring,
+  - no `quiescence` runtime wiring,
+  - no MovePicker scoring changes beyond P0-58.
+- Policy behaviour captured in tests:
+  - capture success/failure decision routing,
+  - noisy-promotion success routing,
+  - quiet/invalid-key rejection,
+  - bounded bonus/clamp preservation,
+  - deterministic repeated update behaviour.
+- Future integration of real search update calls remains explicitly deferred.
