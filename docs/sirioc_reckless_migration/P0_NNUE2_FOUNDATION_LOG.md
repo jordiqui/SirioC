@@ -2110,3 +2110,54 @@ These are emitted through existing `NetworkInfo::format_report` surfaces only.
 
 ## Next deferred step
 - Consider a later approved stage to add canonical/legacy labeling in user-facing UCI docs and eventual alias deprecation planning, without changing runtime behaviour until explicitly authorized.
+
+# P0-42 SirioNNUE2 Internal Evaluation Activation Candidate / Default-Off Contract
+
+## Files changed
+- `CMakeLists.txt`
+- `tests/sirio_nnue_internal_activation_contract.cpp`
+- `tests/nnue_internal_activation_candidate_v2_test.py`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Helper/test path
+- Test-only helper binary: `build/sirio_nnue_internal_activation_contract`
+- Python contract test: `tests/nnue_internal_activation_candidate_v2_test.py`
+
+## Activation flow
+1. Build a temporary NNUE2 candidate artifact with `build_candidate_v2.py`.
+2. Require candidate verification via `verify_candidate_v2.py`.
+3. Reconfirm verified runtime contract via `verified_runtime_load_v2.py`.
+4. Load the verified `candidate.nnue2` in `ExperimentalSirioNNUE2Runtime` through the internal helper.
+5. Evaluate fixed FENs through `evaluate_with_experimental_selector_shadow_for_tests(...)` under explicit backend selection.
+6. Confirm deterministic result and no board mutation.
+
+## Verified-candidate-before-activation rule
+- Activation candidate flow is gated by verification first.
+- The Python contract verifies the candidate and verified-runtime-load contract before invoking internal activation helper.
+- Missing/tampered/unverified candidate paths are rejected and do not produce experimental activation.
+
+## Backend selector behavior
+- `InternalEvalBackend::DefaultExisting` returns baseline `evaluate()` score and reports actual backend `DefaultExisting`.
+- Explicit `InternalEvalBackend::ExperimentalSirioNNUE2` with verified candidate reports actual backend `ExperimentalSirioNNUE2` and non-fallback.
+
+## FENs tested
+- Start position: `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
+- Kings-only: `8/8/8/8/8/8/6k1/6K1 w - - 0 1`
+- Asymmetric material: `4k3/8/8/3q4/4N3/8/8/4K3 w - - 0 1`
+
+## Fallback/refusal cases
+- Tampered candidate payload (`candidate.nnue2` appended bytes) -> load rejected.
+- Missing candidate path -> load rejected.
+
+## Continuity confirmations
+- SirioNNUE2 remains non-default.
+- Normal `evaluate()`, `initialize_evaluation()`, `ensure_thread_backend()`, `evaluate_for_current_player()`, search, and UCI option/default behavior remain unchanged.
+- No engine-vs-engine matches, no OpenBench/fastchess/cutechess/ORDO, and no self-play/teacher integration were added.
+- No strength/Elo claim is made.
+
+## Known limitations
+- Activation candidate is internal/test-only and performed through a contract helper binary rather than public UCI controls.
+- The helper consumes a file path and emits contract lines; it is not integrated into search or production routing.
+
+## Next deferred step
+- After roadmap approval, add a controlled non-default runtime activation surface that still preserves mandatory verified-candidate gating and no-default-change policy.
