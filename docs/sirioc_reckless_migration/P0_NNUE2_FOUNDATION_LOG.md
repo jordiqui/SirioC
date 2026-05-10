@@ -1964,3 +1964,52 @@ This task adds deterministic candidate-artifact verification before any SirioNNU
 
 ## Next deferred step
 - Integrate this verifier as a mandatory precondition gate in future candidate activation/gauntlet orchestration scripts (outside this task scope).
+
+# P0-36 SirioNNUE2 Candidate Runtime Load From Verified Manifest / Verified-Only Contract
+
+This task adds an internal/test-facing verified-only runtime-load contract: candidate directory -> manifest/model-card/hash/format verification -> runtime load smoke. It does not alter public activation, search wiring, or UCI defaults.
+
+## Files changed
+- `training/nnue/scripts/verified_runtime_load_v2.py`
+- `tests/nnue_candidate_verified_runtime_load_test.py`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Helper/test path
+- Helper: `python -m training.nnue.scripts.verified_runtime_load_v2 --candidate-dir <dir>`
+- Test: `python tests/nnue_candidate_verified_runtime_load_test.py`
+
+## Verification-before-load rule
+- The helper always runs `verify_candidate_v2.py` first against the candidate directory contract (`candidate.nnue2`, `CANDIDATE_MANIFEST.json`, `MODEL_CARD.json`).
+- Runtime load is attempted only if verification succeeds (including manifest/model-card integrity, candidate SHA-256, `SirioNNUE2MinimalV1` format, no-strength language, and non-default confirmations enforced by P0-35 verifier).
+
+## Metadata contract
+- `verification_attempted`
+- `verification_succeeded`
+- `load_attempted`
+- `load_succeeded`
+- `failure_reason`
+- `candidate_path`
+- `manifest_path`
+
+## Failure cases tested
+- Corrupted `candidate.nnue2` content (hash mismatch) -> refused before runtime load.
+- Corrupted candidate hash in `CANDIDATE_MANIFEST.json` -> refused before runtime load.
+- Missing `MODEL_CARD.json` -> refused before runtime load.
+- Fake Stockfish-style payload in `candidate.nnue2` -> refused by verification before runtime load.
+
+## Runtime behavior confirmations
+- CPU-only flow; no GPU required by this contract.
+- SirioNNUE2 remains non-default.
+- Normal `evaluate()`, initialization, routing, search, and UCI behavior remain unchanged.
+- No self-play, teacher engines, fastchess/cutechess/ORDO/OpenBench integration added.
+- No Elo/strength claim is made.
+
+## Known limitations
+- Contract is internal/test-facing and currently exercised through smoke/runtime harness binaries rather than production routing.
+- Helper reports pass/fail metadata and does not mutate global evaluation state.
+
+## Next deferred step
+- Controlled integration point for verified candidate selection into broader experimental harness flow (still non-default and non-public), preserving verification gate as mandatory precondition.
+
+## Originality/provenance note
+- Implementation and tests are original SirioC repository work and do not import external engine/trainer source code.
