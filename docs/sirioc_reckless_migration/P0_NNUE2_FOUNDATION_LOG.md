@@ -7,6 +7,14 @@
 - SirioNNUE2 remains non-default.
 - No strength/Elo claim.
 
+# P0-49 Capture/Noisy History Data Structure Scaffold
+
+- Added capture/noisy history scaffolding in the search-history module with isolated tests.
+- No MovePicker/search integration in this step.
+- No search behaviour changed.
+- No NNUE behaviour changed.
+- No strength/Elo claim.
+
 
 # P0-46 Search P0 Re-Entry Baseline
 
