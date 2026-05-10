@@ -288,3 +288,31 @@ Provided APIs:
 - Correction history is **not** read in evaluation.
 - Correction history is **not** read or updated from `negamax` or `quiescence`.
 - Integration into ordering/eval/search remains deferred to later P0 steps.
+
+# P0-52 — SearchHistory Lifecycle Integration Audit / No-Behaviour-Change Contract
+
+## Scope
+- Added aggregate lifecycle contract tests for `SearchHistory` as a complete owned state bundle.
+- Validation-only step; no search-path consumption of new history tables.
+
+## Aggregate lifecycle validated
+The aggregate contract now validates lifecycle behavior for all currently owned tables:
+- killer history,
+- quiet history,
+- capture history,
+- noisy history,
+- continuation history,
+- correction history.
+
+Coverage confirms:
+- default/zero initialization,
+- non-zero updates after writes,
+- `SearchHistory::clear()` resets all owned tables,
+- key isolation under mixed updates,
+- deterministic repeated clear/update cycles.
+
+## Integration status
+- No new history table is read in `MovePicker`.
+- No new history table is updated from `negamax`/`quiescence`.
+- No MovePicker scoring change in this step.
+- Future behavioral integration remains deferred.
