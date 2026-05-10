@@ -2171,3 +2171,15 @@ These are emitted through existing `NetworkInfo::format_report` surfaces only.
 - No search/UCI/evaluation-default behavior changed.
 - SirioNNUE2 remains non-default.
 - Deferred static comparison should be revisited only after the helper/header-contract discrepancy is diagnosed locally.
+
+# P0-44 SirioNNUE2 Helper Contract Failure Register / Deferred Diagnostics Map
+
+## Summary
+- Added `docs/sirioc_reckless_migration/P0_HELPER_CONTRACT_FAILURE_REGISTER.md` as a docs-only forensic register for deferred helper-contract failures.
+- No code, runtime, search, evaluation, UCI, or helper-behaviour changes were made.
+- P0-37 and P0-43 remain deferred/quarantined pending local path/hash parity diagnostics.
+
+## Stability confirmations
+- Stable branch remains at P0-42.
+- SirioNNUE2 remains non-default.
+- No strength/Elo claim is made.
