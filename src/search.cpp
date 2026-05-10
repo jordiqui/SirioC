@@ -2324,4 +2324,29 @@ int static_exchange_eval_for_tests(const Board &board, const Move &move) {
     return static_exchange_score(board, move);
 }
 
+std::vector<Move> move_picker_order_snapshot_for_tests(const Board &board, int ply,
+                                                       const std::optional<Move> &tt_move,
+                                                       bool tactical_only,
+                                                       const std::optional<Move> &killer0,
+                                                       const std::optional<Move> &killer1) {
+    Board board_copy = board;
+    SearchSharedState shared_state{};
+    SearchContext context{};
+    context.shared = &shared_state;
+    if (killer0.has_value()) {
+        context.history.store_killer(*killer0, ply);
+    }
+    if (killer1.has_value()) {
+        context.history.store_killer(*killer1, ply);
+    }
+    auto moves = generate_legal_moves(board_copy);
+    MovePicker picker(board_copy, std::move(moves), context, ply, tt_move, board_copy.side_to_move(),
+                      tactical_only);
+    std::vector<Move> ordered;
+    while (auto move = picker.next()) {
+        ordered.push_back(*move);
+    }
+    return ordered;
+}
+
 }  // namespace sirio

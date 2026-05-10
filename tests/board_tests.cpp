@@ -19,6 +19,7 @@ void run_tt_tests();
 void run_evaluation_phase_tests();
 void run_evaluation_route_harness_tests();
 void run_search_tests();
+void run_move_picker_snapshot_tests();
 void run_nnue_backend_tests();
 void run_history_tests();
 void run_nnue_features_tests();
@@ -466,6 +467,7 @@ int main() {
     run_nnue_api_build_info_v2_tests();
     run_nnue_format_detection_v2_tests();
     run_history_tests();
+    run_move_picker_snapshot_tests();
     run_search_tests();
     run_evaluation_phase_tests();
     run_evaluation_route_harness_tests();
