@@ -79,6 +79,29 @@ std::optional<NoisyHistoryKey> make_noisy_history_key(const Board &board, const 
     return NoisyHistoryKey{board.side_to_move(), move.piece, move.to};
 }
 
+std::optional<ContinuationHistoryKey> make_continuation_history_key(
+    const Board &previous_board, const std::optional<Move> &previous_move, const Board &current_board,
+    const Move &current_move) {
+    if (!previous_move.has_value()) {
+        return std::nullopt;
+    }
+
+    const auto previous_mover_piece = previous_board.piece_at(previous_move->from);
+    if (!previous_mover_piece.has_value() || previous_mover_piece->first != previous_board.side_to_move() ||
+        previous_mover_piece->second != previous_move->piece || !validate_move(previous_board, *previous_move)) {
+        return std::nullopt;
+    }
+
+    const auto current_mover_piece = current_board.piece_at(current_move.from);
+    if (!current_mover_piece.has_value() || current_mover_piece->first != current_board.side_to_move() ||
+        current_mover_piece->second != current_move.piece || !validate_move(current_board, current_move)) {
+        return std::nullopt;
+    }
+
+    return ContinuationHistoryKey{previous_board.side_to_move(), current_board.side_to_move(), previous_move->piece,
+                                  previous_move->to, current_move.piece, current_move.to};
+}
+
 int SearchHistory::quiet_history_score(const Move &move, Color mover) const {
     if (!is_quiet_move(move)) {
         return 0;

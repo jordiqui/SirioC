@@ -361,3 +361,46 @@ Coverage confirms:
 - No search behaviour changes.
 - No NNUE runtime changes.
 - No strength/Elo claim.
+
+# P0-54 — Continuation History Key Extraction Contract
+
+## Scope
+- Added deterministic continuation-history key extraction helpers only.
+- No MovePicker continuation-history read.
+- No search continuation-history update.
+
+## Helpers
+- `ContinuationHistoryKey`
+- `make_continuation_history_key(...)`
+- `make_continuation_history_key_for_tests(...)`
+
+## Key fields
+- `previous_mover_color`
+- `current_mover_color`
+- `previous_moving_piece`
+- `previous_to_square`
+- `current_moving_piece`
+- `current_to_square`
+
+## Context contract
+- Inputs are `previous_board`, `previous_move` (optional), `current_board`, `current_move`.
+- Extraction succeeds only when:
+  - previous move context is present and legal on `previous_board`,
+  - current move is legal on `current_board`,
+  - moving pieces exist on move `from` squares and match move piece type.
+- Extraction fails with `std::nullopt` on missing/invalid context.
+- Helper is deterministic and does not mutate board state.
+
+## Tests
+- Added isolated continuation-key extraction tests in `tests/history_tests.cpp`:
+  - valid quiet previous/current context,
+  - valid previous capture + current quiet context,
+  - missing previous context failure,
+  - invalid current move failure,
+  - deterministic repeated extraction,
+  - different previous context produces different key when expected,
+  - board FEN unchanged before/after extraction.
+
+## Limitations / deferred
+- No MovePicker/search integration in P0-54.
+- No continuation-history update policy changes.
