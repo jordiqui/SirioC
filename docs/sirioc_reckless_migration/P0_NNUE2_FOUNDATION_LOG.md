@@ -2023,3 +2023,22 @@ This task adds an internal/test-facing verified-only runtime-load contract: cand
 - No search/UCI/evaluation-default behavior changed.
 - SirioNNUE2 remains non-default.
 - Deferred corpus reporting should be revisited later with explicit local path/hash parity diagnostics between verified-load and corpus helper paths.
+
+# P0-38 SirioNNUE2 Legacy Pipeline Deprecation Map / No-Behaviour-Change Contract
+
+## Files changed
+- `docs/sirioc_reckless_migration/P0_LEGACY_NNUE_DEPRECATION_MAP.md`
+- `docs/sirioc_reckless_migration/P0_NNUE2_FOUNDATION_LOG.md`
+
+## Scope
+- Added a legacy SirioNNUE1/PieceCount deprecation map documenting current roles, risks, and phased retirement recommendations.
+- Audit/documentation only; no runtime/search/UCI/training-script code behaviour changes.
+
+## Link
+- See `docs/sirioc_reckless_migration/P0_LEGACY_NNUE_DEPRECATION_MAP.md`.
+
+## Continuity confirmations
+- SirioNNUE1 remains legacy/test baseline.
+- SirioNNUE2 remains non-default.
+- No Stockfish `.nnue` compatibility claim is made.
+- No Elo/strength claim is made.
