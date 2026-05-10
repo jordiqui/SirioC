@@ -2312,3 +2312,13 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No search behaviour claim beyond isolated helper/test scaffold.
 - No NNUE behaviour changed.
 - No strength/Elo claim.
+
+# P0-60 Capture/Noisy Search-Update Shadow Harness (Test-Only)
+
+- Added deterministic capture/noisy search-update shadow harness for tests only.
+- Harness applies P0-59 update-policy decisions to `SearchHistory` from explicit simulated events.
+- No `negamax` integration added.
+- No `qsearch` integration added.
+- No runtime search behaviour changed.
+- No NNUE behaviour changed.
+- No strength/Elo claim.

@@ -156,6 +156,37 @@ CaptureNoisyHistoryUpdate make_capture_noisy_history_update(
     return update;
 }
 
+CaptureNoisyHistoryUpdateEvent make_capture_noisy_history_update_event_for_tests(
+    CaptureNoisyHistoryUpdateTarget target, const std::optional<CaptureHistoryKey> &capture_key,
+    const std::optional<NoisyHistoryKey> &noisy_key, int depth, bool success, const char *reason) {
+    CaptureNoisyHistoryUpdateEvent event{};
+    event.target = target;
+    event.capture_key = capture_key;
+    event.noisy_key = noisy_key;
+    event.depth = depth;
+    event.success = success;
+    event.reason = reason != nullptr ? reason : "";
+    return event;
+}
+
+void apply_capture_noisy_history_update_event_for_tests(SearchHistory &history,
+                                                        const CaptureNoisyHistoryUpdateEvent &event) {
+    if (event.target == CaptureNoisyHistoryUpdateTarget::Capture) {
+        const auto update = make_capture_noisy_history_update(event.capture_key, std::nullopt, event.success, event.depth);
+        apply_capture_noisy_history_update_for_tests(history, update);
+        return;
+    }
+
+    if (event.target == CaptureNoisyHistoryUpdateTarget::Noisy) {
+        const auto update = make_capture_noisy_history_update(std::nullopt, event.noisy_key, event.success, event.depth);
+        apply_capture_noisy_history_update_for_tests(history, update);
+        return;
+    }
+
+    const auto update = make_capture_noisy_history_update(std::nullopt, std::nullopt, event.success, event.depth);
+    apply_capture_noisy_history_update_for_tests(history, update);
+}
+
 void apply_capture_noisy_history_update_for_tests(SearchHistory &history, const CaptureNoisyHistoryUpdate &update) {
     switch (update.target) {
         case CaptureNoisyHistoryUpdateTarget::Capture:

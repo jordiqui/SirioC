@@ -42,6 +42,15 @@ enum class CaptureNoisyHistoryUpdateTarget {
     Noisy,
 };
 
+
+struct CaptureNoisyHistoryUpdateEvent {
+    CaptureNoisyHistoryUpdateTarget target = CaptureNoisyHistoryUpdateTarget::None;
+    std::optional<CaptureHistoryKey> capture_key;
+    std::optional<NoisyHistoryKey> noisy_key;
+    int depth = 0;
+    bool success = false;
+    const char *reason = "";
+};
 struct CaptureNoisyHistoryUpdate {
     CaptureNoisyHistoryUpdateTarget target = CaptureNoisyHistoryUpdateTarget::None;
     bool success = false;
@@ -142,6 +151,12 @@ private:
     const std::optional<CaptureHistoryKey> &capture_key, const std::optional<NoisyHistoryKey> &noisy_key,
     bool success, int depth);
 void apply_capture_noisy_history_update_for_tests(SearchHistory &history, const CaptureNoisyHistoryUpdate &update);
+
+[[nodiscard]] CaptureNoisyHistoryUpdateEvent make_capture_noisy_history_update_event_for_tests(
+    CaptureNoisyHistoryUpdateTarget target, const std::optional<CaptureHistoryKey> &capture_key,
+    const std::optional<NoisyHistoryKey> &noisy_key, int depth, bool success, const char *reason = "");
+void apply_capture_noisy_history_update_event_for_tests(SearchHistory &history,
+                                                        const CaptureNoisyHistoryUpdateEvent &event);
 
 [[nodiscard]] inline std::optional<CaptureHistoryKey> make_capture_history_key_for_tests(const Board &board,
                                                                                           const Move &move) {
