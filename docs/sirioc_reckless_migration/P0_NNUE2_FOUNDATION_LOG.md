@@ -2216,3 +2216,12 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 
 ## Link
 - `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINESS_GATE.md`
+
+# P0-48 MovePicker Ordering Snapshot Harness
+
+- Added deterministic MovePicker ordering snapshot harness in `tests/move_picker_snapshot_tests.cpp`.
+- Added minimal search-local test adapter to invoke current production MovePicker ordering without refactoring search.
+- No search behaviour changed.
+- No NNUE behaviour changed.
+- SirioNNUE2 default/runtime behaviour unchanged.
+- No strength/Elo claim.

@@ -144,3 +144,45 @@ No implementation in this patch. Recommended controlled sequence:
 ---
 
 P0-47 is documentation-only. Search behaviour is unchanged. NNUE behaviour is unchanged. SirioNNUE2 remains non-default. No strength/Elo claim is made.
+
+# P0-48 — MovePicker Ordering Snapshot Harness / No-Behaviour-Change Contract
+
+## Harness path
+- `tests/move_picker_snapshot_tests.cpp`
+- test adapter symbol in `src/search.cpp`: `move_picker_order_snapshot_for_tests(...)`
+
+## FEN coverage
+- Starting position: `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
+- Tactical capture-rich: `4k3/8/3q4/3p4/3P4/4N3/8/4K3 w - - 0 1`
+- Quiet middlegame-like: `r2q1rk1/pp2bppp/2n1pn2/2bp4/2P5/2NP1NP1/PP2PPBP/R1BQ1RK1 w - - 0 1`
+- Promotion-like static: `4k3/6P1/8/8/8/8/8/4K3 w - - 0 1`
+- Captures+quiets with TT move input: `8/8/3k4/3p4/3P4/8/3K4/8 w - - 0 1` with TT move `d2e3`
+
+## Snapshot status
+- Exact full ordered snapshot asserted for:
+  - starting position,
+  - tactical capture-rich position,
+  - promotion-like static position,
+  - TT-move priority position.
+- Deterministic repeated-order + legality/invariant assertions asserted for:
+  - quiet middlegame-like position.
+
+## Assertions covered
+- repeated calls produce identical ordering,
+- number of picked moves equals expected snapshot size (where full snapshots are asserted),
+- first move check (implicit via full list and explicit front check),
+- full ordered list equality (selected FENs),
+- no duplicate moves,
+- all picked moves are legal in the source position,
+- TT move priority behaviour checked when supplied and legal.
+
+## Access notes / limitations
+- MovePicker remains embedded in `src/search.cpp` (anonymous namespace).
+- No broad refactor was done.
+- A minimal test-only adapter function was added in `src/search.cpp` to invoke current production MovePicker path with deterministic zero/default `SearchContext`/`SearchHistory` state.
+- Quiet middlegame test currently enforces deterministic and legal ordering invariants without a pinned full list to reduce brittleness for large quiet partitions while still preserving a deterministic no-behaviour-change contract.
+
+## Behavioural continuity confirmations
+- No MovePicker scoring change.
+- No search/negamax/quiescence/LMR/TT/eval/UCI/NNUE runtime change.
+- No strength/Elo claim.

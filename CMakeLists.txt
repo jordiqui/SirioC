@@ -73,6 +73,7 @@ add_executable(sirio_tests
     tests/perft_quiescence.cpp
     tests/perft_tests.cpp
     tests/search_tests.cpp
+    tests/move_picker_snapshot_tests.cpp
     tests/nnue_backend_tests.cpp
     tests/nnue_features_tests.cpp
     tests/nnue_roundtrip_tests.cpp
