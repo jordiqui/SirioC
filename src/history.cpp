@@ -38,6 +38,22 @@ void apply_history_delta(int &entry, int bonus, bool success) {
     }
 }
 
+Move move_from_capture_key(const CaptureHistoryKey &key) {
+    Move move{};
+    move.to = key.to;
+    move.piece = key.attacker;
+    move.captured = key.captured;
+    return move;
+}
+
+Move move_from_noisy_key(const NoisyHistoryKey &key) {
+    Move move{};
+    move.to = key.to;
+    move.piece = key.mover_piece;
+    move.promotion = PieceType::Queen;
+    return move;
+}
+
 }  // namespace
 
 bool is_quiet_move(const Move &move) {
@@ -111,6 +127,52 @@ std::optional<CorrectionHistoryKey> make_correction_history_key(Color mover_colo
         return std::nullopt;
     }
     return CorrectionHistoryKey{mover_color, bucket % 1024};
+}
+
+CaptureNoisyHistoryUpdate make_capture_noisy_history_update(
+    const std::optional<CaptureHistoryKey> &capture_key, const std::optional<NoisyHistoryKey> &noisy_key,
+    bool success, int depth) {
+    CaptureNoisyHistoryUpdate update{};
+    update.success = success;
+    update.bonus = history_bonus_for_depth(depth);
+
+    if (capture_key.has_value()) {
+        const bool valid_square = capture_key->to >= 0 && capture_key->to < 64;
+        if (valid_square && is_valid_color(capture_key->mover)) {
+            update.target = CaptureNoisyHistoryUpdateTarget::Capture;
+            update.capture_key = capture_key;
+            return update;
+        }
+    }
+
+    if (noisy_key.has_value()) {
+        const bool valid_square = noisy_key->to >= 0 && noisy_key->to < 64;
+        if (valid_square && is_valid_color(noisy_key->mover)) {
+            update.target = CaptureNoisyHistoryUpdateTarget::Noisy;
+            update.noisy_key = noisy_key;
+        }
+    }
+
+    return update;
+}
+
+void apply_capture_noisy_history_update_for_tests(SearchHistory &history, const CaptureNoisyHistoryUpdate &update) {
+    switch (update.target) {
+        case CaptureNoisyHistoryUpdateTarget::Capture:
+            if (update.capture_key.has_value()) {
+                history.capture_history().update(update.capture_key->mover, move_from_capture_key(*update.capture_key),
+                                                 update.bonus, update.success);
+            }
+            break;
+        case CaptureNoisyHistoryUpdateTarget::Noisy:
+            if (update.noisy_key.has_value()) {
+                history.noisy_history().update(update.noisy_key->mover, move_from_noisy_key(*update.noisy_key),
+                                               update.bonus, update.success);
+            }
+            break;
+        case CaptureNoisyHistoryUpdateTarget::None:
+            break;
+    }
 }
 
 int SearchHistory::quiet_history_score(const Move &move, Color mover) const {
