@@ -150,6 +150,7 @@ private:
 [[nodiscard]] CaptureNoisyHistoryUpdate make_capture_noisy_history_update(
     const std::optional<CaptureHistoryKey> &capture_key, const std::optional<NoisyHistoryKey> &noisy_key,
     bool success, int depth);
+void apply_capture_noisy_history_update(SearchHistory &history, const CaptureNoisyHistoryUpdate &update);
 void apply_capture_noisy_history_update_for_tests(SearchHistory &history, const CaptureNoisyHistoryUpdate &update);
 
 [[nodiscard]] CaptureNoisyHistoryUpdateEvent make_capture_noisy_history_update_event_for_tests(

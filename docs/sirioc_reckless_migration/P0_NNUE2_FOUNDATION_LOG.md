@@ -2330,3 +2330,12 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No search behaviour changed.
 - No NNUE behaviour changed.
 - No strength/Elo claim.
+
+# P0-62 Capture/NoisyHistory Negamax Tactical Beta-Cutoff Runtime Update
+
+- Added one explicit runtime search update point for Capture/NoisyHistory: main negamax tactical beta-cutoff only.
+- Search behaviour changed only at that explicit cutoff integration point.
+- No qsearch tactical update path was added.
+- No continuation-history or correction-history runtime integration was added.
+- No NNUE runtime behaviour was changed.
+- No strength/Elo claim is made.
