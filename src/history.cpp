@@ -227,9 +227,10 @@ bool apply_capture_noisy_runtime_update_for_tests(SearchHistory &history, Captur
     return true;
 }
 
-bool apply_continuation_runtime_update_for_tests(SearchHistory &history, ContinuationRuntimeUpdateSite site,
-                                                 const std::optional<ContinuationHistoryKey> &continuation_key,
-                                                 int depth) {
+bool apply_continuation_runtime_update_for_tests(
+    SearchHistory &history, ContinuationRuntimeUpdateSite site,
+    const std::optional<ContinuationHistoryKey> &continuation_key,
+    const std::span<const ContinuationHistoryKey> &tried_quiet_keys, int depth) {
     if (site != ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff) {
         return false;
     }
@@ -246,6 +247,16 @@ bool apply_continuation_runtime_update_for_tests(SearchHistory &history, Continu
     history.continuation_history().update(continuation_key->previous_mover_color, previous_move,
                                           continuation_key->current_mover_color, current_move, depth, true);
     history.record_continuation_quiet_beta_cutoff_update_for_tests();
+
+    for (const auto &tried_key : tried_quiet_keys) {
+        Move tried_move{};
+        tried_move.piece = tried_key.current_moving_piece;
+        tried_move.to = tried_key.current_to_square;
+        history.continuation_history().update(tried_key.previous_mover_color, previous_move,
+                                              tried_key.current_mover_color, tried_move,
+                                              search_params::continuation_history_quiet_beta_cutoff_malus, true);
+        history.record_continuation_quiet_beta_cutoff_malus_for_tests();
+    }
     return true;
 }
 
@@ -259,6 +270,9 @@ void SearchHistory::record_capture_noisy_runtime_update_applied() {
 int SearchHistory::continuation_quiet_beta_cutoff_update_count_for_tests() const {
     return continuation_runtime_update_counters_.quiet_beta_cutoff_applied;
 }
+int SearchHistory::continuation_quiet_beta_cutoff_malus_count_for_tests() const {
+    return continuation_runtime_update_counters_.quiet_beta_cutoff_malus_applied;
+}
 int SearchHistory::continuation_quiet_beta_cutoff_skip_count_for_tests() const {
     return continuation_runtime_update_counters_.quiet_beta_cutoff_skipped;
 }
@@ -267,6 +281,9 @@ void SearchHistory::reset_continuation_runtime_observability_for_tests() {
 }
 void SearchHistory::record_continuation_quiet_beta_cutoff_update_for_tests() {
     ++continuation_runtime_update_counters_.quiet_beta_cutoff_applied;
+}
+void SearchHistory::record_continuation_quiet_beta_cutoff_malus_for_tests() {
+    ++continuation_runtime_update_counters_.quiet_beta_cutoff_malus_applied;
 }
 void SearchHistory::record_continuation_quiet_beta_cutoff_skip_for_tests() {
     ++continuation_runtime_update_counters_.quiet_beta_cutoff_skipped;

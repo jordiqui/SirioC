@@ -880,23 +880,24 @@ void test_continuation_runtime_observability_main_quiet_beta_cutoff_applies_once
     assert(key.has_value());
 
     assert(sirio::apply_continuation_runtime_update_for_tests(
-        history, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, key, 3));
+        history, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, key, {}, 3));
     assert(history.continuation_quiet_beta_cutoff_update_count_for_tests() == 1);
     assert(history.continuation_quiet_beta_cutoff_skip_count_for_tests() == 0);
+    assert(history.continuation_quiet_beta_cutoff_malus_count_for_tests() == 0);
 }
 
 void test_continuation_runtime_observability_excluded_or_invalid_paths_skip_or_noop() {
     sirio::SearchHistory history;
     assert(!sirio::apply_continuation_runtime_update_for_tests(
-        history, sirio::ContinuationRuntimeUpdateSite::QuiescenceQuietBetaCutoff, std::nullopt, 3));
+        history, sirio::ContinuationRuntimeUpdateSite::QuiescenceQuietBetaCutoff, std::nullopt, {}, 3));
     assert(!sirio::apply_continuation_runtime_update_for_tests(
-        history, sirio::ContinuationRuntimeUpdateSite::MainNegamaxCaptureBetaCutoff, std::nullopt, 3));
+        history, sirio::ContinuationRuntimeUpdateSite::MainNegamaxCaptureBetaCutoff, std::nullopt, {}, 3));
     assert(!sirio::apply_continuation_runtime_update_for_tests(
-        history, sirio::ContinuationRuntimeUpdateSite::MainNegamaxPromotionBetaCutoff, std::nullopt, 3));
+        history, sirio::ContinuationRuntimeUpdateSite::MainNegamaxPromotionBetaCutoff, std::nullopt, {}, 3));
     assert(!sirio::apply_continuation_runtime_update_for_tests(
-        history, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietNonCutoff, std::nullopt, 3));
+        history, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietNonCutoff, std::nullopt, {}, 3));
     assert(!sirio::apply_continuation_runtime_update_for_tests(
-        history, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, std::nullopt, 3));
+        history, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, std::nullopt, {}, 3));
 
     assert(history.continuation_quiet_beta_cutoff_update_count_for_tests() == 0);
     assert(history.continuation_quiet_beta_cutoff_skip_count_for_tests() == 1);
@@ -913,17 +914,49 @@ void test_continuation_runtime_observability_clear_resets_and_is_deterministic()
     assert(key.has_value());
 
     assert(sirio::apply_continuation_runtime_update_for_tests(
-        a, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, key, 3));
+        a, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, key, {}, 3));
     assert(sirio::apply_continuation_runtime_update_for_tests(
-        b, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, key, 3));
+        b, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, key, {}, 3));
     a.clear();
     b.clear();
     assert(sirio::apply_continuation_runtime_update_for_tests(
-        a, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, key, 3));
+        a, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, key, {}, 3));
     assert(sirio::apply_continuation_runtime_update_for_tests(
-        b, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, key, 3));
+        b, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, key, {}, 3));
     assert(a.continuation_quiet_beta_cutoff_update_count_for_tests() == 1);
     assert(b.continuation_quiet_beta_cutoff_update_count_for_tests() == 1);
+}
+
+void test_continuation_runtime_observability_applies_malus_to_tried_quiets_only() {
+    sirio::SearchHistory history;
+    sirio::Board previous_board{"8/8/8/8/8/8/4K2r/4N1k1 b - - 0 1"};
+    sirio::Board current_board{"8/8/8/8/8/8/4K3/4N2k w - - 0 1"};
+    const sirio::Move previous_move = sirio::move_from_uci(previous_board, "h2h1");
+    const sirio::Move cutoff_move = sirio::move_from_uci(current_board, "e1d3");
+    const sirio::Move tried_a = sirio::move_from_uci(current_board, "e1c2");
+    const sirio::Move tried_b = sirio::move_from_uci(current_board, "e2d3");
+    const auto cutoff_key =
+        sirio::make_continuation_history_key_for_tests(previous_board, previous_move, current_board, cutoff_move);
+    const auto tried_key_a =
+        sirio::make_continuation_history_key_for_tests(previous_board, previous_move, current_board, tried_a);
+    const auto tried_key_b =
+        sirio::make_continuation_history_key_for_tests(previous_board, previous_move, current_board, tried_b);
+    assert(cutoff_key.has_value());
+    assert(tried_key_a.has_value());
+    assert(tried_key_b.has_value());
+    std::array<sirio::ContinuationHistoryKey, 2> tried_keys{*tried_key_a, *tried_key_b};
+
+    assert(sirio::apply_continuation_runtime_update_for_tests(
+        history, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, cutoff_key, tried_keys, 3));
+
+    assert(history.continuation_quiet_beta_cutoff_update_count_for_tests() == 1);
+    assert(history.continuation_quiet_beta_cutoff_malus_count_for_tests() == 2);
+    assert(history.continuation_history().score(cutoff_key->previous_mover_color, previous_move,
+                                                cutoff_key->current_mover_color, cutoff_move) > 0);
+    assert(history.continuation_history().score(tried_key_a->previous_mover_color, previous_move,
+                                                tried_key_a->current_mover_color, tried_a) < 0);
+    assert(history.continuation_history().score(tried_key_b->previous_mover_color, previous_move,
+                                                tried_key_b->current_mover_color, tried_b) < 0);
 }
 
 void run_history_tests() {
@@ -973,4 +1006,5 @@ void run_history_tests() {
     test_continuation_runtime_observability_main_quiet_beta_cutoff_applies_once();
     test_continuation_runtime_observability_excluded_or_invalid_paths_skip_or_noop();
     test_continuation_runtime_observability_clear_resets_and_is_deterministic();
+    test_continuation_runtime_observability_applies_malus_to_tried_quiets_only();
 }

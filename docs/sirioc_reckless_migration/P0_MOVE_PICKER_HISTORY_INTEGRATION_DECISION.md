@@ -233,3 +233,11 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
   - requires successful continuation-key extraction.
 - If context/key is missing or invalid, no ContinuationHistory write occurs.
 - Zero-state and deterministic MovePicker snapshot contracts remain protected.
+
+## 15) P0-66 quiet beta-cutoff continuation symmetry
+- ContinuationHistory runtime update at main-negamax quiet beta cutoff now applies narrow symmetry.
+- The quiet cutoff move keeps the existing positive update.
+- Previously searched quiet moves from the same node now receive a conservative malus.
+- Updates are strictly gated by valid previous board+move context and valid continuation key extraction; no fallback semantics are introduced.
+- No updates were added for qsearch, capture/noisy, promotion, failed/skipped/illegal paths.
+- Zero-state MovePicker ordering contract remains protected.

@@ -1307,6 +1307,8 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
     int best_score = std::numeric_limits<int>::min();
     Move local_best{};
     bool local_found = false;
+    std::array<Move, 64> tried_quiet_moves{};
+    std::size_t tried_quiet_count = 0;
 
     int move_index = 0;
     while (auto move_opt = picker.next()) {
@@ -1417,6 +1419,18 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
                             continuation_key->current_mover_color, move,
                             search_params::continuation_history_quiet_beta_cutoff_bonus, true);
                         context.history.record_continuation_quiet_beta_cutoff_update_for_tests();
+                        for (std::size_t i = 0; i < tried_quiet_count; ++i) {
+                            const auto tried_key =
+                                make_continuation_history_key(*previous_board, previous_move, board, tried_quiet_moves[i]);
+                            if (!tried_key.has_value()) {
+                                continue;
+                            }
+                            context.history.continuation_history().update(
+                                tried_key->previous_mover_color, previous_move.value(),
+                                tried_key->current_mover_color, tried_quiet_moves[i],
+                                search_params::continuation_history_quiet_beta_cutoff_malus, true);
+                            context.history.record_continuation_quiet_beta_cutoff_malus_for_tests();
+                        }
                     } else {
                         context.history.record_continuation_quiet_beta_cutoff_skip_for_tests();
                     }
@@ -1430,6 +1444,9 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
                 apply_capture_noisy_history_update(context.history, update);
             }
             break;
+        }
+        if (quiet_move && tried_quiet_count < tried_quiet_moves.size()) {
+            tried_quiet_moves[tried_quiet_count++] = move;
         }
     }
 
