@@ -778,6 +778,20 @@ void test_search_qsearch_has_no_correction_history_wiring() {
     assert(qsearch_source.find("correction_history()") == std::string::npos);
 }
 
+void test_search_selectivity_foundation_flags_disabled() {
+    assert(!sirio::search_params::selectivity_reverse_futility_enabled);
+    assert(!sirio::search_params::selectivity_move_count_pruning_enabled);
+    assert(!sirio::search_params::selectivity_probcut_enabled);
+    assert(!sirio::search_params::selectivity_singular_extensions_enabled);
+}
+
+void test_search_selectivity_foundation_helpers_disabled() {
+    assert(!sirio::search_params::selectivity_reverse_futility_is_enabled());
+    assert(!sirio::search_params::selectivity_move_count_pruning_is_enabled());
+    assert(!sirio::search_params::selectivity_probcut_is_enabled());
+    assert(!sirio::search_params::selectivity_singular_extensions_are_enabled());
+}
+
 }  // namespace
 
 
@@ -1209,6 +1223,8 @@ void run_history_tests() {
     test_search_history_clear_resets_continuation_history();
     test_search_main_negamax_uses_read_only_correction_history_hook();
     test_search_qsearch_has_no_correction_history_wiring();
+    test_search_selectivity_foundation_flags_disabled();
+    test_search_selectivity_foundation_helpers_disabled();
     test_correction_history_default_update_clamp_and_clear();
     test_correction_history_bucket_indexing_and_determinism();
     test_search_history_clear_resets_correction_history();

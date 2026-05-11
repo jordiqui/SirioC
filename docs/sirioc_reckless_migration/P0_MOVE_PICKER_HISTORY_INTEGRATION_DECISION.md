@@ -318,3 +318,23 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - No new CorrectionHistory runtime update point was added.
 - Main negamax hook locations are unchanged.
 - No qsearch, MovePicker, pruning, LMR, TT, UCI, or NNUE behavior changes were introduced.
+
+## 18) P0-76 search selectivity parameter foundation (zero-behaviour)
+- Added centralized search-selectivity parameter foundation in `include/sirio/search_params.hpp` with disabled/no-op defaults for:
+  - reverse futility,
+  - move count pruning,
+  - probcut,
+  - singular extensions.
+- P0-76 is infrastructure-only:
+  - reverse futility remains disabled and not wired,
+  - move count pruning remains disabled and not wired,
+  - probcut remains disabled and not wired,
+  - singular extensions remain disabled and not wired.
+- No behaviour change was introduced in:
+  - MovePicker,
+  - qsearch,
+  - TT store/probe/replacement,
+  - UCI options/defaults,
+  - NNUE runtime,
+  - pruning/LMR/null-move/futility behaviour.
+- Existing CorrectionHistory, Capture/NoisyHistory, and ContinuationHistory contracts from prior P0 stages are unchanged.

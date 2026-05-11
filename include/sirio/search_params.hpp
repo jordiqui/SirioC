@@ -42,4 +42,25 @@ inline constexpr int continuation_history_quiet_beta_cutoff_malus = -8;
 
 inline constexpr int futility_margin_depth1 = 150;
 
+inline constexpr bool selectivity_reverse_futility_enabled = false;
+inline constexpr bool selectivity_move_count_pruning_enabled = false;
+inline constexpr bool selectivity_probcut_enabled = false;
+inline constexpr bool selectivity_singular_extensions_enabled = false;
+
+[[nodiscard]] inline constexpr bool selectivity_reverse_futility_is_enabled() {
+    return selectivity_reverse_futility_enabled;
+}
+
+[[nodiscard]] inline constexpr bool selectivity_move_count_pruning_is_enabled() {
+    return selectivity_move_count_pruning_enabled;
+}
+
+[[nodiscard]] inline constexpr bool selectivity_probcut_is_enabled() {
+    return selectivity_probcut_enabled;
+}
+
+[[nodiscard]] inline constexpr bool selectivity_singular_extensions_are_enabled() {
+    return selectivity_singular_extensions_enabled;
+}
+
 } // namespace sirio::search_params
