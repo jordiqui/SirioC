@@ -266,3 +266,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - No CaptureHistory scoring change.
 - No NoisyHistory scoring change.
 - No Capture/Noisy runtime update policy change.
+
+## 16) P0-77 note
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-77 adds reverse-futility helper infrastructure only.
+- No CaptureHistory/NoisyHistory scoring or runtime update behavior changed.

@@ -792,6 +792,30 @@ void test_search_selectivity_foundation_helpers_disabled() {
     assert(!sirio::search_params::selectivity_singular_extensions_are_enabled());
 }
 
+void test_reverse_futility_helper_default_flag_disables_pruning() {
+    assert(!sirio::search_params::should_apply_reverse_futility_pruning(1, 500, 100, true, false));
+    assert(!sirio::search_params::should_apply_reverse_futility_pruning(4, 900, -50, false, false));
+}
+
+void test_reverse_futility_helper_in_check_is_disabled() {
+    assert(!sirio::search_params::should_apply_reverse_futility_pruning(3, 800, 300, true, true));
+}
+
+void test_reverse_futility_helper_invalid_depth_is_disabled() {
+    assert(!sirio::search_params::should_apply_reverse_futility_pruning(0, 800, 300, true, false));
+    assert(!sirio::search_params::should_apply_reverse_futility_pruning(-2, 800, 300, false, false));
+}
+
+void test_reverse_futility_helper_no_side_effects_or_history_dependency() {
+    sirio::SearchHistory history;
+    const auto key = sirio::make_correction_history_key_for_tests(sirio::Color::White, 99);
+    assert(key.has_value());
+    history.correction_history().update(*key, 27);
+    const int before = history.correction_history().score(*key);
+    assert(!sirio::search_params::should_apply_reverse_futility_pruning(3, 800, 300, true, false));
+    assert(history.correction_history().score(*key) == before);
+}
+
 }  // namespace
 
 
@@ -1225,6 +1249,10 @@ void run_history_tests() {
     test_search_qsearch_has_no_correction_history_wiring();
     test_search_selectivity_foundation_flags_disabled();
     test_search_selectivity_foundation_helpers_disabled();
+    test_reverse_futility_helper_default_flag_disables_pruning();
+    test_reverse_futility_helper_in_check_is_disabled();
+    test_reverse_futility_helper_invalid_depth_is_disabled();
+    test_reverse_futility_helper_no_side_effects_or_history_dependency();
     test_correction_history_default_update_clamp_and_clear();
     test_correction_history_bucket_indexing_and_determinism();
     test_search_history_clear_resets_correction_history();
