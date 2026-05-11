@@ -42,7 +42,7 @@ inline constexpr int continuation_history_quiet_beta_cutoff_malus = -8;
 
 inline constexpr int futility_margin_depth1 = 150;
 
-inline constexpr bool selectivity_reverse_futility_enabled = false;
+inline constexpr bool selectivity_reverse_futility_enabled = true;
 inline constexpr bool selectivity_move_count_pruning_enabled = false;
 inline constexpr bool selectivity_probcut_enabled = false;
 inline constexpr bool selectivity_singular_extensions_enabled = false;

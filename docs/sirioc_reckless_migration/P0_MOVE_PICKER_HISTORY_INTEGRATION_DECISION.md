@@ -382,3 +382,12 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - `selectivity_reverse_futility_enabled` remains `false`, so guarded return remains unreachable under current defaults.
 - No behaviour change under defaults.
 - No move count pruning, probcut, singular extension, LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour changed.
+
+## P0-83 Reverse Futility Conservative Activation (Main Negamax Only)
+- Reverse futility pruning is now enabled conservatively in main negamax.
+- Existing safety gates are preserved: not in check, not PV node, not root node, depth > 0, and depth within `reverse_futility_depth_limit`.
+- Existing centralized margin helper `reverse_futility_margin(depth, improving)` remains the guard margin source.
+- Existing return observability is preserved via `record_reverse_futility_return()` at the guarded return.
+- qsearch remains excluded (no reverse futility helper call and no reverse-futility return scaffold in qsearch).
+- Move count pruning, probcut, and singular extensions remain disabled.
+- No direct behaviour change was made to LMR, MovePicker, TT, UCI options/defaults, or NNUE runtime.

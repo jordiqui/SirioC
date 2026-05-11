@@ -296,3 +296,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime path remains unchanged.
 - P0-82 is reverse-futility guarded-return observability only.
 - No Capture/NoisyHistory scoring or update behaviour changed.
+
+## P0-83 note
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-83 affects only reverse futility selectivity activation under existing conservative guards.
+- No Capture/NoisyHistory scoring or update behavior was changed.
