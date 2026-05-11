@@ -870,6 +870,62 @@ void test_capture_noisy_runtime_observability_deterministic_repeated_sequence() 
            second.capture_history().score(capture, sirio::Color::White));
 }
 
+void test_continuation_runtime_observability_main_quiet_beta_cutoff_applies_once() {
+    sirio::SearchHistory history;
+    sirio::Board previous_board{"8/8/8/8/8/8/4K2r/4N1k1 b - - 0 1"};
+    sirio::Board current_board{"8/8/8/8/8/8/4K3/4N2k w - - 0 1"};
+    const sirio::Move previous_move = sirio::move_from_uci(previous_board, "h2h1");
+    const sirio::Move current_move = sirio::move_from_uci(current_board, "e1d3");
+    const auto key = sirio::make_continuation_history_key_for_tests(previous_board, previous_move, current_board, current_move);
+    assert(key.has_value());
+
+    assert(sirio::apply_continuation_runtime_update_for_tests(
+        history, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, key, 3));
+    assert(history.continuation_quiet_beta_cutoff_update_count_for_tests() == 1);
+    assert(history.continuation_quiet_beta_cutoff_skip_count_for_tests() == 0);
+}
+
+void test_continuation_runtime_observability_excluded_or_invalid_paths_skip_or_noop() {
+    sirio::SearchHistory history;
+    assert(!sirio::apply_continuation_runtime_update_for_tests(
+        history, sirio::ContinuationRuntimeUpdateSite::QuiescenceQuietBetaCutoff, std::nullopt, 3));
+    assert(!sirio::apply_continuation_runtime_update_for_tests(
+        history, sirio::ContinuationRuntimeUpdateSite::MainNegamaxCaptureBetaCutoff, std::nullopt, 3));
+    assert(!sirio::apply_continuation_runtime_update_for_tests(
+        history, sirio::ContinuationRuntimeUpdateSite::MainNegamaxPromotionBetaCutoff, std::nullopt, 3));
+    assert(!sirio::apply_continuation_runtime_update_for_tests(
+        history, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietNonCutoff, std::nullopt, 3));
+    assert(!sirio::apply_continuation_runtime_update_for_tests(
+        history, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, std::nullopt, 3));
+
+    assert(history.continuation_quiet_beta_cutoff_update_count_for_tests() == 0);
+    assert(history.continuation_quiet_beta_cutoff_skip_count_for_tests() == 1);
+}
+
+void test_continuation_runtime_observability_clear_resets_and_is_deterministic() {
+    sirio::SearchHistory a;
+    sirio::SearchHistory b;
+    sirio::Board previous_board{"8/8/8/8/8/8/4K2r/4N1k1 b - - 0 1"};
+    sirio::Board current_board{"8/8/8/8/8/8/4K3/4N2k w - - 0 1"};
+    const sirio::Move previous_move = sirio::move_from_uci(previous_board, "h2h1");
+    const sirio::Move current_move = sirio::move_from_uci(current_board, "e1d3");
+    const auto key = sirio::make_continuation_history_key_for_tests(previous_board, previous_move, current_board, current_move);
+    assert(key.has_value());
+
+    assert(sirio::apply_continuation_runtime_update_for_tests(
+        a, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, key, 3));
+    assert(sirio::apply_continuation_runtime_update_for_tests(
+        b, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, key, 3));
+    a.clear();
+    b.clear();
+    assert(sirio::apply_continuation_runtime_update_for_tests(
+        a, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, key, 3));
+    assert(sirio::apply_continuation_runtime_update_for_tests(
+        b, sirio::ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff, key, 3));
+    assert(a.continuation_quiet_beta_cutoff_update_count_for_tests() == 1);
+    assert(b.continuation_quiet_beta_cutoff_update_count_for_tests() == 1);
+}
+
 void run_history_tests() {
     test_initial_state_neutral_and_empty_killers();
     test_is_quiet_move_predicate();
@@ -914,4 +970,7 @@ void run_history_tests() {
     test_capture_noisy_runtime_observability_applies_once_for_main_tactical_cutoff();
     test_capture_noisy_runtime_observability_excluded_paths_do_not_apply();
     test_capture_noisy_runtime_observability_deterministic_repeated_sequence();
+    test_continuation_runtime_observability_main_quiet_beta_cutoff_applies_once();
+    test_continuation_runtime_observability_excluded_or_invalid_paths_skip_or_noop();
+    test_continuation_runtime_observability_clear_resets_and_is_deterministic();
 }

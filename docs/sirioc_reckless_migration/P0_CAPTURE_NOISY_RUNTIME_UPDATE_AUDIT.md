@@ -202,3 +202,9 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - No change was made to the existing Capture/NoisyHistory runtime update trigger.
 - No new Capture/NoisyHistory runtime update point was added.
 - P0-63 observability contract remains valid and unchanged.
+
+## 12) P0-65 note (capture/noisy runtime path unchanged)
+- P0-62/P0-63 Capture/NoisyHistory runtime trigger contract is unchanged.
+- Newly added ContinuationHistory runtime update is separate and quiet-only.
+- No new CaptureHistory runtime update point was added.
+- No new NoisyHistory runtime update point was added.
