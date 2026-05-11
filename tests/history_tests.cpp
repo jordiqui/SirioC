@@ -355,6 +355,56 @@ void test_correction_history_static_eval_helper_is_read_only() {
     assert(history.correction_history().score(*key) == before);
 }
 
+void test_correction_history_position_key_same_structure_and_side_is_deterministic() {
+    const sirio::Board board_a;
+    const sirio::Board board_b;
+    const auto key_a = sirio::make_correction_history_key_from_position_for_tests(board_a);
+    const auto key_b = sirio::make_correction_history_key_from_position_for_tests(board_b);
+    assert(key_a.has_value() && key_b.has_value());
+    assert(key_a->mover_color == key_b->mover_color);
+    assert(key_a->bucket == key_b->bucket);
+}
+
+void test_correction_history_position_key_changes_with_side_to_move() {
+    const sirio::Board white_to_move{"8/8/8/3p4/4P3/8/8/4K2k w - - 0 1"};
+    const sirio::Board black_to_move{"8/8/8/3p4/4P3/8/8/4K2k b - - 0 1"};
+    const auto white_key = sirio::make_correction_history_key_from_position_for_tests(white_to_move);
+    const auto black_key = sirio::make_correction_history_key_from_position_for_tests(black_to_move);
+    assert(white_key.has_value() && black_key.has_value());
+    assert(white_key->bucket == black_key->bucket);
+    assert(white_key->mover_color != black_key->mover_color);
+}
+
+void test_correction_history_position_key_changes_with_pawn_structure() {
+    const sirio::Board pawns_a{"8/8/8/8/4P3/8/8/4K2k w - - 0 1"};
+    const sirio::Board pawns_b{"8/8/8/8/3P4/8/8/4K2k w - - 0 1"};
+    const auto key_a = sirio::make_correction_history_key_from_position_for_tests(pawns_a);
+    const auto key_b = sirio::make_correction_history_key_from_position_for_tests(pawns_b);
+    assert(key_a.has_value() && key_b.has_value());
+    assert(key_a->mover_color == key_b->mover_color);
+    assert(key_a->bucket != key_b->bucket);
+}
+
+void test_correction_history_position_key_helper_is_read_only_and_clear_independent() {
+    sirio::SearchHistory history;
+    const sirio::Board board{"8/8/8/3p4/4P3/8/8/4K2k w - - 0 1"};
+    const std::string before_fen = board.to_fen();
+    const auto key_before = sirio::make_correction_history_key_from_position_for_tests(board);
+    assert(key_before.has_value());
+    history.correction_history().update(key_before->mover_color, key_before->bucket, 3, true);
+    const int correction_before_clear = history.correction_history().score(*key_before);
+    assert(correction_before_clear > 0);
+    assert(sirio::apply_correction_history_to_static_eval(10, history, key_before) == 10 + correction_before_clear);
+
+    history.clear();
+    const auto key_after = sirio::make_correction_history_key_from_position_for_tests(board);
+    assert(key_after.has_value());
+    assert(key_before->mover_color == key_after->mover_color);
+    assert(key_before->bucket == key_after->bucket);
+    assert(board.to_fen() == before_fen);
+    assert(history.correction_history().score(*key_after) == 0);
+}
+
 void test_noisy_history_key_extraction_for_quiet_move_fails() {
     sirio::Board board;
     const std::string before = board.to_fen();
@@ -1024,6 +1074,10 @@ void run_history_tests() {
     test_correction_history_static_eval_helper_invalid_key_returns_raw_eval();
     test_correction_history_static_eval_helper_seeded_delta_and_clear_contract();
     test_correction_history_static_eval_helper_is_read_only();
+    test_correction_history_position_key_same_structure_and_side_is_deterministic();
+    test_correction_history_position_key_changes_with_side_to_move();
+    test_correction_history_position_key_changes_with_pawn_structure();
+    test_correction_history_position_key_helper_is_read_only_and_clear_independent();
     test_noisy_history_key_extraction_for_quiet_move_fails();
     test_capture_history_key_extraction_for_capture_succeeds();
     test_capture_history_key_extraction_for_non_capture_fails();

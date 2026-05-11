@@ -129,6 +129,18 @@ std::optional<CorrectionHistoryKey> make_correction_history_key(Color mover_colo
     return CorrectionHistoryKey{mover_color, bucket};
 }
 
+std::optional<CorrectionHistoryKey> make_correction_history_key_from_position(const Board &board) {
+    const Color mover = board.side_to_move();
+    if (!is_valid_color(mover)) {
+        return std::nullopt;
+    }
+
+    const std::uint64_t white_pawns = board.pieces(Color::White, PieceType::Pawn);
+    const std::uint64_t black_pawns = board.pieces(Color::Black, PieceType::Pawn);
+    const std::uint64_t mixed = (white_pawns * 0x9E3779B185EBCA87ULL) ^ (black_pawns * 0xC2B2AE3D27D4EB4FULL);
+    return make_correction_history_key(mover, static_cast<std::size_t>(mixed));
+}
+
 int apply_correction_history_to_static_eval(
     int raw_static_eval, const SearchHistory::CorrectionHistory &correction_history,
     const std::optional<CorrectionHistoryKey> &key) {

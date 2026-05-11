@@ -270,3 +270,11 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - No MovePicker consumption was added.
 - No pruning/LMR/probcut/singular/qsearch/TT/UCI/NNUE behavior changed.
 - Zero-state behavior is preserved by construction.
+
+## 18) P0-70 correction-history runtime key contract foundation (no consumption)
+- Added a read-only, deterministic runtime key-construction helper: `make_correction_history_key_from_position(const Board&)`.
+- Contract inputs are strictly board-derived and stable: side-to-move plus pawn-occupancy-derived deterministic bucket.
+- The helper returns `std::optional<CorrectionHistoryKey>` and preserves P0-68 key validity gating.
+- No CorrectionHistory runtime update point was added.
+- No static-eval runtime hook in search/eval was added.
+- No MovePicker/pruning/LMR/qsearch/TT/UCI/NNUE runtime behavior was changed.
