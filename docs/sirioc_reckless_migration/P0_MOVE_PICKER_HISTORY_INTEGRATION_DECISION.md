@@ -399,3 +399,12 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Reverse futility P0-83 guarded behavior remains unchanged.
 - Probcut and singular extensions remain disabled.
 - No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed.
+
+## 18) P0-85 Move Count Pruning disabled probe wiring
+- Move Count Pruning helper is now wired into main negamax as a disabled no-op probe.
+- `selectivity_move_count_pruning_enabled` remains `false`.
+- No `continue`/`break`/`return` was added for Move Count Pruning.
+- No move is skipped by this wiring.
+- Reverse futility P0-83 path remains unchanged.
+- Probcut and singular extensions remain disabled.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed in this step.

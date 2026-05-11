@@ -2502,3 +2502,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-85 Move Count Pruning Disabled Main-Negamax Probe Wiring
+
+- Move Count Pruning disabled main-negamax probe wiring was added.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
