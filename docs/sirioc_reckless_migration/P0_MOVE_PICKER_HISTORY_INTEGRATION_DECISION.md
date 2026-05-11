@@ -301,3 +301,11 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - `*_for_tests` naming is retained only as a test-facing wrapper that forwards to the production helper.
 - No behaviour change was introduced.
 - P0-72 correction update contract (gating and delta semantics) is unchanged.
+
+## 15) P0-74 note (CorrectionHistory fail-low negative counterpart)
+- Added a CorrectionHistory negative runtime update counterpart for main negamax fail-low nodes.
+- Update is main negamax fail-low only and requires a valid P0-70 correction key.
+- Update is negative-only and uses `raw_static_eval` baseline (`best_value - raw_static_eval`).
+- Existing P0-72 quiet beta-cutoff positive update path remains unchanged.
+- No qsearch CorrectionHistory update was added.
+- No direct MovePicker/pruning/LMR/probcut/singular/TT/UCI/NNUE behavior change was introduced.

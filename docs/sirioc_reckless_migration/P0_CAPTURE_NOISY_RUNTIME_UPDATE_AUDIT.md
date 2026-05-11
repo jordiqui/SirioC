@@ -249,3 +249,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 ## P0-73 note
 - No CaptureHistory/NoisyHistory runtime behaviour changed.
 - This step is CorrectionHistory helper naming/API boundary cleanup only.
+
+## 15) P0-74 note (Capture/Noisy separation unchanged)
+- P0-62/P0-63 Capture/NoisyHistory runtime path remains unchanged.
+- P0-67 read-only Capture/Noisy tactical scoring remains unchanged.
+- P0-74 CorrectionHistory fail-low negative update is separate and does not affect Capture/NoisyHistory runtime/scoring.

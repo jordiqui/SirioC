@@ -309,6 +309,26 @@ bool apply_correction_history_quiet_beta_cutoff_update_for_tests(
     int cutoff_value) {
     return apply_correction_history_quiet_beta_cutoff_update(history, correction_key, raw_static_eval, cutoff_value);
 }
+bool apply_correction_history_fail_low_update(
+    SearchHistory &history, const std::optional<CorrectionHistoryKey> &correction_key, int raw_static_eval,
+    int best_value) {
+    if (!correction_key.has_value()) {
+        return false;
+    }
+    const int correction_delta = best_value - raw_static_eval;
+    if (correction_delta >= 0) {
+        return false;
+    }
+    history.correction_history().update(*correction_key, correction_delta);
+    history.record_correction_fail_low_update_for_tests();
+    return true;
+}
+
+bool apply_correction_history_fail_low_update_for_tests(
+    SearchHistory &history, const std::optional<CorrectionHistoryKey> &correction_key, int raw_static_eval,
+    int best_value) {
+    return apply_correction_history_fail_low_update(history, correction_key, raw_static_eval, best_value);
+}
 
 void SearchHistory::reset_capture_noisy_runtime_update_counters() {
     capture_noisy_runtime_update_counters_ = {};
@@ -341,11 +361,17 @@ void SearchHistory::record_continuation_quiet_beta_cutoff_skip_for_tests() {
 int SearchHistory::correction_quiet_beta_cutoff_update_count_for_tests() const {
     return correction_runtime_update_counters_.quiet_beta_cutoff_applied;
 }
+int SearchHistory::correction_fail_low_update_count_for_tests() const {
+    return correction_runtime_update_counters_.fail_low_applied;
+}
 void SearchHistory::reset_correction_runtime_observability_for_tests() {
     correction_runtime_update_counters_ = {};
 }
 void SearchHistory::record_correction_quiet_beta_cutoff_update_for_tests() {
     ++correction_runtime_update_counters_.quiet_beta_cutoff_applied;
+}
+void SearchHistory::record_correction_fail_low_update_for_tests() {
+    ++correction_runtime_update_counters_.fail_low_applied;
 }
 
 int SearchHistory::quiet_history_score(const Move &move, Color mover) const {
