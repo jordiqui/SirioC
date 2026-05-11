@@ -16,7 +16,9 @@ std::vector<Move> move_picker_order_snapshot_for_tests(const Board &board, int p
                                                        bool tactical_only,
                                                        const std::optional<Move> &killer0,
                                                        const std::optional<Move> &killer1,
-                                                       const SearchHistory *history_override = nullptr);
+                                                       const SearchHistory *history_override = nullptr,
+                                                       const Board *previous_board = nullptr,
+                                                       const std::optional<Move> &previous_move = std::nullopt);
 }
 
 namespace {
@@ -178,6 +180,61 @@ void test_tt_move_priority_preserved_with_nonzero_history() {
     assert(ordered.front() == "d2e3");
 }
 
+void test_continuation_history_seed_reorders_quiets_only_with_valid_previous_context() {
+    const std::string fen = "8/8/8/8/8/8/4K3/4N2k w - - 0 1";
+    sirio::Board board{fen};
+    sirio::Board previous_board{"8/8/8/8/8/8/4K2r/4N1k1 b - - 0 1"};
+    const sirio::Move previous_move = sirio::move_from_uci(previous_board, "h2h1");
+    const sirio::Move boosted = legal_move_by_uci(board, "e1d3");
+
+    auto baseline = moves_to_uci(sirio::move_picker_order_snapshot_for_tests(
+        board, 0, std::nullopt, false, std::nullopt, std::nullopt, nullptr, &previous_board, previous_move));
+
+    sirio::SearchHistory history;
+    history.continuation_history().update(sirio::Color::Black, previous_move, sirio::Color::White, boosted, 4, true);
+    auto boosted_order = moves_to_uci(sirio::move_picker_order_snapshot_for_tests(
+        board, 0, std::nullopt, false, std::nullopt, std::nullopt, &history, &previous_board, previous_move));
+
+    assert(!baseline.empty());
+    assert(boosted_order.size() == baseline.size());
+    assert(boosted_order[0] == "e1d3");
+    assert(boosted_order != baseline);
+}
+
+void test_continuation_history_missing_previous_context_is_noop() {
+    const std::string fen = "8/8/8/8/8/8/4K3/4N2k w - - 0 1";
+    sirio::Board board{fen};
+    auto baseline = moves_to_uci(sirio::move_picker_order_snapshot_for_tests(
+        board, 0, std::nullopt, false, std::nullopt, std::nullopt, nullptr));
+
+    sirio::SearchHistory history;
+    sirio::Board previous_board{"8/8/8/8/8/8/4K2r/4N1k1 b - - 0 1"};
+    const sirio::Move previous_move = sirio::move_from_uci(previous_board, "h2h1");
+    const sirio::Move boosted = legal_move_by_uci(board, "e1d3");
+    history.continuation_history().update(sirio::Color::Black, previous_move, sirio::Color::White, boosted, 4, true);
+
+    auto without_previous = moves_to_uci(sirio::move_picker_order_snapshot_for_tests(
+        board, 0, std::nullopt, false, std::nullopt, std::nullopt, &history, nullptr, std::nullopt));
+    assert(without_previous == baseline);
+}
+
+void test_continuation_history_does_not_affect_tactical_only_ordering() {
+    const std::string fen = "4k3/8/3q4/3p4/3P4/4N3/8/4K3 w - - 0 1";
+    sirio::Board board{fen};
+    auto baseline = moves_to_uci(sirio::move_picker_order_snapshot_for_tests(
+        board, 0, std::nullopt, true, std::nullopt, std::nullopt, nullptr));
+
+    sirio::SearchHistory history;
+    sirio::Board previous_board{"4k3/8/3q4/3p4/3P4/4N3/7r/4K3 b - - 0 1"};
+    const sirio::Move previous_move = sirio::move_from_uci(previous_board, "h2h1");
+    const sirio::Move quiet = legal_move_by_uci(board, "e1d1");
+    history.continuation_history().update(sirio::Color::Black, previous_move, sirio::Color::White, quiet, 4, true);
+
+    auto tactical_only = moves_to_uci(sirio::move_picker_order_snapshot_for_tests(
+        board, 0, std::nullopt, true, std::nullopt, std::nullopt, &history, &previous_board, previous_move));
+    assert(tactical_only == baseline);
+}
+
 }  // namespace
 
 void run_move_picker_snapshot_tests() {
@@ -189,4 +246,7 @@ void run_move_picker_snapshot_tests() {
     test_capture_history_signal_reorders_capture_candidates_only();
     test_noisy_history_signal_reorders_promotions();
     test_tt_move_priority_preserved_with_nonzero_history();
+    test_continuation_history_seed_reorders_quiets_only_with_valid_previous_context();
+    test_continuation_history_missing_previous_context_is_noop();
+    test_continuation_history_does_not_affect_tactical_only_ordering();
 }

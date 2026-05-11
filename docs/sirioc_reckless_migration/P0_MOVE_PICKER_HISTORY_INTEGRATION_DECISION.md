@@ -207,3 +207,15 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Coverage explicitly validates that only main-negamax tactical beta-cutoff is allowed to apply this runtime update contract.
 - No new MovePicker behaviour was added.
 - No new search behaviour was added beyond observability of the existing P0-62 single update point.
+
+## 14) P0-64 continuation-history read-only quiet scoring hook
+- ContinuationHistory is now connected to MovePicker as a **read-only** quiet-move scoring contribution.
+- Integration is intentionally constrained to the existing quiet scoring path only; tactical capture/promotion/noisy ordering paths are unchanged.
+- Zero-state ordering contract is preserved: when ContinuationHistory is zero-initialized, MovePicker ordering remains identical to established P0-48/P0-58 baseline snapshots.
+- Previous-move context gating is strict:
+  - if previous context is unavailable (missing previous board/move),
+  - or key extraction is invalid/not safely representable by existing key contracts,
+  - contribution is zero (no fallback semantics are invented).
+- No ContinuationHistory runtime update point exists yet in search.
+- P0-62/P0-63 Capture/NoisyHistory runtime-update path is unchanged.
+- No qsearch/LMR/pruning/TT/eval/UCI contract changes were introduced in this step.
