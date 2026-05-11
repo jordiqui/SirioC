@@ -318,6 +318,43 @@ void test_correction_history_key_targets_expected_bucket_for_update_and_read() {
     assert(history.correction_history().score(sirio::Color::White, 7 + 1024) == 4);
 }
 
+void test_correction_history_static_eval_helper_zero_state_returns_raw_eval() {
+    sirio::SearchHistory history;
+    const auto key = sirio::make_correction_history_key_for_tests(sirio::Color::White, 11);
+    assert(key.has_value());
+    assert(sirio::apply_correction_history_to_static_eval(42, history, key) == 42);
+}
+
+void test_correction_history_static_eval_helper_invalid_key_returns_raw_eval() {
+    sirio::SearchHistory history;
+    assert(sirio::apply_correction_history_to_static_eval(-17, history, std::nullopt) == -17);
+}
+
+void test_correction_history_static_eval_helper_seeded_delta_and_clear_contract() {
+    sirio::SearchHistory history;
+    const auto key = sirio::make_correction_history_key_for_tests(sirio::Color::White, 5);
+    assert(key.has_value());
+    const int raw_eval = 100;
+
+    history.correction_history().update(key->mover_color, key->bucket, 3, true);
+    const int correction = history.correction_history().score(*key);
+    assert(correction == 9);
+    assert(sirio::apply_correction_history_to_static_eval(raw_eval, history, key) == raw_eval + correction);
+
+    history.clear();
+    assert(sirio::apply_correction_history_to_static_eval(raw_eval, history, key) == raw_eval);
+}
+
+void test_correction_history_static_eval_helper_is_read_only() {
+    sirio::SearchHistory history;
+    const auto key = sirio::make_correction_history_key_for_tests(sirio::Color::Black, 12);
+    assert(key.has_value());
+    history.correction_history().update(key->mover_color, key->bucket, 2, true);
+    const int before = history.correction_history().score(*key);
+    assert(sirio::apply_correction_history_to_static_eval(0, history, key) == before);
+    assert(history.correction_history().score(*key) == before);
+}
+
 void test_noisy_history_key_extraction_for_quiet_move_fails() {
     sirio::Board board;
     const std::string before = board.to_fen();
@@ -983,6 +1020,10 @@ void run_history_tests() {
     test_correction_history_key_extraction_invalid_color_fails();
     test_correction_history_key_extraction_is_deterministic();
     test_correction_history_key_targets_expected_bucket_for_update_and_read();
+    test_correction_history_static_eval_helper_zero_state_returns_raw_eval();
+    test_correction_history_static_eval_helper_invalid_key_returns_raw_eval();
+    test_correction_history_static_eval_helper_seeded_delta_and_clear_contract();
+    test_correction_history_static_eval_helper_is_read_only();
     test_noisy_history_key_extraction_for_quiet_move_fails();
     test_capture_history_key_extraction_for_capture_succeeds();
     test_capture_history_key_extraction_for_non_capture_fails();

@@ -258,3 +258,15 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - No search consumption was added.
 - No eval/pruning/LMR/TT/qsearch/UCI/NNUE behavior was changed.
 - This step is a deterministic zero-runtime foundation for a later, separately authorized correction-history integration patch.
+
+## 18) P0-69 correction-history read-only static-eval helper contract
+- Added a read-only CorrectionHistory static-eval correction helper in the history layer.
+- Runtime wiring into main negamax static eval is deferred in this patch because P0-68 exposes only deterministic placeholder/test key construction (`Color + bucket`) and does not yet provide a safe board-derived runtime key contract.
+- Helper behavior is deterministic and read-only:
+  - returns raw static eval when key is unavailable/invalid;
+  - returns raw static eval when CorrectionHistory score is zero;
+  - returns raw static eval plus correction delta when seeded in tests.
+- No CorrectionHistory runtime update point was added.
+- No MovePicker consumption was added.
+- No pruning/LMR/probcut/singular/qsearch/TT/UCI/NNUE behavior changed.
+- Zero-state behavior is preserved by construction.

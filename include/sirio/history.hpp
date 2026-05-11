@@ -190,6 +190,11 @@ private:
     const Board &previous_board, const std::optional<Move> &previous_move, const Board &current_board,
     const Move &current_move);
 [[nodiscard]] std::optional<CorrectionHistoryKey> make_correction_history_key(Color mover_color, std::size_t bucket);
+[[nodiscard]] int apply_correction_history_to_static_eval(
+    int raw_static_eval, const SearchHistory::CorrectionHistory &correction_history,
+    const std::optional<CorrectionHistoryKey> &key);
+[[nodiscard]] int apply_correction_history_to_static_eval(
+    int raw_static_eval, const SearchHistory &history, const std::optional<CorrectionHistoryKey> &key);
 [[nodiscard]] CaptureNoisyHistoryUpdate make_capture_noisy_history_update(
     const std::optional<CaptureHistoryKey> &capture_key, const std::optional<NoisyHistoryKey> &noisy_key,
     bool success, int depth);
