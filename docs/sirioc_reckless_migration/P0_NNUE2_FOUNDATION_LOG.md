@@ -2437,3 +2437,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-76 Search Selectivity Parameters Foundation / Zero-Behaviour Contract
+
+- Added centralized search-selectivity parameter foundation with disabled/no-op defaults for reverse futility, move count pruning, probcut, and singular extensions.
+- No NNUE runtime behaviour changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

@@ -259,3 +259,10 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime path remains unchanged.
 - P0-75 affects only CorrectionHistory runtime update magnitude hardening (scaled/clamped delta policy).
 - No Capture/NoisyHistory scoring or runtime update behavior changed.
+
+## 15) P0-76 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime update path remains unchanged from P0-62/P0-63.
+- P0-76 adds search-selectivity parameter infrastructure only.
+- No CaptureHistory scoring change.
+- No NoisyHistory scoring change.
+- No Capture/Noisy runtime update policy change.
