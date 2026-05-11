@@ -417,3 +417,12 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Reverse futility (P0-83) remains unchanged and enabled under its current settings.
 - Probcut and singular extensions remain disabled.
 - No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed.
+
+## 18) P0-87 Move Count Pruning continue observability (disabled/no-behaviour contract)
+- Added deterministic observability for the guarded main-negamax Move Count Pruning continue path.
+- `selectivity_move_count_pruning_enabled` remains `false`.
+- The guarded MCP continue path remains unreachable under current defaults.
+- No behaviour change was introduced.
+- Reverse futility P0-83 behavior remains unchanged.
+- Probcut and singular extensions remain disabled/not wired.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed.

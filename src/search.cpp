@@ -1373,6 +1373,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
             is_pv_node,
             ply == 0);
         if (move_count_pruning_probe) {
+            context.history.record_move_count_pruning_continue();
             continue;
         }
         bool is_tt_move = tt_move.has_value() && same_move(*tt_move, move);
