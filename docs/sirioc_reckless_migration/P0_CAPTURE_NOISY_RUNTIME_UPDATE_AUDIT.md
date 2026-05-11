@@ -281,3 +281,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime path remains unchanged.
 - P0-79 scope is reverse-futility disabled return scaffolding only.
 - No Capture/NoisyHistory scoring or update behaviour changed.
+
+## 15) P0-80 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-80 is reverse-futility safety-predicate infrastructure only.
+- No Capture/NoisyHistory scoring or runtime update policy changed.

@@ -793,17 +793,25 @@ void test_search_selectivity_foundation_helpers_disabled() {
 }
 
 void test_reverse_futility_helper_default_flag_disables_pruning() {
-    assert(!sirio::search_params::should_apply_reverse_futility_pruning(1, 500, 100, true, false));
-    assert(!sirio::search_params::should_apply_reverse_futility_pruning(4, 900, -50, false, false));
+    assert(!sirio::search_params::should_apply_reverse_futility_pruning(1, 500, 100, true, false, false, false));
+    assert(!sirio::search_params::should_apply_reverse_futility_pruning(4, 900, -50, false, false, false, false));
 }
 
 void test_reverse_futility_helper_in_check_is_disabled() {
-    assert(!sirio::search_params::should_apply_reverse_futility_pruning(3, 800, 300, true, true));
+    assert(!sirio::search_params::should_apply_reverse_futility_pruning(3, 800, 300, true, true, false, false));
+}
+
+void test_reverse_futility_helper_pv_node_is_disabled() {
+    assert(!sirio::search_params::should_apply_reverse_futility_pruning(3, 800, 300, true, false, true, false));
+}
+
+void test_reverse_futility_helper_root_node_is_disabled() {
+    assert(!sirio::search_params::should_apply_reverse_futility_pruning(3, 800, 300, true, false, false, true));
 }
 
 void test_reverse_futility_helper_invalid_depth_is_disabled() {
-    assert(!sirio::search_params::should_apply_reverse_futility_pruning(0, 800, 300, true, false));
-    assert(!sirio::search_params::should_apply_reverse_futility_pruning(-2, 800, 300, false, false));
+    assert(!sirio::search_params::should_apply_reverse_futility_pruning(0, 800, 300, true, false, false, false));
+    assert(!sirio::search_params::should_apply_reverse_futility_pruning(-2, 800, 300, false, false, false, false));
 }
 
 void test_reverse_futility_helper_no_side_effects_or_history_dependency() {
@@ -812,7 +820,7 @@ void test_reverse_futility_helper_no_side_effects_or_history_dependency() {
     assert(key.has_value());
     history.correction_history().update(*key, 27);
     const int before = history.correction_history().score(*key);
-    assert(!sirio::search_params::should_apply_reverse_futility_pruning(3, 800, 300, true, false));
+    assert(!sirio::search_params::should_apply_reverse_futility_pruning(3, 800, 300, true, false, false, false));
     assert(history.correction_history().score(*key) == before);
 }
 
@@ -827,6 +835,7 @@ void test_search_main_negamax_has_guarded_reverse_futility_return_scaffold_wirin
 
     assert(negamax_source.find("should_apply_reverse_futility_pruning(") != std::string::npos);
     assert(negamax_source.find("if (search_params::should_apply_reverse_futility_pruning(") != std::string::npos);
+    assert(negamax_source.find("in_check,\n            pv_node,\n            ply == 0") != std::string::npos);
     assert(negamax_source.find("return corrected_static_eval;") != std::string::npos);
 }
 
@@ -1294,6 +1303,8 @@ void run_history_tests() {
     test_search_selectivity_foundation_helpers_disabled();
     test_reverse_futility_helper_default_flag_disables_pruning();
     test_reverse_futility_helper_in_check_is_disabled();
+    test_reverse_futility_helper_pv_node_is_disabled();
+    test_reverse_futility_helper_root_node_is_disabled();
     test_reverse_futility_helper_invalid_depth_is_disabled();
     test_reverse_futility_helper_no_side_effects_or_history_dependency();
     test_search_main_negamax_has_guarded_reverse_futility_return_scaffold_wiring();
