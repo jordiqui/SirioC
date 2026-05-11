@@ -2422,3 +2422,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behaviour changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-74 CorrectionHistory Main Negamax Fail-Low Negative Runtime Update
+
+- Added CorrectionHistory main negamax fail-low negative runtime update.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

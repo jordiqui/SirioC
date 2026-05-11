@@ -1489,6 +1489,10 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         return best_score;
     }
 
+    if (local_found && best_score <= alpha_original) {
+        apply_correction_history_fail_low_update(context.history, correction_key, raw_static_eval, best_score);
+    }
+
     if (local_found) {
         TTEntry new_entry{};
         new_entry.best_move = local_best;
