@@ -232,12 +232,12 @@ void test_correction_history_default_update_clamp_and_clear() {
     for (int i = 0; i < 5000; ++i) {
         history.correction_history().update(sirio::Color::White, bucket, 1000, true);
     }
-    assert(history.correction_history().score(sirio::Color::White, bucket) == sirio::search_params::history_max);
+    assert(history.correction_history().score(sirio::Color::White, bucket) == sirio::search_params::correction_history_max);
 
     for (int i = 0; i < 10000; ++i) {
         history.correction_history().update(sirio::Color::White, bucket, 1000, false);
     }
-    assert(history.correction_history().score(sirio::Color::White, bucket) == sirio::search_params::history_min);
+    assert(history.correction_history().score(sirio::Color::White, bucket) == sirio::search_params::correction_history_min);
 
     history.correction_history().clear();
     assert(history.correction_history().score(sirio::Color::White, bucket) == 0);

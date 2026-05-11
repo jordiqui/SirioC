@@ -126,7 +126,7 @@ std::optional<CorrectionHistoryKey> make_correction_history_key(Color mover_colo
     if (!is_valid_color(mover_color)) {
         return std::nullopt;
     }
-    return CorrectionHistoryKey{mover_color, bucket % 1024};
+    return CorrectionHistoryKey{mover_color, bucket};
 }
 
 CaptureNoisyHistoryUpdate make_capture_noisy_history_update(
@@ -385,17 +385,34 @@ void SearchHistory::CorrectionHistory::clear() {
     table_ = {};
 }
 
+bool SearchHistory::CorrectionHistory::is_valid_key(const CorrectionHistoryKey &key) {
+    return is_valid_color(key.mover_color);
+}
+
 std::size_t SearchHistory::CorrectionHistory::normalize_bucket(std::size_t bucket) {
     return bucket % bucket_count_;
 }
 
+int SearchHistory::CorrectionHistory::score(const CorrectionHistoryKey &key) const {
+    if (!is_valid_key(key)) {
+        return 0;
+    }
+    return table_[color_to_index(key.mover_color)][normalize_bucket(key.bucket)];
+}
 int SearchHistory::CorrectionHistory::score(Color mover, std::size_t bucket) const {
-    return table_[color_to_index(mover)][normalize_bucket(bucket)];
+    return score(CorrectionHistoryKey{mover, bucket});
 }
 
+void SearchHistory::CorrectionHistory::update(const CorrectionHistoryKey &key, int bonus) {
+    if (!is_valid_key(key)) {
+        return;
+    }
+    auto &entry = table_[color_to_index(key.mover_color)][normalize_bucket(key.bucket)];
+    entry = std::clamp(entry + bonus, search_params::correction_history_min, search_params::correction_history_max);
+}
 void SearchHistory::CorrectionHistory::update(Color mover, std::size_t bucket, int depth, bool success) {
-    auto &entry = table_[color_to_index(mover)][normalize_bucket(bucket)];
-    apply_history_delta(entry, history_bonus_for_depth(depth), success);
+    const int raw_bonus = history_bonus_for_depth(depth);
+    update(CorrectionHistoryKey{mover, bucket}, success ? raw_bonus : -raw_bonus);
 }
 
 void SearchHistory::clear() {

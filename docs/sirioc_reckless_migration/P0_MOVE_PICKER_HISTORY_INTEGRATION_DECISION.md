@@ -250,3 +250,11 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - P0-62/P0-63 capture/noisy runtime update contract is unchanged.
 - P0-64/P0-65/P0-66 ContinuationHistory read/update contracts remain unchanged.
 - No qsearch, LMR, pruning, TT, eval, UCI, or NNUE runtime behavior changes were introduced.
+
+## 17) P0-68 correction-history zero-runtime foundation
+- CorrectionHistory foundation was added/standardized in the history layer as storage/API only.
+- SearchHistory now owns and clears CorrectionHistory storage as part of normal history lifecycle.
+- No MovePicker consumption was added.
+- No search consumption was added.
+- No eval/pruning/LMR/TT/qsearch/UCI/NNUE behavior was changed.
+- This step is a deterministic zero-runtime foundation for a later, separately authorized correction-history integration patch.
