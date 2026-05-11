@@ -271,3 +271,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime path remains unchanged.
 - P0-77 adds reverse-futility helper infrastructure only.
 - No CaptureHistory/NoisyHistory scoring or runtime update behavior changed.
+
+## 18) P0-78 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-78 is limited to reverse-futility disabled probe wiring in main negamax only.
+- No CaptureHistory or NoisyHistory scoring/update policy change was made.
