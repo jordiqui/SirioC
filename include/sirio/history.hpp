@@ -190,6 +190,7 @@ private:
     const Board &previous_board, const std::optional<Move> &previous_move, const Board &current_board,
     const Move &current_move);
 [[nodiscard]] std::optional<CorrectionHistoryKey> make_correction_history_key(Color mover_color, std::size_t bucket);
+[[nodiscard]] std::optional<CorrectionHistoryKey> make_correction_history_key_from_position(const Board &board);
 [[nodiscard]] int apply_correction_history_to_static_eval(
     int raw_static_eval, const SearchHistory::CorrectionHistory &correction_history,
     const std::optional<CorrectionHistoryKey> &key);
@@ -233,6 +234,11 @@ void apply_capture_noisy_history_update_event_for_tests(SearchHistory &history,
 [[nodiscard]] inline std::optional<CorrectionHistoryKey> make_correction_history_key_for_tests(
     Color mover_color, std::size_t bucket) {
     return make_correction_history_key(mover_color, bucket);
+}
+
+[[nodiscard]] inline std::optional<CorrectionHistoryKey> make_correction_history_key_from_position_for_tests(
+    const Board &board) {
+    return make_correction_history_key_from_position(board);
 }
 
 }  // namespace sirio

@@ -2393,3 +2393,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No evaluation backend topology changed.
 - Runtime main-search wiring is intentionally deferred until a safe board-derived CorrectionHistory runtime key contract exists.
 - No strength/Elo claim.
+
+# P0-70 CorrectionHistory Runtime Key Contract Foundation (No Consumption)
+
+- Added a deterministic CorrectionHistory runtime key construction contract via board-derived helper (`side_to_move` + pawn-occupancy-derived bucket).
+- Integration remains foundation-only: no runtime CorrectionHistory consumption/update in search, qsearch, evaluation, pruning, LMR, MovePicker, TT, or UCI.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
