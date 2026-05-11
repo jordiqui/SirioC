@@ -278,3 +278,12 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - No CorrectionHistory runtime update point was added.
 - No static-eval runtime hook in search/eval was added.
 - No MovePicker/pruning/LMR/qsearch/TT/UCI/NNUE runtime behavior was changed.
+
+## 16) P0-71 correction-history read-only main-negamax static-eval wiring
+- CorrectionHistory is now consumed **read-only** in main `negamax` static-evaluation flow.
+- The board-derived key helper used is `make_correction_history_key_from_position(const Board&)` (P0-70 contract).
+- The correction helper used is `apply_correction_history_to_static_eval(...)` (P0-69 contract).
+- Zero-state contract remains preserved: with default/cleared history, corrected static eval equals raw static eval.
+- No CorrectionHistory runtime update point was added.
+- qsearch remains unchanged and does not consume CorrectionHistory.
+- No direct MovePicker/pruning/LMR/probcut/singular/TT/UCI/NNUE behavioural wiring was added in this step.

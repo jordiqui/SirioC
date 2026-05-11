@@ -2401,3 +2401,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-71 CorrectionHistory Read-Only Main Negamax Static-Eval Wiring
+
+- Added read-only CorrectionHistory consumption in main negamax static evaluation path.
+- No NNUE runtime behaviour changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

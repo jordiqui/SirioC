@@ -235,3 +235,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - P0-62/P0-63 Capture/NoisyHistory runtime path remains unchanged.
 - P0-67 read-only tactical/noisy MovePicker scoring remains unchanged.
 - P0-70 CorrectionHistory runtime key construction is isolated and does not affect Capture/NoisyHistory runtime update or scoring behavior.
+
+## 15) P0-71 note (capture/noisy runtime and read-only tactical scoring unchanged)
+- P0-62/P0-63 Capture/NoisyHistory runtime update path remains unchanged.
+- P0-67 read-only Capture/NoisyHistory MovePicker tactical scoring remains unchanged.
+- P0-71 CorrectionHistory read-only static-eval wiring in main negamax does not alter Capture/NoisyHistory runtime contracts.

@@ -1,4 +1,8 @@
 #include <cassert>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <vector>
 
 #include "sirio/board.hpp"
 #include "sirio/history.hpp"
@@ -729,6 +733,47 @@ void test_search_history_clear_resets_continuation_history() {
     assert(history.continuation_history().score(sirio::Color::White, e2e4, sirio::Color::White, g1f3) == 0);
 }
 
+
+std::string load_search_source_for_tests() {
+    const std::vector<std::string> candidates{"src/search.cpp", "../src/search.cpp"};
+    for (const auto &path : candidates) {
+        std::ifstream in(path);
+        if (!in.good()) {
+            continue;
+        }
+        std::ostringstream buffer;
+        buffer << in.rdbuf();
+        const std::string source = buffer.str();
+        if (!source.empty()) {
+            return source;
+        }
+    }
+    return {};
+}
+
+void test_search_main_negamax_uses_read_only_correction_history_hook() {
+    const std::string source = load_search_source_for_tests();
+    assert(!source.empty());
+
+    assert(source.find("make_correction_history_key_from_position(board)") != std::string::npos);
+    assert(source.find("apply_correction_history_to_static_eval(raw_static_eval, context.history, correction_key)") !=
+           std::string::npos);
+    assert(source.find("new_entry.static_eval = raw_static_eval;") != std::string::npos);
+    assert(source.find("correction_history().update") == std::string::npos);
+}
+
+void test_search_qsearch_has_no_correction_history_wiring() {
+    const std::string source = load_search_source_for_tests();
+    assert(!source.empty());
+    const std::size_t qsearch_pos = source.find("int quiescence(");
+    assert(qsearch_pos != std::string::npos);
+    const std::string qsearch_source = source.substr(qsearch_pos);
+
+    assert(qsearch_source.find("make_correction_history_key_from_position") == std::string::npos);
+    assert(qsearch_source.find("apply_correction_history_to_static_eval") == std::string::npos);
+    assert(qsearch_source.find("correction_history()") == std::string::npos);
+}
+
 }  // namespace
 
 
@@ -1062,6 +1107,8 @@ void run_history_tests() {
     test_search_history_aggregate_key_isolation_and_deterministic_cycles();
     test_search_history_aggregate_key_contract_audit_no_search_use();
     test_search_history_clear_resets_continuation_history();
+    test_search_main_negamax_uses_read_only_correction_history_hook();
+    test_search_qsearch_has_no_correction_history_wiring();
     test_correction_history_default_update_clamp_and_clear();
     test_correction_history_bucket_indexing_and_determinism();
     test_search_history_clear_resets_correction_history();
