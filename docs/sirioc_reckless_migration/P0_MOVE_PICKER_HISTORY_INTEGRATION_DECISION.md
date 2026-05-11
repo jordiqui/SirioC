@@ -309,3 +309,12 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Existing P0-72 quiet beta-cutoff positive update path remains unchanged.
 - No qsearch CorrectionHistory update was added.
 - No direct MovePicker/pruning/LMR/probcut/singular/TT/UCI/NNUE behavior change was introduced.
+
+## 15) P0-75 correction-history runtime delta hardening
+- CorrectionHistory runtime update deltas are now centrally scaled and clamped via `search_params::correction_history_runtime_delta_scale` and `search_params::correction_history_runtime_delta_max`.
+- The same bounded-delta policy applies to both existing runtime helpers:
+  - quiet beta-cutoff positive helper,
+  - fail-low negative helper.
+- No new CorrectionHistory runtime update point was added.
+- Main negamax hook locations are unchanged.
+- No qsearch, MovePicker, pruning, LMR, TT, UCI, or NNUE behavior changes were introduced.

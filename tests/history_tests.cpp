@@ -1098,9 +1098,18 @@ void test_correction_runtime_observability_quiet_beta_cutoff_applies_once_positi
     sirio::SearchHistory history;
     const auto key = sirio::make_correction_history_key_for_tests(sirio::Color::White, 9);
     assert(key.has_value());
-    assert(sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(history, key, 20, 35));
+    assert(sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(history, key, 20, 40));
     assert(history.correction_quiet_beta_cutoff_update_count_for_tests() == 1);
-    assert(history.correction_history().score(*key) == 15);
+    assert(history.correction_history().score(*key) == 5);
+}
+
+void test_correction_runtime_observability_quiet_beta_cutoff_clamps_large_positive_delta() {
+    sirio::SearchHistory history;
+    const auto key = sirio::make_correction_history_key_for_tests(sirio::Color::White, 109);
+    assert(key.has_value());
+    assert(sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(history, key, -500, 500));
+    assert(history.correction_quiet_beta_cutoff_update_count_for_tests() == 1);
+    assert(history.correction_history().score(*key) == sirio::search_params::correction_history_runtime_delta_max);
 }
 
 void test_correction_runtime_observability_excluded_paths_do_not_apply() {
@@ -1110,6 +1119,7 @@ void test_correction_runtime_observability_excluded_paths_do_not_apply() {
     assert(!sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(history, std::nullopt, 10, 30));
     assert(!sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(history, key, 20, 20));
     assert(!sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(history, key, 21, 20));
+    assert(!sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(history, key, 10, 13));
     assert(history.correction_quiet_beta_cutoff_update_count_for_tests() == 0);
     assert(history.correction_history().score(*key) == 0);
 }
@@ -1119,16 +1129,16 @@ void test_correction_runtime_observability_clear_resets_and_is_deterministic() {
     sirio::SearchHistory b;
     const auto key = sirio::make_correction_history_key_for_tests(sirio::Color::Black, 44);
     assert(key.has_value());
-    assert(sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(a, key, -10, 12));
-    assert(sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(b, key, -10, 12));
+    assert(sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(a, key, -10, 10));
+    assert(sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(b, key, -10, 10));
     a.clear();
     b.clear();
     assert(a.correction_quiet_beta_cutoff_update_count_for_tests() == 0);
     assert(b.correction_quiet_beta_cutoff_update_count_for_tests() == 0);
     assert(a.correction_history().score(*key) == 0);
     assert(b.correction_history().score(*key) == 0);
-    assert(sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(a, key, -10, 12));
-    assert(sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(b, key, -10, 12));
+    assert(sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(a, key, -10, 10));
+    assert(sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(b, key, -10, 10));
     assert(a.correction_history().score(*key) == b.correction_history().score(*key));
     assert(a.correction_quiet_beta_cutoff_update_count_for_tests() == 1);
 }
@@ -1136,9 +1146,18 @@ void test_correction_runtime_observability_fail_low_applies_once_negative_raw_ba
     sirio::SearchHistory history;
     const auto key = sirio::make_correction_history_key_for_tests(sirio::Color::White, 19);
     assert(key.has_value());
-    assert(sirio::apply_correction_history_fail_low_update_for_tests(history, key, 40, 12));
+    assert(sirio::apply_correction_history_fail_low_update_for_tests(history, key, 40, 20));
     assert(history.correction_fail_low_update_count_for_tests() == 1);
-    assert(history.correction_history().score(*key) == -28);
+    assert(history.correction_history().score(*key) == -5);
+}
+
+void test_correction_runtime_observability_fail_low_clamps_large_negative_delta() {
+    sirio::SearchHistory history;
+    const auto key = sirio::make_correction_history_key_for_tests(sirio::Color::Black, 119);
+    assert(key.has_value());
+    assert(sirio::apply_correction_history_fail_low_update_for_tests(history, key, 500, -500));
+    assert(history.correction_fail_low_update_count_for_tests() == 1);
+    assert(history.correction_history().score(*key) == -sirio::search_params::correction_history_runtime_delta_max);
 }
 
 void test_correction_runtime_observability_fail_low_excluded_paths_do_not_apply() {
@@ -1148,6 +1167,7 @@ void test_correction_runtime_observability_fail_low_excluded_paths_do_not_apply(
     assert(!sirio::apply_correction_history_fail_low_update_for_tests(history, std::nullopt, 40, 12));
     assert(!sirio::apply_correction_history_fail_low_update_for_tests(history, key, 40, 40));
     assert(!sirio::apply_correction_history_fail_low_update_for_tests(history, key, 40, 55));
+    assert(!sirio::apply_correction_history_fail_low_update_for_tests(history, key, 40, 38));
     assert(history.correction_fail_low_update_count_for_tests() == 0);
     assert(history.correction_history().score(*key) == 0);
 }
@@ -1157,16 +1177,16 @@ void test_correction_runtime_observability_fail_low_clear_resets_and_is_determin
     sirio::SearchHistory b;
     const auto key = sirio::make_correction_history_key_for_tests(sirio::Color::Black, 45);
     assert(key.has_value());
-    assert(sirio::apply_correction_history_fail_low_update_for_tests(a, key, 30, -15));
-    assert(sirio::apply_correction_history_fail_low_update_for_tests(b, key, 30, -15));
+    assert(sirio::apply_correction_history_fail_low_update_for_tests(a, key, 30, 10));
+    assert(sirio::apply_correction_history_fail_low_update_for_tests(b, key, 30, 10));
     a.clear();
     b.clear();
     assert(a.correction_fail_low_update_count_for_tests() == 0);
     assert(b.correction_fail_low_update_count_for_tests() == 0);
     assert(a.correction_history().score(*key) == 0);
     assert(b.correction_history().score(*key) == 0);
-    assert(sirio::apply_correction_history_fail_low_update_for_tests(a, key, 30, -15));
-    assert(sirio::apply_correction_history_fail_low_update_for_tests(b, key, 30, -15));
+    assert(sirio::apply_correction_history_fail_low_update_for_tests(a, key, 30, 10));
+    assert(sirio::apply_correction_history_fail_low_update_for_tests(b, key, 30, 10));
     assert(a.correction_history().score(*key) == b.correction_history().score(*key));
     assert(a.correction_fail_low_update_count_for_tests() == 1);
 }
@@ -1230,9 +1250,11 @@ void run_history_tests() {
     test_continuation_runtime_observability_clear_resets_and_is_deterministic();
     test_continuation_runtime_observability_applies_malus_to_tried_quiets_only();
     test_correction_runtime_observability_quiet_beta_cutoff_applies_once_positive_raw_baseline();
+    test_correction_runtime_observability_quiet_beta_cutoff_clamps_large_positive_delta();
     test_correction_runtime_observability_excluded_paths_do_not_apply();
     test_correction_runtime_observability_clear_resets_and_is_deterministic();
     test_correction_runtime_observability_fail_low_applies_once_negative_raw_baseline();
+    test_correction_runtime_observability_fail_low_clamps_large_negative_delta();
     test_correction_runtime_observability_fail_low_excluded_paths_do_not_apply();
     test_correction_runtime_observability_fail_low_clear_resets_and_is_deterministic();
 }

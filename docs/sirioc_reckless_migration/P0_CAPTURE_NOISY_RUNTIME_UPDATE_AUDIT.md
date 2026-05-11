@@ -254,3 +254,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - P0-62/P0-63 Capture/NoisyHistory runtime path remains unchanged.
 - P0-67 read-only Capture/Noisy tactical scoring remains unchanged.
 - P0-74 CorrectionHistory fail-low negative update is separate and does not affect Capture/NoisyHistory runtime/scoring.
+
+## 15) P0-75 note
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-75 affects only CorrectionHistory runtime update magnitude hardening (scaled/clamped delta policy).
+- No Capture/NoisyHistory scoring or runtime update behavior changed.

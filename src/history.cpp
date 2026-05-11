@@ -30,6 +30,18 @@ int history_bonus_for_depth(int depth) {
     return std::min(bonus, search_params::history_bonus_limit);
 }
 
+int normalize_correction_history_runtime_delta(int raw_delta) {
+    if (raw_delta == 0) {
+        return 0;
+    }
+    const int scaled_delta = raw_delta / search_params::correction_history_runtime_delta_scale;
+    if (scaled_delta == 0) {
+        return 0;
+    }
+    return std::clamp(scaled_delta, -search_params::correction_history_runtime_delta_max,
+                      search_params::correction_history_runtime_delta_max);
+}
+
 void apply_history_delta(int &entry, int bonus, bool success) {
     if (success) {
         entry = std::min(entry + bonus, search_params::history_max);
@@ -295,7 +307,11 @@ bool apply_correction_history_quiet_beta_cutoff_update(
     if (!correction_key.has_value()) {
         return false;
     }
-    const int correction_delta = cutoff_value - raw_static_eval;
+    const int raw_delta = cutoff_value - raw_static_eval;
+    if (raw_delta <= 0) {
+        return false;
+    }
+    const int correction_delta = normalize_correction_history_runtime_delta(raw_delta);
     if (correction_delta <= 0) {
         return false;
     }
@@ -315,7 +331,11 @@ bool apply_correction_history_fail_low_update(
     if (!correction_key.has_value()) {
         return false;
     }
-    const int correction_delta = best_value - raw_static_eval;
+    const int raw_delta = best_value - raw_static_eval;
+    if (raw_delta >= 0) {
+        return false;
+    }
+    const int correction_delta = normalize_correction_history_runtime_delta(raw_delta);
     if (correction_delta >= 0) {
         return false;
     }

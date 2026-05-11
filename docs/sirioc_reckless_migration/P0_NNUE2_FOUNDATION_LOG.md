@@ -2429,3 +2429,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-75 CorrectionHistory Runtime Delta Scaling / Saturation Hardening
+
+- Added centralized CorrectionHistory runtime delta scaling/clamping for existing runtime update helpers.
+- Applied to both quiet beta-cutoff positive and fail-low negative CorrectionHistory runtime updates.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
