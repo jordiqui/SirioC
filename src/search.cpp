@@ -1281,13 +1281,16 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
             return corrected_static_eval - search_params::futility_margin_depth1;
         }
     }
+    const bool is_pv_node = beta - alpha > 1;
     const bool improving = corrected_static_eval > parent_static_eval;
     if (search_params::should_apply_reverse_futility_pruning(
             depth_left,
             corrected_static_eval,
             beta,
             improving,
-            in_check)) {
+            in_check,
+            is_pv_node,
+            ply == 0)) {
         return corrected_static_eval;
     }
 

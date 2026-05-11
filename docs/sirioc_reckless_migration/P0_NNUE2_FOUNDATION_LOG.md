@@ -2467,3 +2467,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behaviour changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-80 Reverse Futility Safety Predicate Expansion (Disabled/No-Op)
+
+- Reverse futility safety predicate expansion was added with explicit safety gating and disabled/no-op behaviour under defaults.
+- No NNUE runtime behaviour changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

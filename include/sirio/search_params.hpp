@@ -67,11 +67,12 @@ inline constexpr int reverse_futility_margin_per_depth = 0;
 }
 
 [[nodiscard]] inline constexpr bool should_apply_reverse_futility_pruning(
-    int depth, int corrected_static_eval, int beta, bool improving, bool in_check) {
+    int depth, int corrected_static_eval, int beta, bool improving, bool in_check, bool is_pv_node,
+    bool is_root_node) {
     if (!selectivity_reverse_futility_is_enabled()) {
         return false;
     }
-    if (in_check) {
+    if (in_check || is_pv_node || is_root_node) {
         return false;
     }
     if (depth <= 0 || depth > reverse_futility_depth_limit) {
