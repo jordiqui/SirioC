@@ -225,3 +225,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - P0-62/P0-63 Capture/NoisyHistory runtime path remains unchanged.
 - P0-67 read-only tactical/noisy MovePicker scoring remains unchanged.
 - CorrectionHistory P0-68 foundation is storage/API only and does not affect CaptureHistory/NoisyHistory runtime/scoring behavior.
+
+## 16) P0-69 note (capture/noisy path unchanged)
+- P0-62/P0-63 Capture/NoisyHistory runtime path remains unchanged.
+- P0-67 read-only tactical/noisy MovePicker scoring remains unchanged.
+- P0-69 CorrectionHistory read-only static-eval helper work is isolated and does not affect CaptureHistory/NoisyHistory runtime or scoring behavior.

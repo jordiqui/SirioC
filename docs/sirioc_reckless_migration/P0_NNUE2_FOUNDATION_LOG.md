@@ -2385,3 +2385,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend behavior changed.
 - No strength/Elo claim is made.
+
+# P0-69 CorrectionHistory read-only static-eval helper / deferred runtime key wiring
+
+- Added a read-only CorrectionHistory static-eval correction helper in the history module.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- Runtime main-search wiring is intentionally deferred until a safe board-derived CorrectionHistory runtime key contract exists.
+- No strength/Elo claim.

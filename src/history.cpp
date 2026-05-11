@@ -129,6 +129,24 @@ std::optional<CorrectionHistoryKey> make_correction_history_key(Color mover_colo
     return CorrectionHistoryKey{mover_color, bucket};
 }
 
+int apply_correction_history_to_static_eval(
+    int raw_static_eval, const SearchHistory::CorrectionHistory &correction_history,
+    const std::optional<CorrectionHistoryKey> &key) {
+    if (!key.has_value()) {
+        return raw_static_eval;
+    }
+    const int correction = correction_history.score(*key);
+    if (correction == 0) {
+        return raw_static_eval;
+    }
+    return raw_static_eval + correction;
+}
+
+int apply_correction_history_to_static_eval(
+    int raw_static_eval, const SearchHistory &history, const std::optional<CorrectionHistoryKey> &key) {
+    return apply_correction_history_to_static_eval(raw_static_eval, history.correction_history(), key);
+}
+
 CaptureNoisyHistoryUpdate make_capture_noisy_history_update(
     const std::optional<CaptureHistoryKey> &capture_key, const std::optional<NoisyHistoryKey> &noisy_key,
     bool success, int depth) {
