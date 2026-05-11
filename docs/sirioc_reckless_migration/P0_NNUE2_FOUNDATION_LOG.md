@@ -2509,3 +2509,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+
+# P0-86 Move Count Pruning Disabled Guarded Continue Scaffold
+
+- Added a Move Count Pruning disabled guarded continue scaffold in main negamax.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

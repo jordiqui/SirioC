@@ -1372,7 +1372,9 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
             in_check,
             is_pv_node,
             ply == 0);
-        (void)move_count_pruning_probe;
+        if (move_count_pruning_probe) {
+            continue;
+        }
         bool is_tt_move = tt_move.has_value() && same_move(*tt_move, move);
         if (!in_check && tactical_move && !is_tt_move) {
             int see_score = static_exchange_score(board, move);

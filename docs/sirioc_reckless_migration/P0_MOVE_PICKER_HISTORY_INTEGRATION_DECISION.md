@@ -408,3 +408,12 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Reverse futility P0-83 path remains unchanged.
 - Probcut and singular extensions remain disabled.
 - No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed in this step.
+
+
+## 29) P0-86 move count pruning guarded continue scaffold (disabled)
+- Added a guarded Move Count Pruning continue scaffold in main `negamax(...)` move loop behind `should_apply_move_count_pruning(...)`.
+- `selectivity_move_count_pruning_enabled` remains `false`, so the guarded continue is unreachable under current defaults.
+- No behavior change was introduced.
+- Reverse futility (P0-83) remains unchanged and enabled under its current settings.
+- Probcut and singular extensions remain disabled.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed.
