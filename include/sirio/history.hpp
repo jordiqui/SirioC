@@ -215,6 +215,9 @@ bool apply_continuation_runtime_update_for_tests(
     SearchHistory &history, ContinuationRuntimeUpdateSite site,
     const std::optional<ContinuationHistoryKey> &continuation_key,
     const std::span<const ContinuationHistoryKey> &tried_quiet_keys, int depth);
+bool apply_correction_history_quiet_beta_cutoff_update(
+    SearchHistory &history, const std::optional<CorrectionHistoryKey> &correction_key, int raw_static_eval,
+    int cutoff_value);
 bool apply_correction_history_quiet_beta_cutoff_update_for_tests(
     SearchHistory &history, const std::optional<CorrectionHistoryKey> &correction_key, int raw_static_eval,
     int cutoff_value);

@@ -294,3 +294,10 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - No qsearch/capture/noisy/promotion/non-cutoff runtime correction updates were added.
 - P0-71 read-only correction application path remains in place.
 - No MovePicker/pruning/LMR/probcut/singular/TT/UCI/NNUE behavior was directly changed.
+
+## 18) P0-73 correction-history runtime helper API boundary cleanup
+- CorrectionHistory quiet beta-cutoff runtime helper naming/API boundary was cleaned.
+- Production search now calls `apply_correction_history_quiet_beta_cutoff_update(...)`.
+- `*_for_tests` naming is retained only as a test-facing wrapper that forwards to the production helper.
+- No behaviour change was introduced.
+- P0-72 correction update contract (gating and delta semantics) is unchanged.

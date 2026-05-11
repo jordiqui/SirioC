@@ -245,3 +245,7 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - P0-62/P0-63 Capture/NoisyHistory runtime update path remains unchanged.
 - P0-67 read-only tactical/noisy MovePicker scoring remains unchanged.
 - CorrectionHistory runtime update in P0-72 is separate and quiet-only.
+
+## P0-73 note
+- No CaptureHistory/NoisyHistory runtime behaviour changed.
+- This step is CorrectionHistory helper naming/API boundary cleanup only.
