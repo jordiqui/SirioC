@@ -196,3 +196,9 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Limitations:
   - this patch provides deterministic contract-level observability via helper+counter tests;
   - full end-to-end node-path orchestration in live negamax/qsearch is still intentionally constrained to avoid brittle position-dependent tests.
+
+## 11) P0-64 note (no capture/noisy runtime-update changes)
+- P0-64 adds a read-only ContinuationHistory quiet-ordering hook in MovePicker only.
+- No change was made to the existing Capture/NoisyHistory runtime update trigger.
+- No new Capture/NoisyHistory runtime update point was added.
+- P0-63 observability contract remains valid and unchanged.

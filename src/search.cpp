@@ -874,12 +874,16 @@ int mvv_lva_score(const Move &move) {
 class MovePicker {
 public:
     MovePicker(Board &board, std::vector<Move> moves, const SearchContext &context, int ply,
-               const std::optional<Move> &tt_move, Color mover, bool tactical_only)
+               const std::optional<Move> &tt_move, Color mover, bool tactical_only,
+               const Board *previous_board = nullptr,
+               const std::optional<Move> &previous_move = std::nullopt)
         : board_(board),
           context_(context),
           mover_(mover),
           ply_(ply),
-          tactical_only_(tactical_only) {
+          tactical_only_(tactical_only),
+          previous_board_(previous_board),
+          previous_move_(previous_move) {
         if (tt_move.has_value()) {
             candidate_tt_move_ = *tt_move;
         }
@@ -944,7 +948,7 @@ public:
                 continue;
             }
 
-            int history = context_.history.quiet_history_score(move, mover_);
+            int history = context_.history.quiet_history_score(move, mover_) + continuation_quiet_score(move);
             quiets_.emplace_back(history, move);
         }
 
@@ -1020,6 +1024,20 @@ public:
     }
 
 private:
+    int continuation_quiet_score(const Move &move) const {
+        if (previous_board_ == nullptr || !previous_move_.has_value()) {
+            return 0;
+        }
+        const auto key =
+            make_continuation_history_key(*previous_board_, previous_move_, board_, move);
+        if (!key.has_value()) {
+            return 0;
+        }
+        return context_.history.continuation_history().score(key->previous_mover_color, *previous_move_,
+                                                             key->current_mover_color, move) *
+               search_params::continuation_history_quiet_score_scale;
+    }
+
     enum class Stage { TT, GoodCaptures, Promotions, Killers, Quiets, BadCaptures, Done };
 
     Board &board_;
@@ -1027,6 +1045,8 @@ private:
     Color mover_;
     int ply_;
     bool tactical_only_;
+    const Board *previous_board_ = nullptr;
+    std::optional<Move> previous_move_{};
 
     std::optional<Move> candidate_tt_move_;
     std::optional<Move> tt_move_;
@@ -2345,7 +2365,9 @@ std::vector<Move> move_picker_order_snapshot_for_tests(const Board &board, int p
                                                        bool tactical_only,
                                                        const std::optional<Move> &killer0,
                                                        const std::optional<Move> &killer1,
-                                                       const SearchHistory *history_override) {
+                                                       const SearchHistory *history_override,
+                                                       const Board *previous_board,
+                                                       const std::optional<Move> &previous_move) {
     Board board_copy = board;
     SearchSharedState shared_state{};
     SearchContext context{};
@@ -2361,7 +2383,7 @@ std::vector<Move> move_picker_order_snapshot_for_tests(const Board &board, int p
     }
     auto moves = generate_legal_moves(board_copy);
     MovePicker picker(board_copy, std::move(moves), context, ply, tt_move, board_copy.side_to_move(),
-                      tactical_only);
+                      tactical_only, previous_board, previous_move);
     std::vector<Move> ordered;
     while (auto move = picker.next()) {
         ordered.push_back(*move);

@@ -2349,3 +2349,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No continuation/correction integration was introduced.
 - No NNUE behaviour changed.
 - No strength/Elo claim.
+
+# P0-64 ContinuationHistory Read-Only MovePicker Quiet Scoring Hook
+
+- Added a read-only ContinuationHistory contribution to MovePicker quiet scoring.
+- No ContinuationHistory runtime update path was added in search.
+- Capture/NoisyHistory P0-62/P0-63 runtime-update path is unchanged.
+- No NNUE runtime behavior change.
+- No strength/Elo claim.

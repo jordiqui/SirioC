@@ -30,6 +30,7 @@ inline constexpr int max_search_threads = 1024;
 inline constexpr int history_bonus_limit = 8192;
 inline constexpr int history_max = 16384;
 inline constexpr int history_min = -history_max;
+inline constexpr int continuation_history_quiet_score_scale = 1;
 
 inline constexpr int futility_margin_depth1 = 150;
 
