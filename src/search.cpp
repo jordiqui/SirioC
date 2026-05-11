@@ -1196,9 +1196,13 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
     }
     Color side_to_move = board.side_to_move();
     bool in_check = board.in_check(side_to_move);
-    int static_eval = 0;
+    int raw_static_eval = 0;
+    int corrected_static_eval = 0;
     if (!in_check) {
-        static_eval = evaluate_for_current_player(board);
+        raw_static_eval = evaluate_for_current_player(board);
+        const auto correction_key = make_correction_history_key_from_position(board);
+        corrected_static_eval =
+            apply_correction_history_to_static_eval(raw_static_eval, context.history, correction_key);
     }
 
     const int max_remaining_depth = search_params::max_search_depth - ply;
@@ -1212,7 +1216,8 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
     if (tt_entry.has_value()) {
         tt_move = tt_entry->best_move;
         if (!in_check && tt_entry->static_eval != 0) {
-            static_eval = tt_entry->static_eval;
+            raw_static_eval = tt_entry->static_eval;
+            corrected_static_eval = raw_static_eval;
         }
     }
 
@@ -1231,7 +1236,8 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
                 return tb_score;
             }
             if (!in_check) {
-                static_eval = tb_score;
+                raw_static_eval = tb_score;
+                corrected_static_eval = raw_static_eval;
             }
         }
     }
@@ -1270,12 +1276,12 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
     }
 
     if (!in_check && depth_left == 1) {
-        if (static_eval - search_params::futility_margin_depth1 >= beta) {
-            return static_eval - search_params::futility_margin_depth1;
+        if (corrected_static_eval - search_params::futility_margin_depth1 >= beta) {
+            return corrected_static_eval - search_params::futility_margin_depth1;
         }
     }
 
-    if (allow_null_move && !in_check && depth_left >= 3 && static_eval >= beta &&
+    if (allow_null_move && !in_check && depth_left >= 3 && corrected_static_eval >= beta &&
         has_non_pawn_material(board, board.side_to_move())) {
         Board::NullUndoState null_undo;
         Color null_mover = board.side_to_move();
@@ -1288,7 +1294,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
             int null_depth = depth_left - 1 - reduction;
             if (null_depth >= 0) {
                 null_score = -negamax(board, null_depth, -beta, -beta + 1, ply + 1, nullptr, nullptr,
-                                      context, static_eval, false);
+                                      context, corrected_static_eval, false);
                 evaluated = true;
             }
         }
@@ -1370,7 +1376,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
 
         int reduction = 0;
         if (child_depth > 0 && depth_left >= 3 && move_index > 1 && quiet_move && !gives_check) {
-            bool improving = static_eval > parent_static_eval;
+            bool improving = corrected_static_eval > parent_static_eval;
             bool delayed_capture_threat = creates_delayed_capture_threat(board, move, mover);
             bool central_sacrifice = is_central_pawn_sacrifice(board, move, mover);
             bool responds_to_threat = in_check || piece_under_attack;
@@ -1401,7 +1407,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
                 context.previous_move_by_ply[static_cast<std::size_t>(ply + 1)] = move;
             }
             score = -negamax(board, new_depth, -beta, -alpha, ply + 1, nullptr, nullptr, context,
-                             static_eval, true);
+                             corrected_static_eval, true);
         }
         board.undo_move(move, undo);
         if (context.shared->stop.load(std::memory_order_relaxed)) {
@@ -1485,7 +1491,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         new_entry.best_move = local_best;
         new_entry.depth = depth_left;
         new_entry.score = to_tt_score(best_score, ply);
-        new_entry.static_eval = static_eval;
+        new_entry.static_eval = raw_static_eval;
         if (best_score <= alpha_original) {
             new_entry.type = TTNodeType::UpperBound;
         } else if (best_score >= beta) {
