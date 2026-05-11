@@ -391,3 +391,11 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - qsearch remains excluded (no reverse futility helper call and no reverse-futility return scaffold in qsearch).
 - Move count pruning, probcut, and singular extensions remain disabled.
 - No direct behaviour change was made to LMR, MovePicker, TT, UCI options/defaults, or NNUE runtime.
+
+## P0-84 update (move count pruning helper foundation only)
+- Added centralized move count pruning helper foundation in search parameters.
+- `selectivity_move_count_pruning_enabled` remains `false`.
+- No active move count pruning return/continue/break was added to main negamax.
+- Reverse futility P0-83 guarded behavior remains unchanged.
+- Probcut and singular extensions remain disabled.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed.

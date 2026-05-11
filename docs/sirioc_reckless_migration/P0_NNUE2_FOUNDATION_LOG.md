@@ -2495,3 +2495,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behaviour changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-84 Move Count Pruning Helper Foundation (Disabled / No-op)
+
+- Added move count pruning helper foundation with disabled/no-op behavior.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

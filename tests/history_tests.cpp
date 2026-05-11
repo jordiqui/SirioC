@@ -868,6 +868,32 @@ void test_reverse_futility_helper_no_side_effects_or_history_dependency() {
     assert(!sirio::search_params::should_apply_reverse_futility_pruning(3, 800, 300, true, false, false, false));
     assert(history.correction_history().score(*key) == before);
 }
+
+void test_move_count_pruning_helper_is_disabled_by_default_flag() {
+    assert(!sirio::search_params::should_apply_move_count_pruning(4, 12, false, false, false, false));
+}
+
+void test_move_count_pruning_helper_in_check_is_disabled() {
+    assert(!sirio::search_params::should_apply_move_count_pruning(4, 12, false, true, false, false));
+}
+
+void test_move_count_pruning_helper_pv_node_is_disabled() {
+    assert(!sirio::search_params::should_apply_move_count_pruning(4, 12, false, false, true, false));
+}
+
+void test_move_count_pruning_helper_root_node_is_disabled() {
+    assert(!sirio::search_params::should_apply_move_count_pruning(4, 12, false, false, false, true));
+}
+
+void test_move_count_pruning_helper_invalid_depth_is_disabled() {
+    assert(!sirio::search_params::should_apply_move_count_pruning(0, 12, false, false, false, false));
+    assert(!sirio::search_params::should_apply_move_count_pruning(-1, 12, true, false, false, false));
+}
+
+void test_move_count_pruning_helper_invalid_move_count_is_disabled() {
+    assert(!sirio::search_params::should_apply_move_count_pruning(3, 0, false, false, false, false));
+    assert(!sirio::search_params::should_apply_move_count_pruning(3, -2, true, false, false, false));
+}
 void test_reverse_futility_return_observability_counter_lifecycle() {
     sirio::SearchHistory history;
     assert(history.reverse_futility_return_count_for_tests() == 0);
@@ -922,6 +948,12 @@ void test_search_reverse_futility_return_is_guarded_and_localized() {
     const std::size_t unguarded_return_pos = negamax_source.find("return corrected_static_eval;");
     assert(unguarded_return_pos == return_pos);
     assert(negamax_source.find("_for_tests(") == std::string::npos);
+}
+
+void test_search_has_no_move_count_pruning_runtime_wiring() {
+    const std::string source = load_search_source_for_tests();
+    assert(!source.empty());
+    assert(source.find("should_apply_move_count_pruning(") == std::string::npos);
 }
 
 }  // namespace
@@ -1366,10 +1398,17 @@ void run_history_tests() {
     test_reverse_futility_helper_root_node_is_disabled();
     test_reverse_futility_helper_invalid_depth_is_disabled();
     test_reverse_futility_helper_no_side_effects_or_history_dependency();
+    test_move_count_pruning_helper_is_disabled_by_default_flag();
+    test_move_count_pruning_helper_in_check_is_disabled();
+    test_move_count_pruning_helper_pv_node_is_disabled();
+    test_move_count_pruning_helper_root_node_is_disabled();
+    test_move_count_pruning_helper_invalid_depth_is_disabled();
+    test_move_count_pruning_helper_invalid_move_count_is_disabled();
     test_reverse_futility_return_observability_counter_lifecycle();
     test_search_main_negamax_has_guarded_reverse_futility_return_scaffold_wiring();
     test_search_qsearch_has_no_reverse_futility_pruning_wiring();
     test_search_reverse_futility_return_is_guarded_and_localized();
+    test_search_has_no_move_count_pruning_runtime_wiring();
     test_correction_history_default_update_clamp_and_clear();
     test_correction_history_bucket_indexing_and_determinism();
     test_search_history_clear_resets_correction_history();

@@ -50,6 +50,10 @@ inline constexpr int reverse_futility_depth_limit = 0;
 inline constexpr int reverse_futility_margin_base = 0;
 inline constexpr int reverse_futility_margin_per_depth = 0;
 inline constexpr int reverse_futility_improving_margin_reduction = 0;
+inline constexpr int move_count_pruning_depth_limit = 0;
+inline constexpr int move_count_pruning_base_count = 0;
+inline constexpr int move_count_pruning_depth_multiplier = 0;
+inline constexpr int move_count_pruning_improving_offset = 0;
 
 [[nodiscard]] inline constexpr bool selectivity_reverse_futility_is_enabled() {
     return selectivity_reverse_futility_enabled;
@@ -89,6 +93,27 @@ inline constexpr int reverse_futility_improving_margin_reduction = 0;
 
     const int margin = reverse_futility_margin(depth, improving);
     return corrected_static_eval - margin >= beta;
+}
+
+[[nodiscard]] inline constexpr bool should_apply_move_count_pruning(
+    int depth, int move_count, bool improving, bool in_check, bool is_pv_node, bool is_root_node) {
+    if (!selectivity_move_count_pruning_is_enabled()) {
+        return false;
+    }
+    if (in_check || is_pv_node || is_root_node) {
+        return false;
+    }
+    if (depth <= 0 || move_count <= 0) {
+        return false;
+    }
+
+    const int improving_offset = improving ? move_count_pruning_improving_offset : 0;
+    const int threshold =
+        move_count_pruning_base_count + (move_count_pruning_depth_multiplier * depth) + improving_offset;
+    if (depth > move_count_pruning_depth_limit) {
+        return false;
+    }
+    return move_count > threshold;
 }
 
 } // namespace sirio::search_params
