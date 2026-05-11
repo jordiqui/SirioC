@@ -2489,3 +2489,9 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behaviour changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-83 Reverse Futility Conservative Activation (Main Negamax)
+- Reverse futility pruning enabled under conservative main-negamax guards.
+- No NNUE runtime behaviour changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
