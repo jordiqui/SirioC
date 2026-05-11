@@ -2365,3 +2365,9 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behaviour was changed.
 - No evaluation backend behaviour was changed.
 - No strength/Elo claim.
+
+# P0-66 ContinuationHistory Quiet Cutoff Symmetry
+- Added conservative ContinuationHistory quiet-cutoff malus for previously searched quiet moves at the same main-negamax cutoff node.
+- No NNUE runtime behaviour changed.
+- No evaluation backend change.
+- No strength/Elo claim.

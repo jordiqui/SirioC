@@ -208,3 +208,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Newly added ContinuationHistory runtime update is separate and quiet-only.
 - No new CaptureHistory runtime update point was added.
 - No new NoisyHistory runtime update point was added.
+
+## 13) P0-66 note (capture/noisy runtime path unchanged)
+- P0-62/P0-63 Capture/NoisyHistory runtime trigger remains unchanged.
+- P0-66 affects only ContinuationHistory quiet beta-cutoff symmetry in main negamax.
+- No new CaptureHistory or NoisyHistory runtime update point was added.
