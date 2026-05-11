@@ -735,7 +735,8 @@ void test_search_history_clear_resets_continuation_history() {
 
 
 std::string load_search_source_for_tests() {
-    const std::vector<std::string> candidates{"src/search.cpp", "../src/search.cpp"};
+    const std::vector<std::string> candidates{"src/search.cpp", "../src/search.cpp", "../../src/search.cpp",
+                                              "../../../src/search.cpp"};
     for (const auto &path : candidates) {
         std::ifstream in(path);
         if (!in.good()) {
@@ -758,8 +759,8 @@ void test_search_main_negamax_uses_read_only_correction_history_hook() {
     assert(source.find("make_correction_history_key_from_position(board)") != std::string::npos);
     assert(source.find("apply_correction_history_to_static_eval(raw_static_eval, context.history, correction_key)") !=
            std::string::npos);
+    assert(source.find("apply_correction_history_quiet_beta_cutoff_update_for_tests") != std::string::npos);
     assert(source.find("new_entry.static_eval = raw_static_eval;") != std::string::npos);
-    assert(source.find("correction_history().update") == std::string::npos);
 }
 
 void test_search_qsearch_has_no_correction_history_wiring() {
@@ -1090,6 +1091,44 @@ void test_continuation_runtime_observability_applies_malus_to_tried_quiets_only(
     assert(history.continuation_history().score(tried_key_b->previous_mover_color, previous_move,
                                                 tried_key_b->current_mover_color, tried_b) < 0);
 }
+void test_correction_runtime_observability_quiet_beta_cutoff_applies_once_positive_raw_baseline() {
+    sirio::SearchHistory history;
+    const auto key = sirio::make_correction_history_key_for_tests(sirio::Color::White, 9);
+    assert(key.has_value());
+    assert(sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(history, key, 20, 35));
+    assert(history.correction_quiet_beta_cutoff_update_count_for_tests() == 1);
+    assert(history.correction_history().score(*key) == 15);
+}
+
+void test_correction_runtime_observability_excluded_paths_do_not_apply() {
+    sirio::SearchHistory history;
+    const auto key = sirio::make_correction_history_key_for_tests(sirio::Color::White, 10);
+    assert(key.has_value());
+    assert(!sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(history, std::nullopt, 10, 30));
+    assert(!sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(history, key, 20, 20));
+    assert(!sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(history, key, 21, 20));
+    assert(history.correction_quiet_beta_cutoff_update_count_for_tests() == 0);
+    assert(history.correction_history().score(*key) == 0);
+}
+
+void test_correction_runtime_observability_clear_resets_and_is_deterministic() {
+    sirio::SearchHistory a;
+    sirio::SearchHistory b;
+    const auto key = sirio::make_correction_history_key_for_tests(sirio::Color::Black, 44);
+    assert(key.has_value());
+    assert(sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(a, key, -10, 12));
+    assert(sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(b, key, -10, 12));
+    a.clear();
+    b.clear();
+    assert(a.correction_quiet_beta_cutoff_update_count_for_tests() == 0);
+    assert(b.correction_quiet_beta_cutoff_update_count_for_tests() == 0);
+    assert(a.correction_history().score(*key) == 0);
+    assert(b.correction_history().score(*key) == 0);
+    assert(sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(a, key, -10, 12));
+    assert(sirio::apply_correction_history_quiet_beta_cutoff_update_for_tests(b, key, -10, 12));
+    assert(a.correction_history().score(*key) == b.correction_history().score(*key));
+    assert(a.correction_quiet_beta_cutoff_update_count_for_tests() == 1);
+}
 
 void run_history_tests() {
     test_initial_state_neutral_and_empty_killers();
@@ -1149,4 +1188,7 @@ void run_history_tests() {
     test_continuation_runtime_observability_excluded_or_invalid_paths_skip_or_noop();
     test_continuation_runtime_observability_clear_resets_and_is_deterministic();
     test_continuation_runtime_observability_applies_malus_to_tried_quiets_only();
+    test_correction_runtime_observability_quiet_beta_cutoff_applies_once_positive_raw_baseline();
+    test_correction_runtime_observability_excluded_paths_do_not_apply();
+    test_correction_runtime_observability_clear_resets_and_is_deterministic();
 }
