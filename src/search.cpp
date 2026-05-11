@@ -1198,9 +1198,10 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
     bool in_check = board.in_check(side_to_move);
     int raw_static_eval = 0;
     int corrected_static_eval = 0;
+    std::optional<CorrectionHistoryKey> correction_key = std::nullopt;
     if (!in_check) {
         raw_static_eval = evaluate_for_current_player(board);
-        const auto correction_key = make_correction_history_key_from_position(board);
+        correction_key = make_correction_history_key_from_position(board);
         corrected_static_eval =
             apply_correction_history_to_static_eval(raw_static_eval, context.history, correction_key);
     }
@@ -1433,6 +1434,8 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         }
         if (alpha >= beta) {
             if (quiet_move) {
+                apply_correction_history_quiet_beta_cutoff_update_for_tests(context.history, correction_key,
+                                                                            raw_static_eval, beta);
                 context.history.store_killer(move, ply);
                 const bool has_previous_context = previous_board != nullptr && previous_move.has_value();
                 if (has_previous_context) {

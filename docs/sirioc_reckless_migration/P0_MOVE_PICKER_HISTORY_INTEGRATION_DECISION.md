@@ -287,3 +287,10 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - No CorrectionHistory runtime update point was added.
 - qsearch remains unchanged and does not consume CorrectionHistory.
 - No direct MovePicker/pruning/LMR/probcut/singular/TT/UCI/NNUE behavioural wiring was added in this step.
+
+## 15) P0-72 correction history quiet beta-cutoff runtime update
+- CorrectionHistory now has exactly one runtime update point in main negamax quiet beta-cutoff handling.
+- Update is positive-only and uses `raw_static_eval` as the learning baseline (`beta - raw_static_eval` gate via helper).
+- No qsearch/capture/noisy/promotion/non-cutoff runtime correction updates were added.
+- P0-71 read-only correction application path remains in place.
+- No MovePicker/pruning/LMR/probcut/singular/TT/UCI/NNUE behavior was directly changed.

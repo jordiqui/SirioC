@@ -84,6 +84,9 @@ struct ContinuationRuntimeUpdateCounters {
     int quiet_beta_cutoff_malus_applied = 0;
     int quiet_beta_cutoff_skipped = 0;
 };
+struct CorrectionRuntimeUpdateCounters {
+    int quiet_beta_cutoff_applied = 0;
+};
 
 class SearchHistory {
 public:
@@ -170,6 +173,9 @@ public:
     void record_continuation_quiet_beta_cutoff_update_for_tests();
     void record_continuation_quiet_beta_cutoff_malus_for_tests();
     void record_continuation_quiet_beta_cutoff_skip_for_tests();
+    [[nodiscard]] int correction_quiet_beta_cutoff_update_count_for_tests() const;
+    void reset_correction_runtime_observability_for_tests();
+    void record_correction_quiet_beta_cutoff_update_for_tests();
 
 private:
     std::array<std::array<std::optional<Move>, 2>, search_params::max_search_depth> killer_moves_{};
@@ -180,6 +186,7 @@ private:
     CorrectionHistory correction_history_{};
     CaptureNoisyRuntimeUpdateCounters capture_noisy_runtime_update_counters_{};
     ContinuationRuntimeUpdateCounters continuation_runtime_update_counters_{};
+    CorrectionRuntimeUpdateCounters correction_runtime_update_counters_{};
 };
 
 [[nodiscard]] bool is_quiet_move(const Move &move);
@@ -208,6 +215,9 @@ bool apply_continuation_runtime_update_for_tests(
     SearchHistory &history, ContinuationRuntimeUpdateSite site,
     const std::optional<ContinuationHistoryKey> &continuation_key,
     const std::span<const ContinuationHistoryKey> &tried_quiet_keys, int depth);
+bool apply_correction_history_quiet_beta_cutoff_update_for_tests(
+    SearchHistory &history, const std::optional<CorrectionHistoryKey> &correction_key, int raw_static_eval,
+    int cutoff_value);
 
 [[nodiscard]] CaptureNoisyHistoryUpdateEvent make_capture_noisy_history_update_event_for_tests(
     CaptureNoisyHistoryUpdateTarget target, const std::optional<CaptureHistoryKey> &capture_key,
