@@ -19,6 +19,8 @@ std::vector<Move> move_picker_order_snapshot_for_tests(const Board &board, int p
                                                        const SearchHistory *history_override = nullptr,
                                                        const Board *previous_board = nullptr,
                                                        const std::optional<Move> &previous_move = std::nullopt);
+int capture_noisy_history_score_for_tests(const Board &board, const SearchHistory &history,
+                                          const Move &move, Color mover);
 }
 
 namespace {
@@ -237,6 +239,49 @@ void test_continuation_history_does_not_affect_tactical_only_ordering() {
 
 }  // namespace
 
+
+void test_capture_noisy_history_zero_state_preserves_tactical_snapshot() {
+    const std::string fen = "4k3/8/3q4/3p4/3P4/4N3/8/4K3 w - - 0 1";
+    sirio::Board board{fen};
+    auto baseline = moves_to_uci(sirio::move_picker_order_snapshot_for_tests(
+        board, 0, std::nullopt, true, std::nullopt, std::nullopt, nullptr));
+    sirio::SearchHistory history;
+    auto zero = moves_to_uci(sirio::move_picker_order_snapshot_for_tests(
+        board, 0, std::nullopt, true, std::nullopt, std::nullopt, &history));
+    assert(zero == baseline);
+}
+
+void test_capture_noisy_history_does_not_affect_quiet_only_position() {
+    const std::string fen = "8/8/8/8/8/8/4K3/4N2k w - - 0 1";
+    sirio::Board board{fen};
+    auto baseline = moves_to_uci(sirio::move_picker_order_snapshot_for_tests(
+        board, 0, std::nullopt, false, std::nullopt, std::nullopt, nullptr));
+
+    sirio::SearchHistory history;
+    sirio::Board seed_board{"4k3/8/8/2p5/3P4/8/8/4K3 w - - 0 1"};
+    const sirio::Move d4c5 = legal_move_by_uci(seed_board, "d4c5");
+    history.capture_history().update(sirio::Color::White, d4c5, 8, true);
+
+    auto with_seed = moves_to_uci(sirio::move_picker_order_snapshot_for_tests(
+        board, 0, std::nullopt, false, std::nullopt, std::nullopt, &history));
+    assert(with_seed == baseline);
+}
+
+void test_capture_noisy_history_invalid_key_returns_zero_and_no_mutation() {
+    sirio::Board board;
+    sirio::SearchHistory history;
+    history.reset_capture_noisy_runtime_update_counters();
+    sirio::Move invalid{};
+    invalid.from = 63;
+    invalid.to = 55;
+    invalid.piece = sirio::PieceType::Queen;
+    invalid.captured = sirio::PieceType::Pawn;
+
+    const int score = sirio::capture_noisy_history_score_for_tests(board, history, invalid, sirio::Color::White);
+    assert(score == 0);
+    assert(history.capture_noisy_runtime_update_counters().applied == 0);
+}
+
 void run_move_picker_snapshot_tests() {
     test_start_position_snapshot();
     test_capture_rich_snapshot();
@@ -246,6 +291,9 @@ void run_move_picker_snapshot_tests() {
     test_capture_history_signal_reorders_capture_candidates_only();
     test_noisy_history_signal_reorders_promotions();
     test_tt_move_priority_preserved_with_nonzero_history();
+    test_capture_noisy_history_zero_state_preserves_tactical_snapshot();
+    test_capture_noisy_history_does_not_affect_quiet_only_position();
+    test_capture_noisy_history_invalid_key_returns_zero_and_no_mutation();
     test_continuation_history_seed_reorders_quiets_only_with_valid_previous_context();
     test_continuation_history_missing_previous_context_is_noop();
     test_continuation_history_does_not_affect_tactical_only_ordering();

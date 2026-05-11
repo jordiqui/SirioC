@@ -2371,3 +2371,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behaviour changed.
 - No evaluation backend change.
 - No strength/Elo claim.
+
+# P0-67 Capture/NoisyHistory Read-Only Tactical MovePicker Hook
+
+- Added a read-only Capture/NoisyHistory tactical scoring helper in MovePicker for captures/en-passant/promotions.
+- No NNUE runtime behavior changed.
+- No evaluation backend behavior changed.
+- No strength/Elo claim is made.

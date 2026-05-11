@@ -213,3 +213,10 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - P0-62/P0-63 Capture/NoisyHistory runtime trigger remains unchanged.
 - P0-66 affects only ContinuationHistory quiet beta-cutoff symmetry in main negamax.
 - No new CaptureHistory or NoisyHistory runtime update point was added.
+
+## 14) P0-67 note (runtime update path unchanged)
+- Existing P0-62/P0-63 Capture/NoisyHistory runtime update path remains unchanged.
+- P0-67 adds only read-only Capture/NoisyHistory consumption in MovePicker tactical/noisy scoring.
+- No new CaptureHistory runtime update site was introduced.
+- No new NoisyHistory runtime update site was introduced.
+- Runtime observability counter semantics remain unchanged.
