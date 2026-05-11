@@ -70,6 +70,19 @@ struct CaptureNoisyRuntimeUpdateCounters {
     int applied = 0;
 };
 
+enum class ContinuationRuntimeUpdateSite {
+    MainNegamaxQuietBetaCutoff,
+    MainNegamaxCaptureBetaCutoff,
+    MainNegamaxPromotionBetaCutoff,
+    MainNegamaxQuietNonCutoff,
+    QuiescenceQuietBetaCutoff,
+};
+
+struct ContinuationRuntimeUpdateCounters {
+    int quiet_beta_cutoff_applied = 0;
+    int quiet_beta_cutoff_skipped = 0;
+};
+
 class SearchHistory {
 public:
     class CaptureHistory {
@@ -145,6 +158,11 @@ public:
     }
     void reset_capture_noisy_runtime_update_counters();
     void record_capture_noisy_runtime_update_applied();
+    [[nodiscard]] int continuation_quiet_beta_cutoff_update_count_for_tests() const;
+    [[nodiscard]] int continuation_quiet_beta_cutoff_skip_count_for_tests() const;
+    void reset_continuation_runtime_observability_for_tests();
+    void record_continuation_quiet_beta_cutoff_update_for_tests();
+    void record_continuation_quiet_beta_cutoff_skip_for_tests();
 
 private:
     std::array<std::array<std::optional<Move>, 2>, search_params::max_search_depth> killer_moves_{};
@@ -154,6 +172,7 @@ private:
     ContinuationHistory continuation_history_{};
     CorrectionHistory correction_history_{};
     CaptureNoisyRuntimeUpdateCounters capture_noisy_runtime_update_counters_{};
+    ContinuationRuntimeUpdateCounters continuation_runtime_update_counters_{};
 };
 
 [[nodiscard]] bool is_quiet_move(const Move &move);
@@ -172,6 +191,9 @@ void apply_capture_noisy_history_update_for_tests(SearchHistory &history, const 
 bool apply_capture_noisy_runtime_update_for_tests(SearchHistory &history, CaptureNoisyRuntimeUpdateSite site,
                                                   const std::optional<CaptureHistoryKey> &capture_key,
                                                   const std::optional<NoisyHistoryKey> &noisy_key, int depth);
+bool apply_continuation_runtime_update_for_tests(SearchHistory &history, ContinuationRuntimeUpdateSite site,
+                                                 const std::optional<ContinuationHistoryKey> &continuation_key,
+                                                 int depth);
 
 [[nodiscard]] CaptureNoisyHistoryUpdateEvent make_capture_noisy_history_update_event_for_tests(
     CaptureNoisyHistoryUpdateTarget target, const std::optional<CaptureHistoryKey> &capture_key,

@@ -2357,3 +2357,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - Capture/NoisyHistory P0-62/P0-63 runtime-update path is unchanged.
 - No NNUE runtime behavior change.
 - No strength/Elo claim.
+
+# P0-65 ContinuationHistory quiet beta-cutoff runtime update
+
+- Added a single ContinuationHistory runtime update point for main-negamax quiet beta-cutoff only.
+- Added deterministic test-observability counters/helpers for this path.
+- No NNUE runtime behaviour was changed.
+- No evaluation backend behaviour was changed.
+- No strength/Elo claim.

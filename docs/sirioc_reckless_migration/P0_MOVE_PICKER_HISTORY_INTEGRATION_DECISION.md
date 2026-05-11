@@ -219,3 +219,17 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - No ContinuationHistory runtime update point exists yet in search.
 - P0-62/P0-63 Capture/NoisyHistory runtime-update path is unchanged.
 - No qsearch/LMR/pruning/TT/eval/UCI contract changes were introduced in this step.
+
+## 15) P0-65 continuation-history runtime update (single-point quiet beta-cutoff)
+- ContinuationHistory is now both:
+  - read by MovePicker quiet scoring (P0-64), and
+  - updated at exactly one runtime point.
+- Exact runtime update point is constrained to **main negamax quiet beta cutoff only**.
+- No qsearch ContinuationHistory update was added.
+- No capture/noisy/promotion ContinuationHistory update was added.
+- No failed quiet ContinuationHistory malus path was added.
+- Previous-context gating remains strict:
+  - requires previous board + previous move availability,
+  - requires successful continuation-key extraction.
+- If context/key is missing or invalid, no ContinuationHistory write occurs.
+- Zero-state and deterministic MovePicker snapshot contracts remain protected.

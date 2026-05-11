@@ -283,6 +283,8 @@ struct SearchContext {
     std::uint64_t total_nodes = 0;
     bool is_primary_thread = false;
     SearchHistory history{};
+    std::array<std::optional<Board>, search_params::max_search_depth> previous_board_by_ply{};
+    std::array<std::optional<Move>, search_params::max_search_depth> previous_move_by_ply{};
 };
 
 
@@ -1290,7 +1292,16 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         return 0;
     }
 
-    MovePicker picker(board, std::move(raw_moves), context, ply, tt_move, side_to_move, false);
+    const Board *previous_board = nullptr;
+    std::optional<Move> previous_move = std::nullopt;
+    if (ply >= 0 && ply < search_params::max_search_depth &&
+        context.previous_board_by_ply[static_cast<std::size_t>(ply)].has_value() &&
+        context.previous_move_by_ply[static_cast<std::size_t>(ply)].has_value()) {
+        previous_board = &context.previous_board_by_ply[static_cast<std::size_t>(ply)].value();
+        previous_move = context.previous_move_by_ply[static_cast<std::size_t>(ply)];
+    }
+    MovePicker picker(board, std::move(raw_moves), context, ply, tt_move, side_to_move, false, previous_board,
+                      previous_move);
 
     int alpha_original = alpha;
     int best_score = std::numeric_limits<int>::min();
@@ -1364,6 +1375,10 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         if (new_depth <= 0) {
             score = -quiescence(board, -beta, -alpha, ply + 1, context);
         } else {
+            if (ply + 1 < search_params::max_search_depth) {
+                context.previous_board_by_ply[static_cast<std::size_t>(ply + 1)] = board;
+                context.previous_move_by_ply[static_cast<std::size_t>(ply + 1)] = move;
+            }
             score = -negamax(board, new_depth, -beta, -alpha, ply + 1, nullptr, nullptr, context,
                              static_eval, true);
         }
@@ -1392,6 +1407,22 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         if (alpha >= beta) {
             if (quiet_move) {
                 context.history.store_killer(move, ply);
+                const bool has_previous_context = previous_board != nullptr && previous_move.has_value();
+                if (has_previous_context) {
+                    const auto continuation_key =
+                        make_continuation_history_key(*previous_board, previous_move, board, move);
+                    if (continuation_key.has_value()) {
+                        context.history.continuation_history().update(
+                            continuation_key->previous_mover_color, previous_move.value(),
+                            continuation_key->current_mover_color, move,
+                            search_params::continuation_history_quiet_beta_cutoff_bonus, true);
+                        context.history.record_continuation_quiet_beta_cutoff_update_for_tests();
+                    } else {
+                        context.history.record_continuation_quiet_beta_cutoff_skip_for_tests();
+                    }
+                } else {
+                    context.history.record_continuation_quiet_beta_cutoff_skip_for_tests();
+                }
             } else {
                 const auto capture_key = make_capture_history_key(board, move);
                 const auto noisy_key = make_noisy_history_key(board, move);

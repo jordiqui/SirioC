@@ -227,12 +227,49 @@ bool apply_capture_noisy_runtime_update_for_tests(SearchHistory &history, Captur
     return true;
 }
 
+bool apply_continuation_runtime_update_for_tests(SearchHistory &history, ContinuationRuntimeUpdateSite site,
+                                                 const std::optional<ContinuationHistoryKey> &continuation_key,
+                                                 int depth) {
+    if (site != ContinuationRuntimeUpdateSite::MainNegamaxQuietBetaCutoff) {
+        return false;
+    }
+    if (!continuation_key.has_value()) {
+        history.record_continuation_quiet_beta_cutoff_skip_for_tests();
+        return false;
+    }
+    Move previous_move{};
+    previous_move.piece = continuation_key->previous_moving_piece;
+    previous_move.to = continuation_key->previous_to_square;
+    Move current_move{};
+    current_move.piece = continuation_key->current_moving_piece;
+    current_move.to = continuation_key->current_to_square;
+    history.continuation_history().update(continuation_key->previous_mover_color, previous_move,
+                                          continuation_key->current_mover_color, current_move, depth, true);
+    history.record_continuation_quiet_beta_cutoff_update_for_tests();
+    return true;
+}
+
 void SearchHistory::reset_capture_noisy_runtime_update_counters() {
     capture_noisy_runtime_update_counters_ = {};
 }
 
 void SearchHistory::record_capture_noisy_runtime_update_applied() {
     ++capture_noisy_runtime_update_counters_.applied;
+}
+int SearchHistory::continuation_quiet_beta_cutoff_update_count_for_tests() const {
+    return continuation_runtime_update_counters_.quiet_beta_cutoff_applied;
+}
+int SearchHistory::continuation_quiet_beta_cutoff_skip_count_for_tests() const {
+    return continuation_runtime_update_counters_.quiet_beta_cutoff_skipped;
+}
+void SearchHistory::reset_continuation_runtime_observability_for_tests() {
+    continuation_runtime_update_counters_ = {};
+}
+void SearchHistory::record_continuation_quiet_beta_cutoff_update_for_tests() {
+    ++continuation_runtime_update_counters_.quiet_beta_cutoff_applied;
+}
+void SearchHistory::record_continuation_quiet_beta_cutoff_skip_for_tests() {
+    ++continuation_runtime_update_counters_.quiet_beta_cutoff_skipped;
 }
 
 int SearchHistory::quiet_history_score(const Move &move, Color mover) const {
@@ -352,6 +389,7 @@ void SearchHistory::clear() {
     continuation_history_.clear();
     correction_history_.clear();
     reset_capture_noisy_runtime_update_counters();
+    reset_continuation_runtime_observability_for_tests();
 }
 
 }  // namespace sirio
