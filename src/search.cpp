@@ -871,6 +871,34 @@ int mvv_lva_score(const Move &move) {
     return search_params::mvv_values[victim_index] * 100 - search_params::mvv_values[attacker_index];
 }
 
+int capture_noisy_history_score(const Board &board, const SearchContext &context,
+                                const Move &move, Color mover) {
+    if (is_quiet_move(move)) {
+        return 0;
+    }
+
+    if (move.captured.has_value() || move.is_en_passant) {
+        const auto capture_key = make_capture_history_key(board, move);
+        const auto noisy_key = make_noisy_history_key(board, move);
+        if (!capture_key.has_value() || !noisy_key.has_value()) {
+            return 0;
+        }
+        const int capture_score = context.history.capture_history().score(move, mover);
+        const int noisy_score = context.history.noisy_history().score(move, mover);
+        return (capture_score + noisy_score) * search_params::capture_noisy_history_score_scale;
+    }
+
+    if (move.promotion.has_value()) {
+        const auto noisy_key = make_noisy_history_key(board, move);
+        if (!noisy_key.has_value()) {
+            return 0;
+        }
+        return context.history.noisy_history().score(move, mover) *
+               search_params::capture_noisy_history_score_scale;
+    }
+
+    return 0;
+}
 
 
 class MovePicker {
@@ -904,13 +932,7 @@ public:
             if (move.captured.has_value() || move.is_en_passant) {
                 int see_score = static_exchange_score(board_, move);
                 int mvv_score = mvv_lva_score(move);
-                int history_score = 0;
-                if (auto capture_key = make_capture_history_key(board_, move); capture_key.has_value()) {
-                    history_score += context_.history.capture_history().score(move, mover_);
-                }
-                if (auto noisy_key = make_noisy_history_key(board_, move); noisy_key.has_value()) {
-                    history_score += context_.history.noisy_history().score(move, mover_);
-                }
+                const int history_score = capture_noisy_history_score(board_, context_, move, mover_);
                 int priority = (see_score << 10) + mvv_score + history_score;
                 if (see_score >= 0) {
                     good_captures_.emplace_back(priority, move);
@@ -922,10 +944,7 @@ public:
 
             if (move.promotion.has_value()) {
                 int promo_score = search_params::mvv_values[static_cast<std::size_t>(*move.promotion)] * 100;
-                int noisy_score = 0;
-                if (auto noisy_key = make_noisy_history_key(board_, move); noisy_key.has_value()) {
-                    noisy_score = context_.history.noisy_history().score(move, mover_);
-                }
+                const int noisy_score = capture_noisy_history_score(board_, context_, move, mover_);
                 promotions_.emplace_back(promo_score + noisy_score, move);
                 continue;
             }
@@ -2406,6 +2425,15 @@ bool responds_to_direct_threat_for_tests(const Board &board, const Move &move, C
 
 int static_exchange_eval_for_tests(const Board &board, const Move &move) {
     return static_exchange_score(board, move);
+}
+
+int capture_noisy_history_score_for_tests(const Board &board, const SearchHistory &history,
+                                          const Move &move, Color mover) {
+    SearchSharedState shared_state{};
+    SearchContext context{};
+    context.shared = &shared_state;
+    context.history = history;
+    return capture_noisy_history_score(board, context, move, mover);
 }
 
 std::vector<Move> move_picker_order_snapshot_for_tests(const Board &board, int ply,

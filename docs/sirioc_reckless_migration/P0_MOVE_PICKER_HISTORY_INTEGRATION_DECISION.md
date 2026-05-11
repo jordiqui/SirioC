@@ -241,3 +241,12 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Updates are strictly gated by valid previous board+move context and valid continuation key extraction; no fallback semantics are introduced.
 - No updates were added for qsearch, capture/noisy, promotion, failed/skipped/illegal paths.
 - Zero-state MovePicker ordering contract remains protected.
+
+## 16) P0-67 capture/noisy read-only tactical scoring consolidation
+- CaptureHistory/NoisyHistory consumption is now centralized via a read-only tactical MovePicker scoring helper.
+- The tactical/noisy contribution is applied only in tactical MovePicker paths (captures/en-passant/promotions).
+- Zero-state tactical/noisy ordering remains unchanged under deterministic snapshot coverage.
+- No new CaptureHistory/NoisyHistory runtime update point was introduced.
+- P0-62/P0-63 capture/noisy runtime update contract is unchanged.
+- P0-64/P0-65/P0-66 ContinuationHistory read/update contracts remain unchanged.
+- No qsearch, LMR, pruning, TT, eval, UCI, or NNUE runtime behavior changes were introduced.
