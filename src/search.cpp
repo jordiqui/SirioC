@@ -1291,6 +1291,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
             in_check,
             is_pv_node,
             ply == 0)) {
+        context.history.record_reverse_futility_return();
         return corrected_static_eval;
     }
 

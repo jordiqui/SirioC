@@ -2482,3 +2482,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behaviour changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-82 Reverse Futility Return Observability (Disabled / No-op)
+
+- Added reverse futility guarded-return observability with disabled/no-op behaviour.
+- No NNUE runtime behaviour changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

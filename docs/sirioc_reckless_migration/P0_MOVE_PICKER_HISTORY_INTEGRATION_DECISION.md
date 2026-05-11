@@ -376,3 +376,9 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - P0-79 guarded reverse-futility return scaffold in main `negamax` remains present and unreachable under defaults.
 - No behaviour change in current defaults.
 - No move count pruning, probcut, singular extension, LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour changed in this step.
+
+## 18) P0-82 reverse futility return observability (disabled/no-behaviour)
+- Added deterministic observability for the guarded reverse futility return path in main negamax.
+- `selectivity_reverse_futility_enabled` remains `false`, so guarded return remains unreachable under current defaults.
+- No behaviour change under defaults.
+- No move count pruning, probcut, singular extension, LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour changed.
