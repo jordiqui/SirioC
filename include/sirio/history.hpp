@@ -91,6 +91,9 @@ struct CorrectionRuntimeUpdateCounters {
 struct ReverseFutilityRuntimeCounters {
     int return_applied = 0;
 };
+struct MoveCountPruningRuntimeCounters {
+    int continue_applied = 0;
+};
 
 class SearchHistory {
 public:
@@ -185,6 +188,9 @@ public:
     [[nodiscard]] int reverse_futility_return_count_for_tests() const;
     void record_reverse_futility_return();
     void reset_reverse_futility_runtime_observability_for_tests();
+    [[nodiscard]] int move_count_pruning_continue_count_for_tests() const;
+    void record_move_count_pruning_continue();
+    void reset_move_count_pruning_runtime_observability_for_tests();
 
 private:
     std::array<std::array<std::optional<Move>, 2>, search_params::max_search_depth> killer_moves_{};
@@ -197,6 +203,7 @@ private:
     ContinuationRuntimeUpdateCounters continuation_runtime_update_counters_{};
     CorrectionRuntimeUpdateCounters correction_runtime_update_counters_{};
     ReverseFutilityRuntimeCounters reverse_futility_runtime_counters_{};
+    MoveCountPruningRuntimeCounters move_count_pruning_runtime_counters_{};
 };
 
 [[nodiscard]] bool is_quiet_move(const Move &move);

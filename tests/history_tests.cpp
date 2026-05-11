@@ -902,6 +902,14 @@ void test_reverse_futility_return_observability_counter_lifecycle() {
     history.clear();
     assert(history.reverse_futility_return_count_for_tests() == 0);
 }
+void test_move_count_pruning_continue_observability_counter_lifecycle() {
+    sirio::SearchHistory history;
+    assert(history.move_count_pruning_continue_count_for_tests() == 0);
+    history.record_move_count_pruning_continue();
+    assert(history.move_count_pruning_continue_count_for_tests() == 1);
+    history.clear();
+    assert(history.move_count_pruning_continue_count_for_tests() == 0);
+}
 
 void test_search_main_negamax_has_guarded_reverse_futility_return_scaffold_wiring() {
     const std::string source = load_search_source_for_tests();
@@ -966,7 +974,8 @@ void test_search_main_negamax_has_guarded_move_count_pruning_continue_scaffold_w
     assert(negamax_source.find("if (move_count_pruning_probe)") != std::string::npos);
     const std::size_t guard_pos = negamax_source.find("if (move_count_pruning_probe)");
     assert(guard_pos != std::string::npos);
-    const std::string guard_window = negamax_source.substr(guard_pos, 120);
+    const std::string guard_window = negamax_source.substr(guard_pos, 220);
+    assert(guard_window.find("context.history.record_move_count_pruning_continue();") != std::string::npos);
     assert(guard_window.find("continue;") != std::string::npos);
     assert(guard_window.find("break;") == std::string::npos);
     assert(guard_window.find("return") == std::string::npos);
@@ -984,6 +993,7 @@ void test_search_qsearch_has_no_move_count_pruning_runtime_wiring() {
     const std::string qsearch_source = source.substr(qsearch_pos);
 
     assert(qsearch_source.find("should_apply_move_count_pruning(") == std::string::npos);
+    assert(qsearch_source.find("record_move_count_pruning_continue") == std::string::npos);
 }
 
 }  // namespace
@@ -1435,6 +1445,7 @@ void run_history_tests() {
     test_move_count_pruning_helper_invalid_depth_is_disabled();
     test_move_count_pruning_helper_invalid_move_count_is_disabled();
     test_reverse_futility_return_observability_counter_lifecycle();
+    test_move_count_pruning_continue_observability_counter_lifecycle();
     test_search_main_negamax_has_guarded_reverse_futility_return_scaffold_wiring();
     test_search_qsearch_has_no_reverse_futility_pruning_wiring();
     test_search_reverse_futility_return_is_guarded_and_localized();

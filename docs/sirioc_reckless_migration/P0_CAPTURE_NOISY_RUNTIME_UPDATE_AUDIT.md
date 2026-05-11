@@ -317,3 +317,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime path remains unchanged.
 - P0-86 is Move Count Pruning disabled guarded-continue scaffolding only.
 - No Capture/NoisyHistory scoring or runtime update behavior changed.
+
+## 15) P0-87 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-87 adds Move Count Pruning guarded-continue observability only.
+- No Capture/NoisyHistory scoring or runtime update behavior changed.

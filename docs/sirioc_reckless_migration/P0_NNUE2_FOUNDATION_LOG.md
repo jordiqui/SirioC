@@ -2517,3 +2517,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-87 Move Count Pruning Continue Observability (Disabled/No-op)
+
+- Added Move Count Pruning guarded-continue observability in main negamax while keeping MCP disabled/no-op by default.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

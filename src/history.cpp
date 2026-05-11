@@ -402,6 +402,15 @@ void SearchHistory::record_reverse_futility_return() {
 void SearchHistory::reset_reverse_futility_runtime_observability_for_tests() {
     reverse_futility_runtime_counters_ = {};
 }
+int SearchHistory::move_count_pruning_continue_count_for_tests() const {
+    return move_count_pruning_runtime_counters_.continue_applied;
+}
+void SearchHistory::record_move_count_pruning_continue() {
+    ++move_count_pruning_runtime_counters_.continue_applied;
+}
+void SearchHistory::reset_move_count_pruning_runtime_observability_for_tests() {
+    move_count_pruning_runtime_counters_ = {};
+}
 
 int SearchHistory::quiet_history_score(const Move &move, Color mover) const {
     if (!is_quiet_move(move)) {
@@ -540,6 +549,7 @@ void SearchHistory::clear() {
     reset_continuation_runtime_observability_for_tests();
     reset_correction_runtime_observability_for_tests();
     reset_reverse_futility_runtime_observability_for_tests();
+    reset_move_count_pruning_runtime_observability_for_tests();
 }
 
 }  // namespace sirio
