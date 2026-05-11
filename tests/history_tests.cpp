@@ -855,6 +855,14 @@ void test_reverse_futility_helper_no_side_effects_or_history_dependency() {
     assert(!sirio::search_params::should_apply_reverse_futility_pruning(3, 800, 300, true, false, false, false));
     assert(history.correction_history().score(*key) == before);
 }
+void test_reverse_futility_return_observability_counter_lifecycle() {
+    sirio::SearchHistory history;
+    assert(history.reverse_futility_return_count_for_tests() == 0);
+    history.record_reverse_futility_return();
+    assert(history.reverse_futility_return_count_for_tests() == 1);
+    history.clear();
+    assert(history.reverse_futility_return_count_for_tests() == 0);
+}
 
 void test_search_main_negamax_has_guarded_reverse_futility_return_scaffold_wiring() {
     const std::string source = load_search_source_for_tests();
@@ -868,6 +876,7 @@ void test_search_main_negamax_has_guarded_reverse_futility_return_scaffold_wirin
     assert(negamax_source.find("should_apply_reverse_futility_pruning(") != std::string::npos);
     assert(negamax_source.find("if (search_params::should_apply_reverse_futility_pruning(") != std::string::npos);
     assert(negamax_source.find("in_check,\n            pv_node,\n            ply == 0") != std::string::npos);
+    assert(negamax_source.find("context.history.record_reverse_futility_return();") != std::string::npos);
     assert(negamax_source.find("return corrected_static_eval;") != std::string::npos);
 }
 
@@ -879,6 +888,7 @@ void test_search_qsearch_has_no_reverse_futility_pruning_wiring() {
     const std::string qsearch_source = source.substr(qsearch_pos);
 
     assert(qsearch_source.find("should_apply_reverse_futility_pruning(") == std::string::npos);
+    assert(qsearch_source.find("record_reverse_futility_return") == std::string::npos);
     assert(qsearch_source.find("return corrected_static_eval;") == std::string::npos);
 }
 
@@ -898,6 +908,7 @@ void test_search_reverse_futility_return_is_guarded_and_localized() {
 
     const std::size_t unguarded_return_pos = negamax_source.find("return corrected_static_eval;");
     assert(unguarded_return_pos == return_pos);
+    assert(negamax_source.find("_for_tests(") == std::string::npos);
 }
 
 }  // namespace
@@ -1342,6 +1353,7 @@ void run_history_tests() {
     test_reverse_futility_helper_root_node_is_disabled();
     test_reverse_futility_helper_invalid_depth_is_disabled();
     test_reverse_futility_helper_no_side_effects_or_history_dependency();
+    test_reverse_futility_return_observability_counter_lifecycle();
     test_search_main_negamax_has_guarded_reverse_futility_return_scaffold_wiring();
     test_search_qsearch_has_no_reverse_futility_pruning_wiring();
     test_search_reverse_futility_return_is_guarded_and_localized();

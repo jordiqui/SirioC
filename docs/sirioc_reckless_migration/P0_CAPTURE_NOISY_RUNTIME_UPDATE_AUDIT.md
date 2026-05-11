@@ -291,3 +291,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime path remains unchanged.
 - P0-80 is reverse-futility safety-predicate infrastructure only.
 - No Capture/NoisyHistory scoring or runtime update policy changed.
+
+## 15) P0-82 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-82 is reverse-futility guarded-return observability only.
+- No Capture/NoisyHistory scoring or update behaviour changed.
