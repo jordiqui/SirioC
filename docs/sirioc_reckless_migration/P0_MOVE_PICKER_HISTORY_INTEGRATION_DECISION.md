@@ -353,3 +353,10 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - `selectivity_reverse_futility_enabled` remains `false`.
 - No behaviour change was introduced.
 - No move count pruning, probcut, singular extension, LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour was changed by P0-78.
+
+## 15) P0-79 reverse futility disabled guarded return scaffold
+- Added reverse futility guarded return scaffold in main `negamax(...)` only.
+- Guard remains exclusively `should_apply_reverse_futility_pruning(...)`.
+- `selectivity_reverse_futility_enabled` remains `false`, so guard is unreachable under defaults.
+- No behaviour change under current defaults.
+- No changes to move count pruning, probcut, singular extensions, LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour.

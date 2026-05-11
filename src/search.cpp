@@ -1282,9 +1282,14 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         }
     }
     const bool improving = corrected_static_eval > parent_static_eval;
-    const bool reverse_futility_probe =
-        search_params::should_apply_reverse_futility_pruning(depth_left, corrected_static_eval, beta, improving, in_check);
-    (void) reverse_futility_probe;
+    if (search_params::should_apply_reverse_futility_pruning(
+            depth_left,
+            corrected_static_eval,
+            beta,
+            improving,
+            in_check)) {
+        return corrected_static_eval;
+    }
 
     if (allow_null_move && !in_check && depth_left >= 3 && corrected_static_eval >= beta &&
         has_non_pawn_material(board, board.side_to_move())) {

@@ -2460,3 +2460,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behaviour changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-79 Reverse Futility Disabled Guarded Return Scaffold
+
+- Added reverse futility disabled guarded return scaffold in main `negamax(...)`.
+- No NNUE runtime behaviour changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
