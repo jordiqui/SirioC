@@ -49,6 +49,7 @@ inline constexpr bool selectivity_singular_extensions_enabled = false;
 inline constexpr int reverse_futility_depth_limit = 0;
 inline constexpr int reverse_futility_margin_base = 0;
 inline constexpr int reverse_futility_margin_per_depth = 0;
+inline constexpr int reverse_futility_improving_margin_reduction = 0;
 
 [[nodiscard]] inline constexpr bool selectivity_reverse_futility_is_enabled() {
     return selectivity_reverse_futility_enabled;
@@ -66,6 +67,13 @@ inline constexpr int reverse_futility_margin_per_depth = 0;
     return selectivity_singular_extensions_enabled;
 }
 
+[[nodiscard]] inline constexpr int reverse_futility_margin(int depth, bool improving) {
+    const int improving_reduction = improving ? reverse_futility_improving_margin_reduction : 0;
+    const int raw_margin =
+        reverse_futility_margin_base + (reverse_futility_margin_per_depth * depth) - improving_reduction;
+    return raw_margin < 0 ? 0 : raw_margin;
+}
+
 [[nodiscard]] inline constexpr bool should_apply_reverse_futility_pruning(
     int depth, int corrected_static_eval, int beta, bool improving, bool in_check, bool is_pv_node,
     bool is_root_node) {
@@ -79,9 +87,8 @@ inline constexpr int reverse_futility_margin_per_depth = 0;
         return false;
     }
 
-    const int safety_margin =
-        reverse_futility_margin_base + (reverse_futility_margin_per_depth * depth) + (improving ? 0 : 0);
-    return corrected_static_eval - safety_margin >= beta;
+    const int margin = reverse_futility_margin(depth, improving);
+    return corrected_static_eval - margin >= beta;
 }
 
 } // namespace sirio::search_params

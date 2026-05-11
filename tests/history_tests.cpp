@@ -797,6 +797,38 @@ void test_reverse_futility_helper_default_flag_disables_pruning() {
     assert(!sirio::search_params::should_apply_reverse_futility_pruning(4, 900, -50, false, false, false, false));
 }
 
+void test_reverse_futility_margin_helper_is_deterministic_and_non_negative() {
+    constexpr int depth = 5;
+    const int first = sirio::search_params::reverse_futility_margin(depth, false);
+    const int second = sirio::search_params::reverse_futility_margin(depth, false);
+    const int improving_first = sirio::search_params::reverse_futility_margin(depth, true);
+    const int improving_second = sirio::search_params::reverse_futility_margin(depth, true);
+
+    assert(first == second);
+    assert(improving_first == improving_second);
+    assert(first >= 0);
+    assert(improving_first >= 0);
+}
+
+void test_reverse_futility_margin_helper_depth_progression_is_stable() {
+    const int depth1 = sirio::search_params::reverse_futility_margin(1, false);
+    const int depth2 = sirio::search_params::reverse_futility_margin(2, false);
+    const int depth3 = sirio::search_params::reverse_futility_margin(3, false);
+
+    assert(depth2 >= depth1);
+    assert(depth3 >= depth2);
+}
+
+void test_reverse_futility_margin_helper_improving_mode_is_deterministic() {
+    constexpr int depth = 4;
+    const int not_improving = sirio::search_params::reverse_futility_margin(depth, false);
+    const int improving = sirio::search_params::reverse_futility_margin(depth, true);
+
+    assert(improving >= 0);
+    assert(not_improving >= 0);
+    assert(improving <= not_improving);
+}
+
 void test_reverse_futility_helper_in_check_is_disabled() {
     assert(!sirio::search_params::should_apply_reverse_futility_pruning(3, 800, 300, true, true, false, false));
 }
@@ -1302,6 +1334,9 @@ void run_history_tests() {
     test_search_selectivity_foundation_flags_disabled();
     test_search_selectivity_foundation_helpers_disabled();
     test_reverse_futility_helper_default_flag_disables_pruning();
+    test_reverse_futility_margin_helper_is_deterministic_and_non_negative();
+    test_reverse_futility_margin_helper_depth_progression_is_stable();
+    test_reverse_futility_margin_helper_improving_mode_is_deterministic();
     test_reverse_futility_helper_in_check_is_disabled();
     test_reverse_futility_helper_pv_node_is_disabled();
     test_reverse_futility_helper_root_node_is_disabled();
