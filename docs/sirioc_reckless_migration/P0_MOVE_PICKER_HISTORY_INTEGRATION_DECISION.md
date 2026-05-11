@@ -338,3 +338,10 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
   - NNUE runtime,
   - pruning/LMR/null-move/futility behaviour.
 - Existing CorrectionHistory, Capture/NoisyHistory, and ContinuationHistory contracts from prior P0 stages are unchanged.
+
+## 18) P0-77 reverse futility decision helper foundation (disabled/no-op)
+- Added reverse futility **decision helper foundation** only.
+- Helper is guarded by the P0-76 selectivity flag (`selectivity_reverse_futility_enabled`) and is disabled by default.
+- No active reverse futility pruning return was added to search runtime.
+- No behavioural search change is introduced in this step.
+- No move count pruning, probcut, singular extension, LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour changed in this step.

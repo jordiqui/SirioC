@@ -2444,3 +2444,12 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behaviour changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-77 Reverse Futility Decision Helper Foundation (Disabled/No-Op)
+
+- Added reverse futility helper foundation with disabled/no-op behaviour.
+- Helper is gated by the centralized P0-76 selectivity disabled flag.
+- No reverse futility pruning return is active in search.
+- No NNUE runtime behaviour changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

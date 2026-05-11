@@ -46,6 +46,9 @@ inline constexpr bool selectivity_reverse_futility_enabled = false;
 inline constexpr bool selectivity_move_count_pruning_enabled = false;
 inline constexpr bool selectivity_probcut_enabled = false;
 inline constexpr bool selectivity_singular_extensions_enabled = false;
+inline constexpr int reverse_futility_depth_limit = 0;
+inline constexpr int reverse_futility_margin_base = 0;
+inline constexpr int reverse_futility_margin_per_depth = 0;
 
 [[nodiscard]] inline constexpr bool selectivity_reverse_futility_is_enabled() {
     return selectivity_reverse_futility_enabled;
@@ -61,6 +64,23 @@ inline constexpr bool selectivity_singular_extensions_enabled = false;
 
 [[nodiscard]] inline constexpr bool selectivity_singular_extensions_are_enabled() {
     return selectivity_singular_extensions_enabled;
+}
+
+[[nodiscard]] inline constexpr bool should_apply_reverse_futility_pruning(
+    int depth, int corrected_static_eval, int beta, bool improving, bool in_check) {
+    if (!selectivity_reverse_futility_is_enabled()) {
+        return false;
+    }
+    if (in_check) {
+        return false;
+    }
+    if (depth <= 0 || depth > reverse_futility_depth_limit) {
+        return false;
+    }
+
+    const int safety_margin =
+        reverse_futility_margin_base + (reverse_futility_margin_per_depth * depth) + (improving ? 0 : 0);
+    return corrected_static_eval - safety_margin >= beta;
 }
 
 } // namespace sirio::search_params
