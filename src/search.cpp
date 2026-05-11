@@ -1364,6 +1364,15 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         }
         bool quiet_move = is_quiet_move(move);
         bool tactical_move = !quiet_move;
+        const int searched_move_count = move_index;
+        const bool move_count_pruning_probe = search_params::should_apply_move_count_pruning(
+            depth_left,
+            searched_move_count,
+            improving,
+            in_check,
+            is_pv_node,
+            ply == 0);
+        (void)move_count_pruning_probe;
         bool is_tt_move = tt_move.has_value() && same_move(*tt_move, move);
         if (!in_check && tactical_move && !is_tt_move) {
             int see_score = static_exchange_score(board, move);

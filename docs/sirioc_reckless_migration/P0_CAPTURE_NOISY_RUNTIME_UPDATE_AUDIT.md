@@ -306,3 +306,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime path remains unchanged.
 - P0-84 is move-count-pruning helper infrastructure only.
 - No Capture/NoisyHistory scoring or update behavior changed.
+
+## 18) P0-85 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-85 is Move Count Pruning disabled probe wiring only.
+- No Capture/NoisyHistory scoring or update behavior changed.

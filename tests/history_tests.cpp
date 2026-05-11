@@ -950,10 +950,37 @@ void test_search_reverse_futility_return_is_guarded_and_localized() {
     assert(negamax_source.find("_for_tests(") == std::string::npos);
 }
 
-void test_search_has_no_move_count_pruning_runtime_wiring() {
+void test_search_main_negamax_has_disabled_move_count_pruning_probe_wiring() {
     const std::string source = load_search_source_for_tests();
     assert(!source.empty());
-    assert(source.find("should_apply_move_count_pruning(") == std::string::npos);
+
+    const std::size_t negamax_pos = source.find("int negamax(");
+    assert(negamax_pos != std::string::npos);
+    const std::size_t qsearch_pos = source.find("int quiescence(");
+    assert(qsearch_pos != std::string::npos);
+    const std::string negamax_source = source.substr(negamax_pos, qsearch_pos - negamax_pos);
+
+    assert(negamax_source.find("should_apply_move_count_pruning(") != std::string::npos);
+    assert(negamax_source.find("const bool move_count_pruning_probe =") != std::string::npos);
+    assert(negamax_source.find("(void)move_count_pruning_probe;") != std::string::npos);
+    assert(negamax_source.find("searched_move_count") != std::string::npos);
+    assert(negamax_source.find("if (move_count_pruning_probe)") == std::string::npos);
+    const std::size_t probe_pos = negamax_source.find("const bool move_count_pruning_probe =");
+    assert(probe_pos != std::string::npos);
+    const std::string probe_window = negamax_source.substr(probe_pos, 400);
+    assert(probe_window.find("continue;") == std::string::npos);
+    assert(probe_window.find("break;") == std::string::npos);
+    assert(probe_window.find("return") == std::string::npos);
+}
+
+void test_search_qsearch_has_no_move_count_pruning_runtime_wiring() {
+    const std::string source = load_search_source_for_tests();
+    assert(!source.empty());
+    const std::size_t qsearch_pos = source.find("int quiescence(");
+    assert(qsearch_pos != std::string::npos);
+    const std::string qsearch_source = source.substr(qsearch_pos);
+
+    assert(qsearch_source.find("should_apply_move_count_pruning(") == std::string::npos);
 }
 
 }  // namespace
@@ -1408,7 +1435,8 @@ void run_history_tests() {
     test_search_main_negamax_has_guarded_reverse_futility_return_scaffold_wiring();
     test_search_qsearch_has_no_reverse_futility_pruning_wiring();
     test_search_reverse_futility_return_is_guarded_and_localized();
-    test_search_has_no_move_count_pruning_runtime_wiring();
+    test_search_main_negamax_has_disabled_move_count_pruning_probe_wiring();
+    test_search_qsearch_has_no_move_count_pruning_runtime_wiring();
     test_correction_history_default_update_clamp_and_clear();
     test_correction_history_bucket_indexing_and_determinism();
     test_search_history_clear_resets_correction_history();
