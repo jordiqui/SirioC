@@ -30,6 +30,14 @@
 - No evaluation backend behaviour changed.
 - No strength/Elo claim.
 
+# P0-81 Reverse Futility Margin Helper (Disabled / No-op)
+
+- Added centralized reverse futility margin helper contract in search parameters with deterministic/no-op defaults.
+- Reverse futility remains disabled under current defaults (`selectivity_reverse_futility_enabled = false`).
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
+
 
 # P0-46 Search P0 Re-Entry Baseline
 

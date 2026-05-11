@@ -259,6 +259,15 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - No eval/pruning/LMR/TT/qsearch/UCI/NNUE behavior was changed.
 - This step is a deterministic zero-runtime foundation for a later, separately authorized correction-history integration patch.
 
+## 18) P0-81 reverse futility margin helper (disabled/no-behavior-change)
+- Added a centralized reverse futility margin helper in `search_params` for deterministic margin computation.
+- Margin calculation is centralized, deterministic, and bounded to non-negative output.
+- `selectivity_reverse_futility_enabled` remains `false`.
+- P0-79 guarded reverse-futility return scaffold remains unreachable under defaults.
+- No behavior change.
+- No move count pruning/probcut/singular extension wiring changes.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changes.
+
 ## 18) P0-69 correction-history read-only static-eval helper contract
 - Added a read-only CorrectionHistory static-eval correction helper in the history layer.
 - Runtime wiring into main negamax static eval is deferred in this patch because P0-68 exposes only deterministic placeholder/test key construction (`Color + bucket`) and does not yet provide a safe board-derived runtime key contract.

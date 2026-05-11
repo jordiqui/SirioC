@@ -218,6 +218,11 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Existing P0-62/P0-63 Capture/NoisyHistory runtime update path remains unchanged.
 - P0-67 adds only read-only Capture/NoisyHistory consumption in MovePicker tactical/noisy scoring.
 - No new CaptureHistory runtime update site was introduced.
+
+## 15) P0-81 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-81 is reverse-futility margin infrastructure only.
+- No Capture/NoisyHistory scoring or update behavior changed.
 - No new NoisyHistory runtime update site was introduced.
 - Runtime observability counter semantics remain unchanged.
 
