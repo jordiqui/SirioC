@@ -759,7 +759,8 @@ void test_search_main_negamax_uses_read_only_correction_history_hook() {
     assert(source.find("make_correction_history_key_from_position(board)") != std::string::npos);
     assert(source.find("apply_correction_history_to_static_eval(raw_static_eval, context.history, correction_key)") !=
            std::string::npos);
-    assert(source.find("apply_correction_history_quiet_beta_cutoff_update_for_tests") != std::string::npos);
+    assert(source.find("apply_correction_history_quiet_beta_cutoff_update(context.history") != std::string::npos);
+    assert(source.find("apply_correction_history_quiet_beta_cutoff_update_for_tests") == std::string::npos);
     assert(source.find("new_entry.static_eval = raw_static_eval;") != std::string::npos);
 }
 

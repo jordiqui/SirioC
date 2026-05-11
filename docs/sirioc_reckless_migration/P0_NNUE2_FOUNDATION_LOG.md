@@ -2414,3 +2414,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-73 CorrectionHistory Runtime Helper API Boundary Cleanup
+
+- CorrectionHistory quiet beta-cutoff runtime helper API boundary was cleaned.
+- Production search no longer calls a `*_for_tests` helper.
+- No NNUE runtime behaviour changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

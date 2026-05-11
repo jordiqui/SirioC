@@ -289,7 +289,7 @@ bool apply_continuation_runtime_update_for_tests(
     }
     return true;
 }
-bool apply_correction_history_quiet_beta_cutoff_update_for_tests(
+bool apply_correction_history_quiet_beta_cutoff_update(
     SearchHistory &history, const std::optional<CorrectionHistoryKey> &correction_key, int raw_static_eval,
     int cutoff_value) {
     if (!correction_key.has_value()) {
@@ -302,6 +302,12 @@ bool apply_correction_history_quiet_beta_cutoff_update_for_tests(
     history.correction_history().update(*correction_key, correction_delta);
     history.record_correction_quiet_beta_cutoff_update_for_tests();
     return true;
+}
+
+bool apply_correction_history_quiet_beta_cutoff_update_for_tests(
+    SearchHistory &history, const std::optional<CorrectionHistoryKey> &correction_key, int raw_static_eval,
+    int cutoff_value) {
+    return apply_correction_history_quiet_beta_cutoff_update(history, correction_key, raw_static_eval, cutoff_value);
 }
 
 void SearchHistory::reset_capture_noisy_runtime_update_counters() {

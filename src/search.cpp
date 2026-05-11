@@ -1434,8 +1434,8 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         }
         if (alpha >= beta) {
             if (quiet_move) {
-                apply_correction_history_quiet_beta_cutoff_update_for_tests(context.history, correction_key,
-                                                                            raw_static_eval, beta);
+                apply_correction_history_quiet_beta_cutoff_update(context.history, correction_key,
+                                                                   raw_static_eval, beta);
                 context.history.store_killer(move, ply);
                 const bool has_previous_context = previous_board != nullptr && previous_move.has_value();
                 if (has_previous_context) {
