@@ -345,3 +345,11 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - No active reverse futility pruning return was added to search runtime.
 - No behavioural search change is introduced in this step.
 - No move count pruning, probcut, singular extension, LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour changed in this step.
+
+## 16) P0-78 reverse futility disabled probe wiring (main negamax, no-op)
+- `should_apply_reverse_futility_pruning(...)` is now wired in main `negamax(...)` as a disabled probe-only call.
+- Wiring location is after corrected static eval availability and before move generation/move loop entry, and remains outside qsearch.
+- No active reverse-futility pruning return was added; probe result is explicitly no-op consumed.
+- `selectivity_reverse_futility_enabled` remains `false`.
+- No behaviour change was introduced.
+- No move count pruning, probcut, singular extension, LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour was changed by P0-78.

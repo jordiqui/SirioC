@@ -2453,3 +2453,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behaviour changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-78 Reverse Futility Disabled Main-Negamax Probe Wiring
+
+- Added reverse futility helper probe wiring in main negamax as a disabled no-op call-site.
+- No NNUE runtime behaviour changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

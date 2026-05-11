@@ -1281,6 +1281,10 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
             return corrected_static_eval - search_params::futility_margin_depth1;
         }
     }
+    const bool improving = corrected_static_eval > parent_static_eval;
+    const bool reverse_futility_probe =
+        search_params::should_apply_reverse_futility_pruning(depth_left, corrected_static_eval, beta, improving, in_check);
+    (void) reverse_futility_probe;
 
     if (allow_null_move && !in_check && depth_left >= 3 && corrected_static_eval >= beta &&
         has_non_pawn_material(board, board.side_to_move())) {
@@ -1377,7 +1381,6 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
 
         int reduction = 0;
         if (child_depth > 0 && depth_left >= 3 && move_index > 1 && quiet_move && !gives_check) {
-            bool improving = corrected_static_eval > parent_static_eval;
             bool delayed_capture_threat = creates_delayed_capture_threat(board, move, mover);
             bool central_sacrifice = is_central_pawn_sacrifice(board, move, mover);
             bool responds_to_threat = in_check || piece_under_attack;
