@@ -112,12 +112,15 @@ public:
 
     class CorrectionHistory {
     public:
+        [[nodiscard]] int score(const CorrectionHistoryKey &key) const;
         [[nodiscard]] int score(Color mover, std::size_t bucket) const;
+        void update(const CorrectionHistoryKey &key, int bonus);
         void update(Color mover, std::size_t bucket, int depth, bool success);
         void clear();
 
     private:
         static constexpr std::size_t bucket_count_ = 1024;
+        [[nodiscard]] static bool is_valid_key(const CorrectionHistoryKey &key);
         [[nodiscard]] static std::size_t normalize_bucket(std::size_t bucket);
         std::array<std::array<int, bucket_count_>, 2> table_{};
     };

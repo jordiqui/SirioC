@@ -32,6 +32,9 @@ inline constexpr int history_max = 16384;
 inline constexpr int history_min = -history_max;
 inline constexpr int continuation_history_quiet_score_scale = 1;
 inline constexpr int capture_noisy_history_score_scale = 1;
+inline constexpr int correction_history_max = 1024;
+inline constexpr int correction_history_min = -correction_history_max;
+inline constexpr int correction_history_default_bonus = 16;
 inline constexpr int continuation_history_quiet_beta_cutoff_bonus = 16;
 inline constexpr int continuation_history_quiet_beta_cutoff_malus = -8;
 

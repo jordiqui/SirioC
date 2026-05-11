@@ -23,6 +23,13 @@
 - No NNUE behaviour changed.
 - No strength/Elo claim.
 
+# P0-68 CorrectionHistory Foundation (Zero Runtime Integration)
+
+- Added CorrectionHistory foundation as deterministic storage/API only in search history.
+- No NNUE runtime behaviour changed.
+- No evaluation backend behaviour changed.
+- No strength/Elo claim.
+
 
 # P0-46 Search P0 Re-Entry Baseline
 
