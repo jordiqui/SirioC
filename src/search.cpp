@@ -1283,6 +1283,9 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
     }
     const bool is_pv_node = beta - alpha > 1;
     const bool improving = corrected_static_eval > parent_static_eval;
+    const bool probcut_probe = search_params::should_apply_probcut(
+        depth_left, beta, corrected_static_eval, in_check, is_pv_node, ply == 0);
+    (void)probcut_probe;
     if (search_params::should_apply_reverse_futility_pruning(
             depth_left,
             corrected_static_eval,
