@@ -462,3 +462,13 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Reverse futility P0-83 remains unchanged.
 - Probcut and singular extensions remain disabled.
 - No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed.
+
+## P0-91 update — Move Count Pruning conservative activation
+- Move Count Pruning is now enabled conservatively in main negamax.
+- P0-88 quiet/non-promotion/non-tactical guards are preserved.
+- P0-90 conservative thresholds are preserved.
+- P0-87 observability before continue is preserved.
+- qsearch remains excluded from MCP helper/scaffold/observability wiring.
+- Reverse futility P0-83 remains unchanged.
+- Probcut and singular extensions remain disabled.
+- No LMR, MovePicker, TT, UCI, or NNUE behavior was directly changed.

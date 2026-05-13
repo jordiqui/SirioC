@@ -2545,3 +2545,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-91 Move Count Pruning conservative activation
+
+- Move Count Pruning enabled under conservative main-negamax quiet-only guards.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
