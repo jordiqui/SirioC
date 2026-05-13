@@ -437,3 +437,15 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Reverse futility (P0-83) remains unchanged.
 - Probcut and singular extensions remain disabled.
 - No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed.
+
+## P0-89 Move Count Pruning threshold helper (disabled/no-behaviour-change)
+- Added a centralized Move Count Pruning threshold helper in search parameters.
+- Threshold calculation is now centralized and deterministic.
+- `selectivity_move_count_pruning_enabled` remains `false`.
+- P0-86 guarded continue scaffold remains unreachable under current defaults.
+- P0-87 move-count-pruning observability remains intact.
+- P0-88 quiet/non-promotion/non-tactical guards remain intact.
+- No behaviour change.
+- Reverse futility P0-83 remains unchanged.
+- ProbCut and singular extensions remain disabled.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour changed.

@@ -873,6 +873,33 @@ void test_move_count_pruning_helper_is_disabled_by_default_flag() {
     assert(!sirio::search_params::should_apply_move_count_pruning(4, 12, false, false, false, false, true, false, false));
 }
 
+void test_move_count_pruning_threshold_helper_is_deterministic() {
+    const int a = sirio::search_params::move_count_pruning_threshold(4, false);
+    const int b = sirio::search_params::move_count_pruning_threshold(4, false);
+    assert(a == b);
+}
+
+void test_move_count_pruning_threshold_helper_is_positive_for_valid_depth() {
+    assert(sirio::search_params::move_count_pruning_threshold(1, false) >= 1);
+    assert(sirio::search_params::move_count_pruning_threshold(4, true) >= 1);
+}
+
+void test_move_count_pruning_threshold_helper_depth_progression_is_monotonic() {
+    const int d1 = sirio::search_params::move_count_pruning_threshold(1, false);
+    const int d2 = sirio::search_params::move_count_pruning_threshold(2, false);
+    const int d3 = sirio::search_params::move_count_pruning_threshold(3, false);
+    assert(d2 >= d1);
+    assert(d3 >= d2);
+}
+
+void test_move_count_pruning_threshold_helper_improving_mode_is_deterministic() {
+    const int improving_a = sirio::search_params::move_count_pruning_threshold(5, true);
+    const int improving_b = sirio::search_params::move_count_pruning_threshold(5, true);
+    const int not_improving = sirio::search_params::move_count_pruning_threshold(5, false);
+    assert(improving_a == improving_b);
+    assert(not_improving == sirio::search_params::move_count_pruning_threshold(5, false));
+}
+
 void test_move_count_pruning_helper_in_check_is_disabled() {
     assert(!sirio::search_params::should_apply_move_count_pruning(4, 12, false, true, false, false, true, false, false));
 }
@@ -1455,6 +1482,10 @@ void run_history_tests() {
     test_reverse_futility_helper_invalid_depth_is_disabled();
     test_reverse_futility_helper_no_side_effects_or_history_dependency();
     test_move_count_pruning_helper_is_disabled_by_default_flag();
+    test_move_count_pruning_threshold_helper_is_deterministic();
+    test_move_count_pruning_threshold_helper_is_positive_for_valid_depth();
+    test_move_count_pruning_threshold_helper_depth_progression_is_monotonic();
+    test_move_count_pruning_threshold_helper_improving_mode_is_deterministic();
     test_move_count_pruning_helper_in_check_is_disabled();
     test_move_count_pruning_helper_pv_node_is_disabled();
     test_move_count_pruning_helper_root_node_is_disabled();

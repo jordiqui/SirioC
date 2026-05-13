@@ -95,6 +95,13 @@ inline constexpr int move_count_pruning_improving_offset = 0;
     return corrected_static_eval - margin >= beta;
 }
 
+[[nodiscard]] inline constexpr int move_count_pruning_threshold(int depth, bool improving) {
+    const int improving_offset = improving ? move_count_pruning_improving_offset : 0;
+    const int raw_threshold =
+        move_count_pruning_base_count + (move_count_pruning_depth_multiplier * depth) + improving_offset;
+    return raw_threshold < 1 ? 1 : raw_threshold;
+}
+
 [[nodiscard]] inline constexpr bool should_apply_move_count_pruning(
     int depth, int move_count, bool improving, bool in_check, bool is_pv_node, bool is_root_node,
     bool is_quiet_move, bool is_promotion, bool is_tactical_or_noisy) {
@@ -111,12 +118,10 @@ inline constexpr int move_count_pruning_improving_offset = 0;
         return false;
     }
 
-    const int improving_offset = improving ? move_count_pruning_improving_offset : 0;
-    const int threshold =
-        move_count_pruning_base_count + (move_count_pruning_depth_multiplier * depth) + improving_offset;
     if (depth > move_count_pruning_depth_limit) {
         return false;
     }
+    const int threshold = move_count_pruning_threshold(depth, improving);
     return move_count > threshold;
 }
 
