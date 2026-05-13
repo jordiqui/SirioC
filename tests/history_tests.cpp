@@ -965,6 +965,26 @@ void test_probcut_constants_are_deterministic_and_non_negative() {
     assert(sirio::search_params::probcut_reduction >= 0);
 }
 
+void test_probcut_beta_threshold_helper_is_deterministic_and_matches_formula() {
+    constexpr int beta = 250;
+    const int first = sirio::search_params::probcut_beta_threshold(beta);
+    const int second = sirio::search_params::probcut_beta_threshold(beta);
+    assert(first == second);
+    assert(first == beta + sirio::search_params::probcut_margin);
+}
+
+void test_probcut_reduced_depth_helper_is_deterministic_non_negative_and_clamped() {
+    const int first = sirio::search_params::probcut_reduced_depth(8);
+    const int second = sirio::search_params::probcut_reduced_depth(8);
+    assert(first == second);
+    assert(first == std::max(0, 8 - sirio::search_params::probcut_reduction));
+    assert(first >= 0);
+
+    const int clamped = sirio::search_params::probcut_reduced_depth(1);
+    assert(clamped == std::max(0, 1 - sirio::search_params::probcut_reduction));
+    assert(clamped >= 0);
+}
+
 void test_probcut_helper_returns_false_under_default_disabled_flag() {
     assert(!sirio::search_params::should_apply_probcut(6, 250, 600, false, false, false));
 }
@@ -1101,6 +1121,7 @@ void test_search_main_negamax_has_probcut_disabled_probe_wiring_only() {
     assert(negamax_source.find("return probcut") == std::string::npos);
     assert(negamax_source.find("if (probcut_probe)") == std::string::npos);
     assert(negamax_source.find("probcut_reduction") == std::string::npos);
+    assert(negamax_source.find("probcut_reduced_depth(") == std::string::npos);
     assert(qsearch_source.find("should_apply_probcut(") == std::string::npos);
     assert(qsearch_source.find("probcut_probe") == std::string::npos);
     assert(negamax_source.find("_for_tests(") == std::string::npos);
@@ -1564,6 +1585,8 @@ void run_history_tests() {
     test_move_count_pruning_helper_promotion_is_disabled();
     test_move_count_pruning_helper_tactical_or_noisy_move_is_disabled();
     test_probcut_constants_are_deterministic_and_non_negative();
+    test_probcut_beta_threshold_helper_is_deterministic_and_matches_formula();
+    test_probcut_reduced_depth_helper_is_deterministic_non_negative_and_clamped();
     test_probcut_helper_returns_false_under_default_disabled_flag();
     test_probcut_helper_guard_disables_in_check_pv_root_and_invalid_depth();
     test_reverse_futility_return_observability_counter_lifecycle();

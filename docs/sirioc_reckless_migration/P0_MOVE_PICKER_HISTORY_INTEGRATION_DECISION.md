@@ -259,6 +259,20 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - No eval/pruning/LMR/TT/qsearch/UCI/NNUE behavior was changed.
 - This step is a deterministic zero-runtime foundation for a later, separately authorized correction-history integration patch.
 
+## 18) P0-94 ProbCut threshold/reduction helper foundation (disabled / no-op)
+- Added centralized ProbCut helper contracts in `search_params`:
+  - beta-threshold helper (`beta + probcut_margin`),
+  - reduced-depth helper (`max(0, depth - probcut_reduction)`).
+- `selectivity_probcut_enabled` remains `false`.
+- P0-93 main-negamax ProbCut probe remains no-op wiring only.
+- No ProbCut search was added.
+- No ProbCut reduced-depth search was added.
+- No ProbCut return/cutoff was added.
+- Reverse futility (P0-83) remains unchanged.
+- Move Count Pruning (P0-91) remains unchanged.
+- Singular extensions remain disabled.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed.
+
 ## 18) P0-92 ProbCut helper foundation (disabled / no-behaviour contract)
 - Added centralized ProbCut helper foundation in search parameters only (constants + decision helper contract).
 - `selectivity_probcut_enabled` remains `false`, so helper resolution is disabled/no-op under default conditions.
