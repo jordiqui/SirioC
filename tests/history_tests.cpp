@@ -780,14 +780,14 @@ void test_search_qsearch_has_no_correction_history_wiring() {
 
 void test_search_selectivity_foundation_flags_contract() {
     assert(sirio::search_params::selectivity_reverse_futility_enabled);
-    assert(!sirio::search_params::selectivity_move_count_pruning_enabled);
+    assert(sirio::search_params::selectivity_move_count_pruning_enabled);
     assert(!sirio::search_params::selectivity_probcut_enabled);
     assert(!sirio::search_params::selectivity_singular_extensions_enabled);
 }
 
 void test_search_selectivity_foundation_helpers_contract() {
     assert(sirio::search_params::selectivity_reverse_futility_is_enabled());
-    assert(!sirio::search_params::selectivity_move_count_pruning_is_enabled());
+    assert(sirio::search_params::selectivity_move_count_pruning_is_enabled());
     assert(!sirio::search_params::selectivity_probcut_is_enabled());
     assert(!sirio::search_params::selectivity_singular_extensions_are_enabled());
 }
@@ -871,22 +871,35 @@ void test_reverse_futility_helper_no_side_effects_or_history_dependency() {
 
 
 void test_move_count_pruning_constants_are_conservative_and_explicit() {
-    assert(!sirio::search_params::selectivity_move_count_pruning_enabled);
+    assert(sirio::search_params::selectivity_move_count_pruning_enabled);
     assert(sirio::search_params::move_count_pruning_depth_limit > 0);
     assert(sirio::search_params::move_count_pruning_base_count > 0);
     assert(sirio::search_params::move_count_pruning_depth_multiplier >= 0);
     assert(sirio::search_params::move_count_pruning_improving_offset >= 0);
 }
 
-void test_move_count_pruning_helper_is_disabled_by_default_flag() {
-    assert(!sirio::search_params::should_apply_move_count_pruning(4, 12, false, false, false, false, true, false, false));
-    assert(!sirio::search_params::should_apply_move_count_pruning(3, 10'000, false, false, false, false, true, false, false));
+void test_move_count_pruning_helper_allows_continue_only_when_all_guards_pass_and_move_count_exceeds_threshold() {
+    const int depth = 3;
+    const int threshold = sirio::search_params::move_count_pruning_threshold(depth, false);
+    assert(sirio::search_params::should_apply_move_count_pruning(
+        depth, threshold + 1, false, false, false, false, true, false, false));
+    assert(!sirio::search_params::should_apply_move_count_pruning(
+        depth, threshold, false, false, false, false, true, false, false));
 }
 
 void test_move_count_pruning_threshold_helper_is_deterministic() {
     const int a = sirio::search_params::move_count_pruning_threshold(4, false);
     const int b = sirio::search_params::move_count_pruning_threshold(4, false);
     assert(a == b);
+}
+
+void test_move_count_pruning_threshold_formula_is_unchanged() {
+    const int depth = 3;
+    const int expected = sirio::search_params::move_count_pruning_base_count +
+                         (sirio::search_params::move_count_pruning_depth_multiplier * depth);
+    assert(sirio::search_params::move_count_pruning_threshold(depth, false) == expected);
+    assert(sirio::search_params::move_count_pruning_threshold(depth, true) ==
+           expected + sirio::search_params::move_count_pruning_improving_offset);
 }
 
 void test_move_count_pruning_threshold_helper_is_positive_for_valid_depth() {
@@ -1493,8 +1506,9 @@ void run_history_tests() {
     test_reverse_futility_helper_invalid_depth_is_disabled();
     test_reverse_futility_helper_no_side_effects_or_history_dependency();
     test_move_count_pruning_constants_are_conservative_and_explicit();
-    test_move_count_pruning_helper_is_disabled_by_default_flag();
+    test_move_count_pruning_helper_allows_continue_only_when_all_guards_pass_and_move_count_exceeds_threshold();
     test_move_count_pruning_threshold_helper_is_deterministic();
+    test_move_count_pruning_threshold_formula_is_unchanged();
     test_move_count_pruning_threshold_helper_is_positive_for_valid_depth();
     test_move_count_pruning_threshold_helper_depth_progression_is_monotonic();
     test_move_count_pruning_threshold_helper_improving_mode_is_deterministic();
