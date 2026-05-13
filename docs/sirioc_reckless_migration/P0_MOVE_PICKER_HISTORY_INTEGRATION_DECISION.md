@@ -542,3 +542,16 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Move Count Pruning P0-91 remains unchanged.
 - Singular extensions remain disabled.
 - No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed.
+
+
+## P0-98 ProbCut candidate-context helper foundation (disabled / no-op)
+- Added a deterministic ProbCut candidate-context helper foundation (`ProbCutCandidateContext`) in centralized search parameters.
+- Current runtime node-level ProbCut context remains empty/no-candidate via the explicit empty helper.
+- `selectivity_probcut_enabled` remains `false`; ProbCut remains disabled/no-op under defaults.
+- No real candidate selection was added (no Board/Move/MovePicker/TT candidate extraction).
+- No ProbCut search, reduced-depth search call, return, or cutoff path was added.
+- Future candidate extraction remains deferred.
+- Reverse futility P0-83 remains unchanged.
+- MCP P0-91 remains unchanged.
+- Singular extensions remain disabled.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour changed.
