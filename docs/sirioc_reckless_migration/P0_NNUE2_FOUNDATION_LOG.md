@@ -2583,3 +2583,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-96 ProbCut guarded parameter scaffold (disabled/no-op)
+
+- ProbCut guarded parameter scaffold added using centralized threshold/reduction helpers.
+- ProbCut remains disabled/no-op by default (`selectivity_probcut_enabled = false`).
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

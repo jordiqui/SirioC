@@ -516,3 +516,14 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Move Count Pruning P0-91 remains unchanged.
 - Singular extensions remain disabled.
 - No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed.
+
+## P0-96 ProbCut guarded parameter scaffold (disabled/no-op contract preserved)
+- Added guarded ProbCut parameter preparation inside the existing P0-95 main-negamax probe block.
+- Guarded block now computes ProbCut beta threshold and reduced depth via centralized P0-94 helpers.
+- `selectivity_probcut_enabled` remains `false`.
+- No ProbCut search, reduced-depth search, return, or cutoff was added.
+- P0-95 observability remains intact via `record_probcut_probe()`.
+- Reverse futility P0-83 remains unchanged.
+- Move Count Pruning P0-91 remains unchanged.
+- Singular extensions remain disabled.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed.
