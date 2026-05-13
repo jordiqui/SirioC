@@ -1016,6 +1016,15 @@ void test_move_count_pruning_continue_observability_counter_lifecycle() {
     assert(history.move_count_pruning_continue_count_for_tests() == 0);
 }
 
+void test_probcut_probe_observability_counter_lifecycle() {
+    sirio::SearchHistory history;
+    assert(history.probcut_probe_count_for_tests() == 0);
+    history.record_probcut_probe();
+    assert(history.probcut_probe_count_for_tests() == 1);
+    history.clear();
+    assert(history.probcut_probe_count_for_tests() == 0);
+}
+
 void test_search_main_negamax_has_guarded_reverse_futility_return_scaffold_wiring() {
     const std::string source = load_search_source_for_tests();
     assert(!source.empty());
@@ -1104,7 +1113,7 @@ void test_search_qsearch_has_no_move_count_pruning_runtime_wiring() {
     assert(qsearch_source.find("record_move_count_pruning_continue") == std::string::npos);
 }
 
-void test_search_main_negamax_has_probcut_disabled_probe_wiring_only() {
+void test_search_main_negamax_has_probcut_disabled_probe_observability_wiring_only() {
     const std::string source = load_search_source_for_tests();
     assert(!source.empty());
     const std::size_t negamax_pos = source.find("int negamax(");
@@ -1115,15 +1124,15 @@ void test_search_main_negamax_has_probcut_disabled_probe_wiring_only() {
     const std::string qsearch_source = source.substr(qsearch_pos);
 
     assert(negamax_source.find("const bool probcut_probe = search_params::should_apply_probcut(") != std::string::npos);
-    assert(negamax_source.find("(void)probcut_probe;") != std::string::npos);
-    assert(negamax_source.find("record_probcut") == std::string::npos);
+    assert(negamax_source.find("if (probcut_probe)") != std::string::npos);
+    assert(negamax_source.find("context.history.record_probcut_probe();") != std::string::npos);
     assert(negamax_source.find("probcut_depth") == std::string::npos);
     assert(negamax_source.find("return probcut") == std::string::npos);
-    assert(negamax_source.find("if (probcut_probe)") == std::string::npos);
     assert(negamax_source.find("probcut_reduction") == std::string::npos);
     assert(negamax_source.find("probcut_reduced_depth(") == std::string::npos);
     assert(qsearch_source.find("should_apply_probcut(") == std::string::npos);
     assert(qsearch_source.find("probcut_probe") == std::string::npos);
+    assert(qsearch_source.find("record_probcut_probe") == std::string::npos);
     assert(negamax_source.find("_for_tests(") == std::string::npos);
 }
 
@@ -1591,12 +1600,13 @@ void run_history_tests() {
     test_probcut_helper_guard_disables_in_check_pv_root_and_invalid_depth();
     test_reverse_futility_return_observability_counter_lifecycle();
     test_move_count_pruning_continue_observability_counter_lifecycle();
+    test_probcut_probe_observability_counter_lifecycle();
     test_search_main_negamax_has_guarded_reverse_futility_return_scaffold_wiring();
     test_search_qsearch_has_no_reverse_futility_pruning_wiring();
     test_search_reverse_futility_return_is_guarded_and_localized();
     test_search_main_negamax_has_guarded_move_count_pruning_continue_scaffold_wiring();
     test_search_qsearch_has_no_move_count_pruning_runtime_wiring();
-    test_search_main_negamax_has_probcut_disabled_probe_wiring_only();
+    test_search_main_negamax_has_probcut_disabled_probe_observability_wiring_only();
     test_correction_history_default_update_clamp_and_clear();
     test_correction_history_bucket_indexing_and_determinism();
     test_search_history_clear_resets_correction_history();

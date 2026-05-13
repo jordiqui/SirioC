@@ -358,3 +358,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime path remains unchanged.
 - P0-93 is ProbCut disabled probe wiring only.
 - No Capture/NoisyHistory scoring or update change.
+
+## 15) P0-95 note (capture/noisy runtime unchanged)
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-95 adds ProbCut probe observability only.
+- No Capture/NoisyHistory scoring or update behavior changed.
