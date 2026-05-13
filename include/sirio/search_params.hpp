@@ -54,6 +54,9 @@ inline constexpr int move_count_pruning_depth_limit = 3;
 inline constexpr int move_count_pruning_base_count = 16;
 inline constexpr int move_count_pruning_depth_multiplier = 1;
 inline constexpr int move_count_pruning_improving_offset = 0;
+inline constexpr int probcut_depth_limit = 5;
+inline constexpr int probcut_margin = 150;
+inline constexpr int probcut_reduction = 2;
 
 [[nodiscard]] inline constexpr bool selectivity_reverse_futility_is_enabled() {
     return selectivity_reverse_futility_enabled;
@@ -123,6 +126,21 @@ inline constexpr int move_count_pruning_improving_offset = 0;
     }
     const int threshold = move_count_pruning_threshold(depth, improving);
     return move_count > threshold;
+}
+
+[[nodiscard]] inline constexpr bool should_apply_probcut(
+    int depth, int beta, int static_eval, bool in_check, bool is_pv_node, bool is_root_node) {
+    if (!selectivity_probcut_is_enabled()) {
+        return false;
+    }
+    if (in_check || is_pv_node || is_root_node) {
+        return false;
+    }
+    if (depth <= 0 || depth < probcut_depth_limit) {
+        return false;
+    }
+
+    return static_eval >= (beta + probcut_margin);
 }
 
 } // namespace sirio::search_params
