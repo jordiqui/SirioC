@@ -976,6 +976,48 @@ void test_probcut_candidate_context_helpers_are_deterministic() {
     assert(explicit_promotion.is_promotion);
 }
 
+void test_probcut_candidate_classification_rejects_false_candidate_flags() {
+    const auto classified = sirio::search_params::classify_probcut_candidate(false, false, false, false);
+    assert(!classified.has_candidate_move);
+    assert(!classified.is_capture_or_noisy);
+    assert(!classified.is_promotion);
+}
+
+void test_probcut_candidate_classification_explicit_quiet_candidate_is_not_tactical() {
+    const auto classified = sirio::search_params::classify_probcut_candidate(true, false, false, false);
+    assert(classified.has_candidate_move);
+    assert(!classified.is_capture_or_noisy);
+    assert(!classified.is_promotion);
+}
+
+void test_probcut_candidate_classification_explicit_capture_candidate_is_tactical() {
+    const auto classified = sirio::search_params::classify_probcut_candidate(true, true, false, false);
+    assert(classified.has_candidate_move);
+    assert(classified.is_capture_or_noisy);
+    assert(!classified.is_promotion);
+}
+
+void test_probcut_candidate_classification_explicit_noisy_candidate_is_tactical() {
+    const auto classified = sirio::search_params::classify_probcut_candidate(true, false, true, false);
+    assert(classified.has_candidate_move);
+    assert(classified.is_capture_or_noisy);
+    assert(!classified.is_promotion);
+}
+
+void test_probcut_candidate_classification_explicit_promotion_candidate_stays_non_tactical_unless_set() {
+    const auto classified = sirio::search_params::classify_probcut_candidate(true, false, false, true);
+    assert(classified.has_candidate_move);
+    assert(!classified.is_capture_or_noisy);
+    assert(classified.is_promotion);
+}
+
+void test_probcut_candidate_classification_preserves_tactical_and_promotion_when_both_are_set() {
+    const auto classified = sirio::search_params::classify_probcut_candidate(true, true, false, true);
+    assert(classified.has_candidate_move);
+    assert(classified.is_capture_or_noisy);
+    assert(classified.is_promotion);
+}
+
 void test_probcut_helper_rejects_empty_candidate_context_defaults() {
     const auto empty = sirio::search_params::empty_probcut_candidate_context();
     assert(!sirio::search_params::should_apply_probcut(
@@ -1030,6 +1072,22 @@ void test_probcut_helper_guard_disables_missing_or_invalid_candidate_move_contex
     assert(!sirio::search_params::should_apply_probcut(6, 250, 600, false, false, false, false, true, false));
     assert(!sirio::search_params::should_apply_probcut(6, 250, 600, false, false, false, true, false, false));
     assert(!sirio::search_params::should_apply_probcut(6, 250, 600, false, false, false, true, true, true));
+}
+
+void test_probcut_helper_rejects_explicit_classified_quiet_and_promotion_candidates() {
+    const auto quiet = sirio::search_params::classify_probcut_candidate(true, false, false, false);
+    assert(!sirio::search_params::should_apply_probcut(
+        6, 250, 600, false, false, false,
+        quiet.has_candidate_move,
+        quiet.is_capture_or_noisy,
+        quiet.is_promotion));
+
+    const auto promotion = sirio::search_params::classify_probcut_candidate(true, false, false, true);
+    assert(!sirio::search_params::should_apply_probcut(
+        6, 250, 600, false, false, false,
+        promotion.has_candidate_move,
+        promotion.is_capture_or_noisy,
+        promotion.is_promotion));
 }
 
 void test_reverse_futility_return_observability_counter_lifecycle() {
@@ -1638,6 +1696,12 @@ void run_history_tests() {
     test_move_count_pruning_helper_promotion_is_disabled();
     test_move_count_pruning_helper_tactical_or_noisy_move_is_disabled();
     test_probcut_candidate_context_helpers_are_deterministic();
+    test_probcut_candidate_classification_rejects_false_candidate_flags();
+    test_probcut_candidate_classification_explicit_quiet_candidate_is_not_tactical();
+    test_probcut_candidate_classification_explicit_capture_candidate_is_tactical();
+    test_probcut_candidate_classification_explicit_noisy_candidate_is_tactical();
+    test_probcut_candidate_classification_explicit_promotion_candidate_stays_non_tactical_unless_set();
+    test_probcut_candidate_classification_preserves_tactical_and_promotion_when_both_are_set();
     test_probcut_helper_rejects_empty_candidate_context_defaults();
     test_probcut_constants_are_deterministic_and_non_negative();
     test_probcut_beta_threshold_helper_is_deterministic_and_matches_formula();
@@ -1645,6 +1709,7 @@ void run_history_tests() {
     test_probcut_helper_returns_false_under_default_disabled_flag();
     test_probcut_helper_guard_disables_in_check_pv_root_and_invalid_depth();
     test_probcut_helper_guard_disables_missing_or_invalid_candidate_move_context();
+    test_probcut_helper_rejects_explicit_classified_quiet_and_promotion_candidates();
     test_reverse_futility_return_observability_counter_lifecycle();
     test_move_count_pruning_continue_observability_counter_lifecycle();
     test_probcut_probe_observability_counter_lifecycle();

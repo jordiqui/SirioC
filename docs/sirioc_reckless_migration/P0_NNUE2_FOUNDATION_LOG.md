@@ -2607,3 +2607,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-99 ProbCut Candidate Classification Helper (Disabled / No-op)
+
+- Added deterministic ProbCut candidate classification helper with disabled/no-op behavior.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

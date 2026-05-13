@@ -555,3 +555,16 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - MCP P0-91 remains unchanged.
 - Singular extensions remain disabled.
 - No LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour changed.
+
+## P0-99 ProbCut candidate classification helper (disabled / no-op)
+- Added deterministic ProbCut candidate classification helper in centralized search parameters.
+- Classification uses explicit booleans only (`has_candidate_move`, `is_capture`, `is_noisy`, `is_promotion`).
+- No runtime candidate extraction was added (no Board/Move/MovePicker/TT-based selection path).
+- Current runtime ProbCut context remains empty/no-candidate (or equivalent no-candidate explicit classification).
+- `selectivity_probcut_enabled` remains `false`.
+- No ProbCut search, reduced-depth search, return, or cutoff was added.
+- Future runtime candidate extraction remains explicitly deferred.
+- Reverse futility P0-83 remains unchanged.
+- MCP P0-91 remains unchanged.
+- Singular extensions remain disabled.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour changed.

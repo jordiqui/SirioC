@@ -380,3 +380,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime update path remains unchanged.
 - P0-98 introduces ProbCut candidate-context infrastructure only.
 - No Capture/NoisyHistory scoring or runtime update policy changed.
+
+## P0-99 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-99 is ProbCut explicit-property candidate classification infrastructure only.
+- No Capture/NoisyHistory scoring or runtime update behavior changed.
