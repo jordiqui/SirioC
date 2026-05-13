@@ -2524,3 +2524,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-88 Move Count Pruning move-safety predicate expansion (disabled/no-op)
+- Expanded Move Count Pruning helper safety predicate inputs with explicit move-safety guards.
+- Behavior remains disabled/no-op under current defaults.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
