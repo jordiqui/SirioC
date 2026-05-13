@@ -958,6 +958,33 @@ void test_move_count_pruning_helper_tactical_or_noisy_move_is_disabled() {
     assert(!sirio::search_params::should_apply_move_count_pruning(3, 2, false, false, false, false, true, false, true));
 }
 
+
+void test_probcut_candidate_context_helpers_are_deterministic() {
+    const auto empty = sirio::search_params::empty_probcut_candidate_context();
+    assert(!empty.has_candidate_move);
+    assert(!empty.is_capture_or_noisy);
+    assert(!empty.is_promotion);
+
+    const auto explicit_ctx = sirio::search_params::make_probcut_candidate_context(true, true, false);
+    assert(explicit_ctx.has_candidate_move);
+    assert(explicit_ctx.is_capture_or_noisy);
+    assert(!explicit_ctx.is_promotion);
+
+    const auto explicit_promotion = sirio::search_params::make_probcut_candidate_context(true, true, true);
+    assert(explicit_promotion.has_candidate_move);
+    assert(explicit_promotion.is_capture_or_noisy);
+    assert(explicit_promotion.is_promotion);
+}
+
+void test_probcut_helper_rejects_empty_candidate_context_defaults() {
+    const auto empty = sirio::search_params::empty_probcut_candidate_context();
+    assert(!sirio::search_params::should_apply_probcut(
+        6, 250, 600, false, false, false,
+        empty.has_candidate_move,
+        empty.is_capture_or_noisy,
+        empty.is_promotion));
+}
+
 void test_probcut_constants_are_deterministic_and_non_negative() {
     assert(!sirio::search_params::selectivity_probcut_enabled);
     assert(sirio::search_params::probcut_depth_limit >= 0);
@@ -1130,8 +1157,11 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_wiring_on
     const std::string qsearch_source = source.substr(qsearch_pos);
 
     assert(negamax_source.find("const bool probcut_probe = search_params::should_apply_probcut(") != std::string::npos);
-    assert(negamax_source.find("depth_left, beta, corrected_static_eval, in_check, is_pv_node, ply == 0, false, false, false") !=
+    assert(negamax_source.find("const auto probcut_candidate = search_params::empty_probcut_candidate_context();") !=
            std::string::npos);
+    assert(negamax_source.find("probcut_candidate.has_candidate_move") != std::string::npos);
+    assert(negamax_source.find("probcut_candidate.is_capture_or_noisy") != std::string::npos);
+    assert(negamax_source.find("probcut_candidate.is_promotion") != std::string::npos);
     assert(negamax_source.find("if (probcut_probe)") != std::string::npos);
     assert(negamax_source.find("context.history.record_probcut_probe();") != std::string::npos);
     assert(negamax_source.find("const int probcut_beta = search_params::probcut_beta_threshold(beta);") !=
@@ -1607,6 +1637,8 @@ void run_history_tests() {
     test_move_count_pruning_helper_non_quiet_move_is_disabled();
     test_move_count_pruning_helper_promotion_is_disabled();
     test_move_count_pruning_helper_tactical_or_noisy_move_is_disabled();
+    test_probcut_candidate_context_helpers_are_deterministic();
+    test_probcut_helper_rejects_empty_candidate_context_defaults();
     test_probcut_constants_are_deterministic_and_non_negative();
     test_probcut_beta_threshold_helper_is_deterministic_and_matches_formula();
     test_probcut_reduced_depth_helper_is_deterministic_non_negative_and_clamped();

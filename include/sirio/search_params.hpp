@@ -58,6 +58,22 @@ inline constexpr int probcut_depth_limit = 5;
 inline constexpr int probcut_margin = 150;
 inline constexpr int probcut_reduction = 2;
 
+
+struct ProbCutCandidateContext {
+    bool has_candidate_move = false;
+    bool is_capture_or_noisy = false;
+    bool is_promotion = false;
+};
+
+[[nodiscard]] inline constexpr ProbCutCandidateContext empty_probcut_candidate_context() {
+    return ProbCutCandidateContext{};
+}
+
+[[nodiscard]] inline constexpr ProbCutCandidateContext make_probcut_candidate_context(
+    bool has_candidate_move, bool is_capture_or_noisy, bool is_promotion) {
+    return ProbCutCandidateContext{has_candidate_move, is_capture_or_noisy, is_promotion};
+}
+
 [[nodiscard]] inline constexpr bool selectivity_reverse_futility_is_enabled() {
     return selectivity_reverse_futility_enabled;
 }
