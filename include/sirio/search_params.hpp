@@ -96,7 +96,8 @@ inline constexpr int move_count_pruning_improving_offset = 0;
 }
 
 [[nodiscard]] inline constexpr bool should_apply_move_count_pruning(
-    int depth, int move_count, bool improving, bool in_check, bool is_pv_node, bool is_root_node) {
+    int depth, int move_count, bool improving, bool in_check, bool is_pv_node, bool is_root_node,
+    bool is_quiet_move, bool is_promotion, bool is_tactical_or_noisy) {
     if (!selectivity_move_count_pruning_is_enabled()) {
         return false;
     }
@@ -104,6 +105,9 @@ inline constexpr int move_count_pruning_improving_offset = 0;
         return false;
     }
     if (depth <= 0 || move_count <= 0) {
+        return false;
+    }
+    if (!is_quiet_move || is_promotion || is_tactical_or_noisy) {
         return false;
     }
 

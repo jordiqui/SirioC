@@ -426,3 +426,14 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Reverse futility P0-83 behavior remains unchanged.
 - Probcut and singular extensions remain disabled/not wired.
 - No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed.
+
+## P0-88 move count pruning move-safety predicate expansion (disabled contract preserved)
+- Move Count Pruning helper safety predicate contract was expanded with explicit move-safety inputs.
+- Explicit guards now require quiet, non-promotion, and non-tactical/non-noisy move state before pruning can ever apply.
+- `selectivity_move_count_pruning_enabled` remains `false`; MCP remains disabled/no-op under defaults.
+- P0-86 guarded `continue` scaffold remains present and unreachable under defaults.
+- P0-87 observability wiring remains intact (`record_move_count_pruning_continue()` remains inside the guarded continue block).
+- No behavior change was introduced.
+- Reverse futility (P0-83) remains unchanged.
+- Probcut and singular extensions remain disabled.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed.

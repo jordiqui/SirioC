@@ -870,30 +870,43 @@ void test_reverse_futility_helper_no_side_effects_or_history_dependency() {
 }
 
 void test_move_count_pruning_helper_is_disabled_by_default_flag() {
-    assert(!sirio::search_params::should_apply_move_count_pruning(4, 12, false, false, false, false));
+    assert(!sirio::search_params::should_apply_move_count_pruning(4, 12, false, false, false, false, true, false, false));
 }
 
 void test_move_count_pruning_helper_in_check_is_disabled() {
-    assert(!sirio::search_params::should_apply_move_count_pruning(4, 12, false, true, false, false));
+    assert(!sirio::search_params::should_apply_move_count_pruning(4, 12, false, true, false, false, true, false, false));
 }
 
 void test_move_count_pruning_helper_pv_node_is_disabled() {
-    assert(!sirio::search_params::should_apply_move_count_pruning(4, 12, false, false, true, false));
+    assert(!sirio::search_params::should_apply_move_count_pruning(4, 12, false, false, true, false, true, false, false));
 }
 
 void test_move_count_pruning_helper_root_node_is_disabled() {
-    assert(!sirio::search_params::should_apply_move_count_pruning(4, 12, false, false, false, true));
+    assert(!sirio::search_params::should_apply_move_count_pruning(4, 12, false, false, false, true, true, false, false));
 }
 
 void test_move_count_pruning_helper_invalid_depth_is_disabled() {
-    assert(!sirio::search_params::should_apply_move_count_pruning(0, 12, false, false, false, false));
-    assert(!sirio::search_params::should_apply_move_count_pruning(-1, 12, true, false, false, false));
+    assert(!sirio::search_params::should_apply_move_count_pruning(0, 12, false, false, false, false, true, false, false));
+    assert(!sirio::search_params::should_apply_move_count_pruning(-1, 12, true, false, false, false, true, false, false));
 }
 
 void test_move_count_pruning_helper_invalid_move_count_is_disabled() {
-    assert(!sirio::search_params::should_apply_move_count_pruning(3, 0, false, false, false, false));
-    assert(!sirio::search_params::should_apply_move_count_pruning(3, -2, true, false, false, false));
+    assert(!sirio::search_params::should_apply_move_count_pruning(3, 0, false, false, false, false, true, false, false));
+    assert(!sirio::search_params::should_apply_move_count_pruning(3, -2, true, false, false, false, true, false, false));
 }
+
+void test_move_count_pruning_helper_non_quiet_move_is_disabled() {
+    assert(!sirio::search_params::should_apply_move_count_pruning(3, 2, false, false, false, false, false, false, true));
+}
+
+void test_move_count_pruning_helper_promotion_is_disabled() {
+    assert(!sirio::search_params::should_apply_move_count_pruning(3, 2, false, false, false, false, true, true, false));
+}
+
+void test_move_count_pruning_helper_tactical_or_noisy_move_is_disabled() {
+    assert(!sirio::search_params::should_apply_move_count_pruning(3, 2, false, false, false, false, true, false, true));
+}
+
 void test_reverse_futility_return_observability_counter_lifecycle() {
     sirio::SearchHistory history;
     assert(history.reverse_futility_return_count_for_tests() == 0);
@@ -971,6 +984,9 @@ void test_search_main_negamax_has_guarded_move_count_pruning_continue_scaffold_w
     assert(negamax_source.find("should_apply_move_count_pruning(") != std::string::npos);
     assert(negamax_source.find("const bool move_count_pruning_probe =") != std::string::npos);
     assert(negamax_source.find("searched_move_count") != std::string::npos);
+    assert(negamax_source.find("quiet_move") != std::string::npos);
+    assert(negamax_source.find("move.promotion.has_value()") != std::string::npos);
+    assert(negamax_source.find("tactical_move") != std::string::npos);
     assert(negamax_source.find("if (move_count_pruning_probe)") != std::string::npos);
     const std::size_t guard_pos = negamax_source.find("if (move_count_pruning_probe)");
     assert(guard_pos != std::string::npos);
@@ -1444,6 +1460,9 @@ void run_history_tests() {
     test_move_count_pruning_helper_root_node_is_disabled();
     test_move_count_pruning_helper_invalid_depth_is_disabled();
     test_move_count_pruning_helper_invalid_move_count_is_disabled();
+    test_move_count_pruning_helper_non_quiet_move_is_disabled();
+    test_move_count_pruning_helper_promotion_is_disabled();
+    test_move_count_pruning_helper_tactical_or_noisy_move_is_disabled();
     test_reverse_futility_return_observability_counter_lifecycle();
     test_move_count_pruning_continue_observability_counter_lifecycle();
     test_search_main_negamax_has_guarded_reverse_futility_return_scaffold_wiring();
