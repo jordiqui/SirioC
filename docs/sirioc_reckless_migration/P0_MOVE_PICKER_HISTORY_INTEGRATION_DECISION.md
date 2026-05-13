@@ -259,6 +259,17 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - No eval/pruning/LMR/TT/qsearch/UCI/NNUE behavior was changed.
 - This step is a deterministic zero-runtime foundation for a later, separately authorized correction-history integration patch.
 
+## 18) P0-92 ProbCut helper foundation (disabled / no-behaviour contract)
+- Added centralized ProbCut helper foundation in search parameters only (constants + decision helper contract).
+- `selectivity_probcut_enabled` remains `false`, so helper resolution is disabled/no-op under default conditions.
+- No ProbCut runtime search was added.
+- No ProbCut return was added.
+- No ProbCut reduced-depth search was added.
+- Reverse futility (P0-83) remains enabled and unchanged.
+- Move Count Pruning (P0-91) remains enabled and unchanged.
+- Singular extensions remain disabled.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour changed.
+
 ## 18) P0-81 reverse futility margin helper (disabled/no-behavior-change)
 - Added a centralized reverse futility margin helper in `search_params` for deterministic margin computation.
 - Margin calculation is centralized, deterministic, and bounded to non-negative output.

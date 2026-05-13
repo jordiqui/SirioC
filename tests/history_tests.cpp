@@ -958,6 +958,27 @@ void test_move_count_pruning_helper_tactical_or_noisy_move_is_disabled() {
     assert(!sirio::search_params::should_apply_move_count_pruning(3, 2, false, false, false, false, true, false, true));
 }
 
+void test_probcut_constants_are_deterministic_and_non_negative() {
+    assert(!sirio::search_params::selectivity_probcut_enabled);
+    assert(sirio::search_params::probcut_depth_limit >= 0);
+    assert(sirio::search_params::probcut_margin >= 0);
+    assert(sirio::search_params::probcut_reduction >= 0);
+}
+
+void test_probcut_helper_returns_false_under_default_disabled_flag() {
+    assert(!sirio::search_params::should_apply_probcut(6, 250, 600, false, false, false));
+}
+
+void test_probcut_helper_guard_disables_in_check_pv_root_and_invalid_depth() {
+    assert(!sirio::search_params::should_apply_probcut(6, 250, 600, true, false, false));
+    assert(!sirio::search_params::should_apply_probcut(6, 250, 600, false, true, false));
+    assert(!sirio::search_params::should_apply_probcut(6, 250, 600, false, false, true));
+    assert(!sirio::search_params::should_apply_probcut(0, 250, 600, false, false, false));
+    assert(!sirio::search_params::should_apply_probcut(-1, 250, 600, false, false, false));
+    assert(!sirio::search_params::should_apply_probcut(
+        sirio::search_params::probcut_depth_limit - 1, 250, 600, false, false, false));
+}
+
 void test_reverse_futility_return_observability_counter_lifecycle() {
     sirio::SearchHistory history;
     assert(history.reverse_futility_return_count_for_tests() == 0);
@@ -1061,6 +1082,22 @@ void test_search_qsearch_has_no_move_count_pruning_runtime_wiring() {
 
     assert(qsearch_source.find("should_apply_move_count_pruning(") == std::string::npos);
     assert(qsearch_source.find("record_move_count_pruning_continue") == std::string::npos);
+}
+
+void test_search_has_no_probcut_runtime_wiring_or_scaffold() {
+    const std::string source = load_search_source_for_tests();
+    assert(!source.empty());
+    const std::size_t negamax_pos = source.find("int negamax(");
+    assert(negamax_pos != std::string::npos);
+    const std::size_t qsearch_pos = source.find("int quiescence(");
+    assert(qsearch_pos != std::string::npos);
+    const std::string negamax_source = source.substr(negamax_pos, qsearch_pos - negamax_pos);
+    const std::string qsearch_source = source.substr(qsearch_pos);
+
+    assert(negamax_source.find("should_apply_probcut(") == std::string::npos);
+    assert(qsearch_source.find("should_apply_probcut(") == std::string::npos);
+    assert(negamax_source.find("probcut") == std::string::npos);
+    assert(qsearch_source.find("probcut") == std::string::npos);
 }
 
 }  // namespace
@@ -1520,6 +1557,9 @@ void run_history_tests() {
     test_move_count_pruning_helper_non_quiet_move_is_disabled();
     test_move_count_pruning_helper_promotion_is_disabled();
     test_move_count_pruning_helper_tactical_or_noisy_move_is_disabled();
+    test_probcut_constants_are_deterministic_and_non_negative();
+    test_probcut_helper_returns_false_under_default_disabled_flag();
+    test_probcut_helper_guard_disables_in_check_pv_root_and_invalid_depth();
     test_reverse_futility_return_observability_counter_lifecycle();
     test_move_count_pruning_continue_observability_counter_lifecycle();
     test_search_main_negamax_has_guarded_reverse_futility_return_scaffold_wiring();
@@ -1527,6 +1567,7 @@ void run_history_tests() {
     test_search_reverse_futility_return_is_guarded_and_localized();
     test_search_main_negamax_has_guarded_move_count_pruning_continue_scaffold_wiring();
     test_search_qsearch_has_no_move_count_pruning_runtime_wiring();
+    test_search_has_no_probcut_runtime_wiring_or_scaffold();
     test_correction_history_default_update_clamp_and_clear();
     test_correction_history_bucket_indexing_and_determinism();
     test_search_history_clear_resets_correction_history();
