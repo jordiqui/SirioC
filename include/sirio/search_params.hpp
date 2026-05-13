@@ -138,7 +138,8 @@ inline constexpr int probcut_reduction = 2;
 }
 
 [[nodiscard]] inline constexpr bool should_apply_probcut(
-    int depth, int beta, int static_eval, bool in_check, bool is_pv_node, bool is_root_node) {
+    int depth, int beta, int static_eval, bool in_check, bool is_pv_node, bool is_root_node,
+    bool has_candidate_move, bool is_candidate_capture_or_noisy, bool is_candidate_promotion) {
     if (!selectivity_probcut_is_enabled()) {
         return false;
     }
@@ -146,6 +147,9 @@ inline constexpr int probcut_reduction = 2;
         return false;
     }
     if (depth <= 0 || depth < probcut_depth_limit) {
+        return false;
+    }
+    if (!has_candidate_move || !is_candidate_capture_or_noisy || is_candidate_promotion) {
         return false;
     }
 

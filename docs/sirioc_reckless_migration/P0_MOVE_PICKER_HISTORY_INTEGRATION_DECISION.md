@@ -238,6 +238,21 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - ContinuationHistory runtime update at main-negamax quiet beta cutoff now applies narrow symmetry.
 - The quiet cutoff move keeps the existing positive update.
 - Previously searched quiet moves from the same node now receive a conservative malus.
+
+## 16) P0-97 ProbCut move-safety predicate expansion (still disabled / no-search)
+- ProbCut helper safety predicate is expanded with explicit candidate-move gates:
+  - `has_candidate_move`
+  - `is_candidate_capture_or_noisy`
+  - `is_candidate_promotion`
+- Current node-level probe in main negamax passes safe placeholders (`false, false, false`) and remains a no-op.
+- `selectivity_probcut_enabled` remains `false`.
+- P0-96 guarded parameter scaffold remains unchanged and unreachable under current defaults.
+- No ProbCut search, reduced-depth search, return, or cutoff was added.
+- Future candidate-move selection for ProbCut remains explicitly deferred.
+- Reverse futility (P0-83) remains unchanged.
+- Move Count Pruning (P0-91) remains unchanged.
+- Singular extensions remain disabled.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour changed in this step.
 - Updates are strictly gated by valid previous board+move context and valid continuation key extraction; no fallback semantics are introduced.
 - No updates were added for qsearch, capture/noisy, promotion, failed/skipped/illegal paths.
 - Zero-state MovePicker ordering contract remains protected.

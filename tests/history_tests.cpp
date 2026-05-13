@@ -986,17 +986,23 @@ void test_probcut_reduced_depth_helper_is_deterministic_non_negative_and_clamped
 }
 
 void test_probcut_helper_returns_false_under_default_disabled_flag() {
-    assert(!sirio::search_params::should_apply_probcut(6, 250, 600, false, false, false));
+    assert(!sirio::search_params::should_apply_probcut(6, 250, 600, false, false, false, true, true, false));
 }
 
 void test_probcut_helper_guard_disables_in_check_pv_root_and_invalid_depth() {
-    assert(!sirio::search_params::should_apply_probcut(6, 250, 600, true, false, false));
-    assert(!sirio::search_params::should_apply_probcut(6, 250, 600, false, true, false));
-    assert(!sirio::search_params::should_apply_probcut(6, 250, 600, false, false, true));
-    assert(!sirio::search_params::should_apply_probcut(0, 250, 600, false, false, false));
-    assert(!sirio::search_params::should_apply_probcut(-1, 250, 600, false, false, false));
+    assert(!sirio::search_params::should_apply_probcut(6, 250, 600, true, false, false, true, true, false));
+    assert(!sirio::search_params::should_apply_probcut(6, 250, 600, false, true, false, true, true, false));
+    assert(!sirio::search_params::should_apply_probcut(6, 250, 600, false, false, true, true, true, false));
+    assert(!sirio::search_params::should_apply_probcut(0, 250, 600, false, false, false, true, true, false));
+    assert(!sirio::search_params::should_apply_probcut(-1, 250, 600, false, false, false, true, true, false));
     assert(!sirio::search_params::should_apply_probcut(
-        sirio::search_params::probcut_depth_limit - 1, 250, 600, false, false, false));
+        sirio::search_params::probcut_depth_limit - 1, 250, 600, false, false, false, true, true, false));
+}
+
+void test_probcut_helper_guard_disables_missing_or_invalid_candidate_move_context() {
+    assert(!sirio::search_params::should_apply_probcut(6, 250, 600, false, false, false, false, true, false));
+    assert(!sirio::search_params::should_apply_probcut(6, 250, 600, false, false, false, true, false, false));
+    assert(!sirio::search_params::should_apply_probcut(6, 250, 600, false, false, false, true, true, true));
 }
 
 void test_reverse_futility_return_observability_counter_lifecycle() {
@@ -1124,6 +1130,8 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_wiring_on
     const std::string qsearch_source = source.substr(qsearch_pos);
 
     assert(negamax_source.find("const bool probcut_probe = search_params::should_apply_probcut(") != std::string::npos);
+    assert(negamax_source.find("depth_left, beta, corrected_static_eval, in_check, is_pv_node, ply == 0, false, false, false") !=
+           std::string::npos);
     assert(negamax_source.find("if (probcut_probe)") != std::string::npos);
     assert(negamax_source.find("context.history.record_probcut_probe();") != std::string::npos);
     assert(negamax_source.find("const int probcut_beta = search_params::probcut_beta_threshold(beta);") !=
@@ -1604,6 +1612,7 @@ void run_history_tests() {
     test_probcut_reduced_depth_helper_is_deterministic_non_negative_and_clamped();
     test_probcut_helper_returns_false_under_default_disabled_flag();
     test_probcut_helper_guard_disables_in_check_pv_root_and_invalid_depth();
+    test_probcut_helper_guard_disables_missing_or_invalid_candidate_move_context();
     test_reverse_futility_return_observability_counter_lifecycle();
     test_move_count_pruning_continue_observability_counter_lifecycle();
     test_probcut_probe_observability_counter_lifecycle();
