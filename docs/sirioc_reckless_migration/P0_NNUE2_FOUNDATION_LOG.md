@@ -46,6 +46,14 @@
 - No evaluation backend topology changed.
 - No strength/Elo claim.
 
+# P0-94 ProbCut Threshold/Reduction Helper Foundation (Disabled / No-op)
+
+- Added centralized ProbCut threshold/reduction helper contracts in `search_params`.
+- ProbCut remains disabled/no-op under default selectivity state (`selectivity_probcut_enabled = false`).
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
+
 
 # P0-46 Search P0 Re-Entry Baseline
 

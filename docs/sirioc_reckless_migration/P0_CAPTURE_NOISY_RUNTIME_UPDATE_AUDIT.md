@@ -238,6 +238,12 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 
 ## 16) P0-69 note (capture/noisy path unchanged)
 - P0-62/P0-63 Capture/NoisyHistory runtime path remains unchanged.
+
+## 17) P0-94 note (capture/noisy path unchanged)
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-94 is ProbCut threshold/reduction helper infrastructure only.
+- No Capture/NoisyHistory scoring change was made.
+- No Capture/NoisyHistory runtime update-location change was made.
 - P0-67 read-only tactical/noisy MovePicker scoring remains unchanged.
 - P0-69 CorrectionHistory read-only static-eval helper work is isolated and does not affect CaptureHistory/NoisyHistory runtime or scoring behavior.
 

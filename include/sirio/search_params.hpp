@@ -74,6 +74,15 @@ inline constexpr int probcut_reduction = 2;
     return selectivity_singular_extensions_enabled;
 }
 
+[[nodiscard]] inline constexpr int probcut_beta_threshold(int beta) {
+    return beta + probcut_margin;
+}
+
+[[nodiscard]] inline constexpr int probcut_reduced_depth(int depth) {
+    const int reduced = depth - probcut_reduction;
+    return reduced < 0 ? 0 : reduced;
+}
+
 [[nodiscard]] inline constexpr int reverse_futility_margin(int depth, bool improving) {
     const int improving_reduction = improving ? reverse_futility_improving_margin_reduction : 0;
     const int raw_margin =
@@ -140,7 +149,7 @@ inline constexpr int probcut_reduction = 2;
         return false;
     }
 
-    return static_eval >= (beta + probcut_margin);
+    return static_eval >= probcut_beta_threshold(beta);
 }
 
 } // namespace sirio::search_params
