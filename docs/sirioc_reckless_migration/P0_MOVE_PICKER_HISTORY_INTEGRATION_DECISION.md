@@ -449,3 +449,16 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Reverse futility P0-83 remains unchanged.
 - ProbCut and singular extensions remain disabled.
 - No LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour changed.
+
+## 18) P0-90 conservative MCP constants / disabled no-op contract
+- Conservative Move Count Pruning threshold constants were set explicitly for future activation readiness.
+- `selectivity_move_count_pruning_enabled` remains `false`.
+- MCP remains disabled in production behavior.
+- P0-86 guarded `continue` remains unreachable under defaults.
+- P0-87 observability wiring remains intact.
+- P0-88 move-safety guards remain intact.
+- P0-89 threshold helper remains centralized and deterministic.
+- No behavior change is introduced by P0-90.
+- Reverse futility P0-83 remains unchanged.
+- Probcut and singular extensions remain disabled.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed.

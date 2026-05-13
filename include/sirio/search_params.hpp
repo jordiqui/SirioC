@@ -50,9 +50,9 @@ inline constexpr int reverse_futility_depth_limit = 0;
 inline constexpr int reverse_futility_margin_base = 0;
 inline constexpr int reverse_futility_margin_per_depth = 0;
 inline constexpr int reverse_futility_improving_margin_reduction = 0;
-inline constexpr int move_count_pruning_depth_limit = 0;
-inline constexpr int move_count_pruning_base_count = 0;
-inline constexpr int move_count_pruning_depth_multiplier = 0;
+inline constexpr int move_count_pruning_depth_limit = 3;
+inline constexpr int move_count_pruning_base_count = 16;
+inline constexpr int move_count_pruning_depth_multiplier = 1;
 inline constexpr int move_count_pruning_improving_offset = 0;
 
 [[nodiscard]] inline constexpr bool selectivity_reverse_futility_is_enabled() {

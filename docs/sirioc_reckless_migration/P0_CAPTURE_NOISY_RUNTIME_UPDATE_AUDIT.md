@@ -332,3 +332,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime path remains unchanged.
 - P0-89 is Move Count Pruning threshold infrastructure only.
 - No Capture/NoisyHistory scoring or update behavior changed.
+
+## 15) P0-90 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-90 is MCP threshold-constant preparation only.
+- No Capture/NoisyHistory scoring or update behavior changed.
