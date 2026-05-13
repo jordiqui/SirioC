@@ -54,6 +54,14 @@
 - No evaluation backend topology changed.
 - No strength/Elo claim.
 
+# P0-97 ProbCut Move-Safety Predicate Expansion (Disabled / No-op)
+
+- Added ProbCut safety-predicate expansion with explicit candidate-move gates in centralized search parameters.
+- Default behavior remains disabled/no-op (`selectivity_probcut_enabled = false`).
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
+
 
 # P0-46 Search P0 Re-Entry Baseline
 

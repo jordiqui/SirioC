@@ -1284,7 +1284,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
     const bool is_pv_node = beta - alpha > 1;
     const bool improving = corrected_static_eval > parent_static_eval;
     const bool probcut_probe = search_params::should_apply_probcut(
-        depth_left, beta, corrected_static_eval, in_check, is_pv_node, ply == 0);
+        depth_left, beta, corrected_static_eval, in_check, is_pv_node, ply == 0, false, false, false);
     if (probcut_probe) {
         context.history.record_probcut_probe();
         const int probcut_beta = search_params::probcut_beta_threshold(beta);
