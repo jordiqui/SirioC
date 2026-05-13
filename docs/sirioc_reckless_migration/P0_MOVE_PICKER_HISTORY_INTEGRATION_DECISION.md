@@ -483,3 +483,12 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Reverse futility P0-83 remains unchanged.
 - Probcut and singular extensions remain disabled.
 - No LMR, MovePicker, TT, UCI, or NNUE behavior was directly changed.
+
+## 18) P0-93 ProbCut disabled main-negamax probe wiring
+- ProbCut helper is now wired into main negamax as a disabled no-op probe only.
+- `selectivity_probcut_enabled` remains `false`.
+- No ProbCut search, reduced-depth search, or return was added.
+- Reverse futility P0-83 remains unchanged.
+- Move Count Pruning P0-91 remains unchanged.
+- Singular extensions remain disabled.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed.

@@ -347,3 +347,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime path remains unchanged.
 - P0-91 affects only Move Count Pruning selectivity activation.
 - No Capture/NoisyHistory scoring or update behavior changed.
+
+## 18) P0-93 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-93 is ProbCut disabled probe wiring only.
+- No Capture/NoisyHistory scoring or update change.

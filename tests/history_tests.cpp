@@ -1084,7 +1084,7 @@ void test_search_qsearch_has_no_move_count_pruning_runtime_wiring() {
     assert(qsearch_source.find("record_move_count_pruning_continue") == std::string::npos);
 }
 
-void test_search_has_no_probcut_runtime_wiring_or_scaffold() {
+void test_search_main_negamax_has_probcut_disabled_probe_wiring_only() {
     const std::string source = load_search_source_for_tests();
     assert(!source.empty());
     const std::size_t negamax_pos = source.find("int negamax(");
@@ -1094,10 +1094,16 @@ void test_search_has_no_probcut_runtime_wiring_or_scaffold() {
     const std::string negamax_source = source.substr(negamax_pos, qsearch_pos - negamax_pos);
     const std::string qsearch_source = source.substr(qsearch_pos);
 
-    assert(negamax_source.find("should_apply_probcut(") == std::string::npos);
+    assert(negamax_source.find("const bool probcut_probe = search_params::should_apply_probcut(") != std::string::npos);
+    assert(negamax_source.find("(void)probcut_probe;") != std::string::npos);
+    assert(negamax_source.find("record_probcut") == std::string::npos);
+    assert(negamax_source.find("probcut_depth") == std::string::npos);
+    assert(negamax_source.find("return probcut") == std::string::npos);
+    assert(negamax_source.find("if (probcut_probe)") == std::string::npos);
+    assert(negamax_source.find("probcut_reduction") == std::string::npos);
     assert(qsearch_source.find("should_apply_probcut(") == std::string::npos);
-    assert(negamax_source.find("probcut") == std::string::npos);
-    assert(qsearch_source.find("probcut") == std::string::npos);
+    assert(qsearch_source.find("probcut_probe") == std::string::npos);
+    assert(negamax_source.find("_for_tests(") == std::string::npos);
 }
 
 }  // namespace
@@ -1567,7 +1573,7 @@ void run_history_tests() {
     test_search_reverse_futility_return_is_guarded_and_localized();
     test_search_main_negamax_has_guarded_move_count_pruning_continue_scaffold_wiring();
     test_search_qsearch_has_no_move_count_pruning_runtime_wiring();
-    test_search_has_no_probcut_runtime_wiring_or_scaffold();
+    test_search_main_negamax_has_probcut_disabled_probe_wiring_only();
     test_correction_history_default_update_clamp_and_clear();
     test_correction_history_bucket_indexing_and_determinism();
     test_search_history_clear_resets_correction_history();
