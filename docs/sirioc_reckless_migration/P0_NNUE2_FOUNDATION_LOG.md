@@ -2575,3 +2575,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-95 ProbCut Probe Observability (Disabled / No-op)
+
+- Added deterministic ProbCut probe observability accounting on the guarded P0-93 main-negamax probe path.
+- ProbCut remains disabled/no-op by default (`selectivity_probcut_enabled = false`).
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

@@ -411,6 +411,15 @@ void SearchHistory::record_move_count_pruning_continue() {
 void SearchHistory::reset_move_count_pruning_runtime_observability_for_tests() {
     move_count_pruning_runtime_counters_ = {};
 }
+int SearchHistory::probcut_probe_count_for_tests() const {
+    return probcut_runtime_counters_.probe_applied;
+}
+void SearchHistory::record_probcut_probe() {
+    ++probcut_runtime_counters_.probe_applied;
+}
+void SearchHistory::reset_probcut_runtime_observability_for_tests() {
+    probcut_runtime_counters_ = {};
+}
 
 int SearchHistory::quiet_history_score(const Move &move, Color mover) const {
     if (!is_quiet_move(move)) {
@@ -550,6 +559,7 @@ void SearchHistory::clear() {
     reset_correction_runtime_observability_for_tests();
     reset_reverse_futility_runtime_observability_for_tests();
     reset_move_count_pruning_runtime_observability_for_tests();
+    reset_probcut_runtime_observability_for_tests();
 }
 
 }  // namespace sirio
