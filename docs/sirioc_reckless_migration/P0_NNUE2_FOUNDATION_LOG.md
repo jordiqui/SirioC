@@ -2538,3 +2538,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-90 Move Count Pruning conservative constants (disabled/no-op)
+
+- Conservative MCP threshold constants were added while keeping MCP disabled by default.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

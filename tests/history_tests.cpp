@@ -869,8 +869,18 @@ void test_reverse_futility_helper_no_side_effects_or_history_dependency() {
     assert(history.correction_history().score(*key) == before);
 }
 
+
+void test_move_count_pruning_constants_are_conservative_and_explicit() {
+    assert(!sirio::search_params::selectivity_move_count_pruning_enabled);
+    assert(sirio::search_params::move_count_pruning_depth_limit > 0);
+    assert(sirio::search_params::move_count_pruning_base_count > 0);
+    assert(sirio::search_params::move_count_pruning_depth_multiplier >= 0);
+    assert(sirio::search_params::move_count_pruning_improving_offset >= 0);
+}
+
 void test_move_count_pruning_helper_is_disabled_by_default_flag() {
     assert(!sirio::search_params::should_apply_move_count_pruning(4, 12, false, false, false, false, true, false, false));
+    assert(!sirio::search_params::should_apply_move_count_pruning(3, 10'000, false, false, false, false, true, false, false));
 }
 
 void test_move_count_pruning_threshold_helper_is_deterministic() {
@@ -898,6 +908,7 @@ void test_move_count_pruning_threshold_helper_improving_mode_is_deterministic() 
     const int not_improving = sirio::search_params::move_count_pruning_threshold(5, false);
     assert(improving_a == improving_b);
     assert(not_improving == sirio::search_params::move_count_pruning_threshold(5, false));
+    assert(improving_a >= not_improving);
 }
 
 void test_move_count_pruning_helper_in_check_is_disabled() {
@@ -1481,6 +1492,7 @@ void run_history_tests() {
     test_reverse_futility_helper_root_node_is_disabled();
     test_reverse_futility_helper_invalid_depth_is_disabled();
     test_reverse_futility_helper_no_side_effects_or_history_dependency();
+    test_move_count_pruning_constants_are_conservative_and_explicit();
     test_move_count_pruning_helper_is_disabled_by_default_flag();
     test_move_count_pruning_threshold_helper_is_deterministic();
     test_move_count_pruning_threshold_helper_is_positive_for_valid_depth();
