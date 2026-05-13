@@ -74,6 +74,14 @@ struct ProbCutCandidateContext {
     return ProbCutCandidateContext{has_candidate_move, is_capture_or_noisy, is_promotion};
 }
 
+[[nodiscard]] inline constexpr ProbCutCandidateContext classify_probcut_candidate(
+    bool has_candidate_move, bool is_capture, bool is_noisy, bool is_promotion) {
+    return ProbCutCandidateContext{
+        has_candidate_move,
+        has_candidate_move && (is_capture || is_noisy),
+        has_candidate_move && is_promotion};
+}
+
 [[nodiscard]] inline constexpr bool selectivity_reverse_futility_is_enabled() {
     return selectivity_reverse_futility_enabled;
 }
