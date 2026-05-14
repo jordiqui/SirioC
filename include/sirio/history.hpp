@@ -96,6 +96,7 @@ struct MoveCountPruningRuntimeCounters {
 };
 struct ProbCutRuntimeCounters {
     int probe_applied = 0;
+    int empty_candidate_context_applied = 0;
 };
 
 class SearchHistory {
@@ -196,6 +197,8 @@ public:
     void reset_move_count_pruning_runtime_observability_for_tests();
     [[nodiscard]] int probcut_probe_count_for_tests() const;
     void record_probcut_probe();
+    [[nodiscard]] int probcut_empty_candidate_context_count_for_tests() const;
+    void record_probcut_empty_candidate_context();
     void reset_probcut_runtime_observability_for_tests();
 
 private:
