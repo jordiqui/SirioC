@@ -593,3 +593,16 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - MCP P0-91 remains unchanged.
 - Singular extensions remain disabled.
 - No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed in this step.
+
+## P0-102 runtime ProbCut explicit-false selector wiring (still disabled / no-op)
+- Main negamax runtime ProbCut candidate selector is now wired through explicit false flags:
+  - `select_probcut_candidate_context_from_flags(false, false, false, false)`.
+- Runtime ProbCut candidate context remains empty/no-candidate (`has_candidate_move=false`, `is_capture_or_noisy=false`, `is_promotion=false`).
+- No Board/Move/MovePicker/TT candidate extraction was added.
+- `selectivity_probcut_enabled` remains `false`.
+- No ProbCut search, reduced-depth search execution, return, or cutoff was added.
+- Future real runtime candidate extraction remains deferred.
+- Reverse futility P0-83 remains unchanged.
+- Move Count Pruning P0-91 remains unchanged.
+- Singular extensions remain disabled.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour changed.
