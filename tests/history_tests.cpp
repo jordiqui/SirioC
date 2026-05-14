@@ -976,6 +976,21 @@ void test_probcut_candidate_context_helpers_are_deterministic() {
     assert(explicit_promotion.is_promotion);
 }
 
+void test_probcut_candidate_selector_returns_empty_default_context() {
+    const auto selected = sirio::search_params::select_probcut_candidate_context();
+    assert(!selected.has_candidate_move);
+    assert(!selected.is_capture_or_noisy);
+    assert(!selected.is_promotion);
+}
+
+void test_probcut_candidate_selector_is_deterministic() {
+    const auto first = sirio::search_params::select_probcut_candidate_context();
+    const auto second = sirio::search_params::select_probcut_candidate_context();
+    assert(first.has_candidate_move == second.has_candidate_move);
+    assert(first.is_capture_or_noisy == second.is_capture_or_noisy);
+    assert(first.is_promotion == second.is_promotion);
+}
+
 void test_probcut_candidate_classification_rejects_false_candidate_flags() {
     const auto classified = sirio::search_params::classify_probcut_candidate(false, false, false, false);
     assert(!classified.has_candidate_move);
@@ -1025,6 +1040,15 @@ void test_probcut_helper_rejects_empty_candidate_context_defaults() {
         empty.has_candidate_move,
         empty.is_capture_or_noisy,
         empty.is_promotion));
+}
+
+void test_probcut_helper_rejects_selected_empty_candidate_context_defaults() {
+    const auto selected = sirio::search_params::select_probcut_candidate_context();
+    assert(!sirio::search_params::should_apply_probcut(
+        6, 250, 600, false, false, false,
+        selected.has_candidate_move,
+        selected.is_capture_or_noisy,
+        selected.is_promotion));
 }
 
 void test_probcut_constants_are_deterministic_and_non_negative() {
@@ -1215,7 +1239,7 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_wiring_on
     const std::string qsearch_source = source.substr(qsearch_pos);
 
     assert(negamax_source.find("const bool probcut_probe = search_params::should_apply_probcut(") != std::string::npos);
-    assert(negamax_source.find("const auto probcut_candidate = search_params::empty_probcut_candidate_context();") !=
+    assert(negamax_source.find("const auto probcut_candidate = search_params::select_probcut_candidate_context();") !=
            std::string::npos);
     assert(negamax_source.find("probcut_candidate.has_candidate_move") != std::string::npos);
     assert(negamax_source.find("probcut_candidate.is_capture_or_noisy") != std::string::npos);
@@ -1230,6 +1254,7 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_wiring_on
     assert(negamax_source.find("(void)probcut_depth;") != std::string::npos);
     assert(negamax_source.find("return probcut") == std::string::npos);
     assert(negamax_source.find("probcut_reduction") == std::string::npos);
+    assert(qsearch_source.find("select_probcut_candidate_context(") == std::string::npos);
     assert(qsearch_source.find("should_apply_probcut(") == std::string::npos);
     assert(qsearch_source.find("probcut_probe") == std::string::npos);
     assert(qsearch_source.find("record_probcut_probe") == std::string::npos);
@@ -1696,6 +1721,8 @@ void run_history_tests() {
     test_move_count_pruning_helper_promotion_is_disabled();
     test_move_count_pruning_helper_tactical_or_noisy_move_is_disabled();
     test_probcut_candidate_context_helpers_are_deterministic();
+    test_probcut_candidate_selector_returns_empty_default_context();
+    test_probcut_candidate_selector_is_deterministic();
     test_probcut_candidate_classification_rejects_false_candidate_flags();
     test_probcut_candidate_classification_explicit_quiet_candidate_is_not_tactical();
     test_probcut_candidate_classification_explicit_capture_candidate_is_tactical();
@@ -1703,6 +1730,7 @@ void run_history_tests() {
     test_probcut_candidate_classification_explicit_promotion_candidate_stays_non_tactical_unless_set();
     test_probcut_candidate_classification_preserves_tactical_and_promotion_when_both_are_set();
     test_probcut_helper_rejects_empty_candidate_context_defaults();
+    test_probcut_helper_rejects_selected_empty_candidate_context_defaults();
     test_probcut_constants_are_deterministic_and_non_negative();
     test_probcut_beta_threshold_helper_is_deterministic_and_matches_formula();
     test_probcut_reduced_depth_helper_is_deterministic_non_negative_and_clamped();

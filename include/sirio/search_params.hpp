@@ -69,6 +69,10 @@ struct ProbCutCandidateContext {
     return ProbCutCandidateContext{};
 }
 
+[[nodiscard]] inline constexpr ProbCutCandidateContext select_probcut_candidate_context() {
+    return empty_probcut_candidate_context();
+}
+
 [[nodiscard]] inline constexpr ProbCutCandidateContext make_probcut_candidate_context(
     bool has_candidate_move, bool is_capture_or_noisy, bool is_promotion) {
     return ProbCutCandidateContext{has_candidate_move, is_capture_or_noisy, is_promotion};
