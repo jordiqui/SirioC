@@ -416,3 +416,10 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime update path remains unchanged.
 - P0-105 is ProbCut reduced-search result context infrastructure only.
 - No Capture/NoisyHistory scoring or runtime update behavior changed.
+
+## P0-106 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime update path remains unchanged.
+- P0-106 adds only an empty ProbCut reduced-result runtime scaffold in guarded main-negamax code.
+- Runtime reduced-search result remains empty/no-result.
+- `should_cutoff_probcut(...)` remains unwired from runtime.
+- No Capture/NoisyHistory scoring or runtime update behavior changed.
