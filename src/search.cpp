@@ -1299,9 +1299,13 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         const int probcut_depth = search_params::probcut_reduced_depth(depth_left);
         const auto probcut_result =
             search_params::empty_probcut_reduced_search_result();
+        const bool probcut_cutoff =
+            probcut_result.has_result &&
+            search_params::should_cutoff_probcut(probcut_result.value, probcut_beta);
         (void)probcut_beta;
         (void)probcut_depth;
         (void)probcut_result;
+        (void)probcut_cutoff;
     }
     if (search_params::should_apply_reverse_futility_pruning(
             depth_left,

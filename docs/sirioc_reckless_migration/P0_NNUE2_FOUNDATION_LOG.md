@@ -2670,3 +2670,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - ProbCut remains disabled/no-op under default selectivity state (`selectivity_probcut_enabled = false`).
 - No ProbCut reduced-depth search execution, return path, or cutoff behavior was introduced.
 - No LMR, qsearch, MovePicker, TT, UCI, NNUE, reverse futility, or MCP behavior changed in this step.
+
+# P0-107 ProbCut Cutoff Decision Wiring With Empty Result / No Return Contract
+- Wired `should_cutoff_probcut(...)` in guarded main-negamax ProbCut block only, using empty reduced-result context.
+- Decision is guarded by `probcut_result.has_result` and discarded locally (`(void)probcut_cutoff`).
+- No return/cutoff/search/reduced-depth search behavior added.
+- `selectivity_probcut_enabled` remains `false`.
+- qsearch remains clean of ProbCut helper/probe wiring.
+- Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, NNUE, TT, MovePicker, and UCI remain unchanged.
