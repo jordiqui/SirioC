@@ -65,6 +65,11 @@ struct ProbCutCandidateContext {
     bool is_promotion = false;
 };
 
+struct ProbCutReducedSearchResult {
+    bool has_result = false;
+    int value = 0;
+};
+
 [[nodiscard]] inline constexpr ProbCutCandidateContext empty_probcut_candidate_context() {
     return ProbCutCandidateContext{};
 }
@@ -89,6 +94,15 @@ struct ProbCutCandidateContext {
 [[nodiscard]] inline constexpr ProbCutCandidateContext select_probcut_candidate_context_from_flags(
     bool has_candidate_move, bool is_capture, bool is_noisy, bool is_promotion) {
     return classify_probcut_candidate(has_candidate_move, is_capture, is_noisy, is_promotion);
+}
+
+[[nodiscard]] inline constexpr ProbCutReducedSearchResult empty_probcut_reduced_search_result() {
+    return ProbCutReducedSearchResult{};
+}
+
+[[nodiscard]] inline constexpr ProbCutReducedSearchResult make_probcut_reduced_search_result(
+    bool has_result, int value) {
+    return ProbCutReducedSearchResult{has_result, value};
 }
 
 [[nodiscard]] inline constexpr bool selectivity_reverse_futility_is_enabled() {

@@ -2655,3 +2655,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-105 ProbCut Reduced-Search Result Context Foundation (Disabled / No Runtime Integration)
+
+- Added ProbCut reduced-search result context foundation with disabled/no-runtime behavior.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

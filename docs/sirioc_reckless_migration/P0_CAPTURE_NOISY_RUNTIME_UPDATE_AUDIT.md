@@ -411,3 +411,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime update path remains unchanged.
 - P0-104 adds ProbCut cutoff-decision helper infrastructure only.
 - No CaptureHistory or NoisyHistory scoring/update behavior was changed.
+
+## P0-105 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime update path remains unchanged.
+- P0-105 is ProbCut reduced-search result context infrastructure only.
+- No Capture/NoisyHistory scoring or runtime update behavior changed.
