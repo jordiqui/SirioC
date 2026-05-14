@@ -1104,6 +1104,36 @@ void test_probcut_candidate_selector_from_flags_matches_classifier() {
     }
 }
 
+void test_probcut_reduced_search_result_empty_helper_is_defaulted() {
+    const auto result = sirio::search_params::empty_probcut_reduced_search_result();
+    assert(!result.has_result);
+    assert(result.value == 0);
+}
+
+void test_probcut_reduced_search_result_make_helper_preserves_false_flag_and_value() {
+    const auto result = sirio::search_params::make_probcut_reduced_search_result(false, 321);
+    assert(!result.has_result);
+    assert(result.value == 321);
+}
+
+void test_probcut_reduced_search_result_make_helper_preserves_true_flag_and_value() {
+    const auto result = sirio::search_params::make_probcut_reduced_search_result(true, -77);
+    assert(result.has_result);
+    assert(result.value == -77);
+}
+
+void test_probcut_reduced_search_result_helpers_are_deterministic() {
+    const auto first_empty = sirio::search_params::empty_probcut_reduced_search_result();
+    const auto second_empty = sirio::search_params::empty_probcut_reduced_search_result();
+    assert(first_empty.has_result == second_empty.has_result);
+    assert(first_empty.value == second_empty.value);
+
+    const auto first_made = sirio::search_params::make_probcut_reduced_search_result(true, 444);
+    const auto second_made = sirio::search_params::make_probcut_reduced_search_result(true, 444);
+    assert(first_made.has_result == second_made.has_result);
+    assert(first_made.value == second_made.value);
+}
+
 void test_probcut_helper_rejects_empty_candidate_context_defaults() {
     const auto empty = sirio::search_params::empty_probcut_candidate_context();
     assert(!sirio::search_params::should_apply_probcut(
@@ -1848,6 +1878,10 @@ void run_history_tests() {
     test_probcut_candidate_selector_from_flags_explicit_promotion_candidate_is_preserved();
     test_probcut_candidate_selector_from_flags_preserves_all_flags();
     test_probcut_candidate_selector_from_flags_matches_classifier();
+    test_probcut_reduced_search_result_empty_helper_is_defaulted();
+    test_probcut_reduced_search_result_make_helper_preserves_false_flag_and_value();
+    test_probcut_reduced_search_result_make_helper_preserves_true_flag_and_value();
+    test_probcut_reduced_search_result_helpers_are_deterministic();
     test_probcut_helper_rejects_empty_candidate_context_defaults();
     test_probcut_helper_rejects_selected_empty_candidate_context_defaults();
     test_probcut_constants_are_deterministic_and_non_negative();
