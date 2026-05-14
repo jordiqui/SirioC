@@ -1149,6 +1149,31 @@ void test_probcut_reduced_depth_helper_is_deterministic_non_negative_and_clamped
     assert(clamped >= 0);
 }
 
+
+void test_probcut_cutoff_helper_matches_expected_threshold_semantics() {
+    constexpr int probcut_beta = 350;
+    assert(sirio::search_params::should_cutoff_probcut(probcut_beta, probcut_beta));
+    assert(sirio::search_params::should_cutoff_probcut(probcut_beta + 1, probcut_beta));
+    assert(!sirio::search_params::should_cutoff_probcut(probcut_beta - 1, probcut_beta));
+}
+
+void test_probcut_cutoff_helper_is_deterministic_and_side_effect_free() {
+    sirio::SearchHistory history;
+    history.record_probcut_probe();
+    history.record_probcut_empty_candidate_context();
+
+    const int probe_count_before = history.probcut_probe_count_for_tests();
+    const int empty_count_before = history.probcut_empty_candidate_context_count_for_tests();
+
+    const bool first = sirio::search_params::should_cutoff_probcut(512, 500);
+    const bool second = sirio::search_params::should_cutoff_probcut(512, 500);
+
+    assert(first);
+    assert(first == second);
+    assert(history.probcut_probe_count_for_tests() == probe_count_before);
+    assert(history.probcut_empty_candidate_context_count_for_tests() == empty_count_before);
+}
+
 void test_probcut_helper_returns_false_under_default_disabled_flag() {
     assert(!sirio::search_params::should_apply_probcut(6, 250, 600, false, false, false, true, true, false));
 }
@@ -1336,6 +1361,7 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_wiring_on
     assert(negamax_source.find("(void)probcut_beta;") != std::string::npos);
     assert(negamax_source.find("(void)probcut_depth;") != std::string::npos);
     assert(negamax_source.find("return probcut") == std::string::npos);
+    assert(negamax_source.find("should_cutoff_probcut(") == std::string::npos);
     assert(negamax_source.find("probcut_reduction") == std::string::npos);
     assert(qsearch_source.find("select_probcut_candidate_context(") == std::string::npos);
     assert(qsearch_source.find("should_apply_probcut(") == std::string::npos);
@@ -1344,6 +1370,7 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_wiring_on
     assert(qsearch_source.find("record_probcut_empty_candidate_context") == std::string::npos);
     assert(qsearch_source.find("probcut_beta_threshold(") == std::string::npos);
     assert(qsearch_source.find("probcut_reduced_depth(") == std::string::npos);
+    assert(qsearch_source.find("should_cutoff_probcut(") == std::string::npos);
     assert(negamax_source.find("_for_tests(") == std::string::npos);
 }
 
@@ -1826,6 +1853,8 @@ void run_history_tests() {
     test_probcut_constants_are_deterministic_and_non_negative();
     test_probcut_beta_threshold_helper_is_deterministic_and_matches_formula();
     test_probcut_reduced_depth_helper_is_deterministic_non_negative_and_clamped();
+    test_probcut_cutoff_helper_matches_expected_threshold_semantics();
+    test_probcut_cutoff_helper_is_deterministic_and_side_effect_free();
     test_probcut_helper_returns_false_under_default_disabled_flag();
     test_probcut_helper_guard_disables_in_check_pv_root_and_invalid_depth();
     test_probcut_helper_guard_disables_missing_or_invalid_candidate_move_context();

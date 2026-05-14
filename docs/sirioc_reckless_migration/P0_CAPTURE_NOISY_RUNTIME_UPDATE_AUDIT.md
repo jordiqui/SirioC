@@ -406,3 +406,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - P0-102 is ProbCut explicit false-flags runtime selector wiring only.
 - No Capture/NoisyHistory scoring change was made.
 - No Capture/NoisyHistory runtime update change was made.
+
+## 22) P0-104 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime update path remains unchanged.
+- P0-104 adds ProbCut cutoff-decision helper infrastructure only.
+- No CaptureHistory or NoisyHistory scoring/update behavior was changed.

@@ -620,3 +620,18 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Move Count Pruning P0-91 remains unchanged.
 - Singular extensions remain disabled.
 - No LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour changed.
+
+## 30) P0-104 ProbCut cutoff-decision helper foundation (disabled / no-runtime)
+- Added a pure ProbCut cutoff-decision helper in centralized search parameters for future reduced-search integration:
+  - `should_cutoff_probcut(reduced_search_value, probcut_beta)`
+  - semantics: `reduced_search_value >= probcut_beta`.
+- Helper is deterministic, side-effect free, and not wired into runtime search flow in this patch.
+- Runtime ProbCut selector path remains explicit-false flag based (`select_probcut_candidate_context_from_flags(false, false, false, false)`).
+- Runtime ProbCut candidate context remains empty/no-candidate under the current guarded probe path.
+- `selectivity_probcut_enabled` remains `false`.
+- No ProbCut search, no reduced-depth search call path, and no ProbCut return/cutoff scaffold was added.
+- Future reduced-search integration remains explicitly deferred.
+- Reverse futility (P0-83) remains unchanged.
+- Move Count Pruning (P0-91) remains unchanged.
+- Singular extensions remain disabled.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE runtime behavior changed.
