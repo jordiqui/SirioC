@@ -991,6 +991,15 @@ void test_probcut_candidate_selector_is_deterministic() {
     assert(first.is_promotion == second.is_promotion);
 }
 
+void test_probcut_candidate_selector_from_flags_false_matches_empty_context() {
+    const auto selected =
+        sirio::search_params::select_probcut_candidate_context_from_flags(false, false, false, false);
+    const auto empty = sirio::search_params::empty_probcut_candidate_context();
+    assert(selected.has_candidate_move == empty.has_candidate_move);
+    assert(selected.is_capture_or_noisy == empty.is_capture_or_noisy);
+    assert(selected.is_promotion == empty.is_promotion);
+}
+
 void test_probcut_candidate_classification_rejects_false_candidate_flags() {
     const auto classified = sirio::search_params::classify_probcut_candidate(false, false, false, false);
     assert(!classified.has_candidate_move);
@@ -1301,9 +1310,10 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_wiring_on
     const std::string qsearch_source = source.substr(qsearch_pos);
 
     assert(negamax_source.find("const bool probcut_probe = search_params::should_apply_probcut(") != std::string::npos);
-    assert(negamax_source.find("const auto probcut_candidate = search_params::select_probcut_candidate_context();") !=
+    assert(negamax_source.find("select_probcut_candidate_context_from_flags(false, false, false, false)") !=
            std::string::npos);
-    assert(negamax_source.find("select_probcut_candidate_context_from_flags(") == std::string::npos);
+    assert(negamax_source.find("const auto probcut_candidate = search_params::select_probcut_candidate_context();") ==
+           std::string::npos);
     assert(negamax_source.find("probcut_candidate.has_candidate_move") != std::string::npos);
     assert(negamax_source.find("probcut_candidate.is_capture_or_noisy") != std::string::npos);
     assert(negamax_source.find("probcut_candidate.is_promotion") != std::string::npos);
@@ -1786,6 +1796,7 @@ void run_history_tests() {
     test_probcut_candidate_context_helpers_are_deterministic();
     test_probcut_candidate_selector_returns_empty_default_context();
     test_probcut_candidate_selector_is_deterministic();
+    test_probcut_candidate_selector_from_flags_false_matches_empty_context();
     test_probcut_candidate_classification_rejects_false_candidate_flags();
     test_probcut_candidate_classification_explicit_quiet_candidate_is_not_tactical();
     test_probcut_candidate_classification_explicit_capture_candidate_is_tactical();

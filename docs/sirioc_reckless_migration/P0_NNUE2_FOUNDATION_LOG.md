@@ -2630,3 +2630,12 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-102 ProbCut Runtime Explicit-False Selector Wiring (Disabled / No-op)
+
+- ProbCut runtime selector is wired through explicit false flags in main negamax:
+  - `select_probcut_candidate_context_from_flags(false, false, false, false)`.
+- Behaviour remains disabled/no-op under current defaults.
+- No NNUE runtime behaviour changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
