@@ -695,3 +695,12 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Existing P0-109 guarded return scaffold remains unchanged and unreachable under defaults.
 - qsearch remains clean of ProbCut helper/probe/cutoff/request wiring.
 - Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.
+
+## P0-111 ProbCut Empty Reduced-Search Request Observability / No Runtime Invocation Contract
+- Added deterministic SearchHistory observability for empty ProbCut reduced-search request state via `record_probcut_empty_reduced_search_request()` and test counter accessor.
+- Main negamax guarded ProbCut block now records empty request only when `!probcut_request.has_request`.
+- Runtime ProbCut request remains explicit empty/no-request (`empty_probcut_reduced_search_request()`).
+- No non-empty request, no candidate selection, and no reduced-depth search invocation were added.
+- `selectivity_probcut_enabled` remains `false`; P0-109 guarded return scaffold remains unreachable under defaults.
+- qsearch remains clean of ProbCut helper/probe/request/cutoff wiring.
+- Reverse futility (P0-83), MCP (P0-91), CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.

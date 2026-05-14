@@ -1435,6 +1435,8 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_and_guard
            std::string::npos);
     assert(negamax_source.find("const auto probcut_request =") != std::string::npos);
     assert(negamax_source.find("search_params::empty_probcut_reduced_search_request()") != std::string::npos);
+    assert(negamax_source.find("if (!probcut_request.has_request)") != std::string::npos);
+    assert(negamax_source.find("context.history.record_probcut_empty_reduced_search_request();") != std::string::npos);
     assert(negamax_source.find("(void)probcut_request;") != std::string::npos);
     assert(negamax_source.find("(void)probcut_beta;") != std::string::npos);
     assert(negamax_source.find("(void)probcut_depth;") != std::string::npos);
@@ -1462,6 +1464,8 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_and_guard
     assert(qsearch_source.find("record_probcut_probe") == std::string::npos);
     assert(qsearch_source.find("record_probcut_empty_candidate_context") == std::string::npos);
     assert(qsearch_source.find("record_probcut_cutoff_decision") == std::string::npos);
+    assert(qsearch_source.find("record_probcut_empty_reduced_search_request") == std::string::npos);
+    assert(qsearch_source.find("empty_probcut_reduced_search_request") == std::string::npos);
     assert(qsearch_source.find("probcut_beta_threshold(") == std::string::npos);
     assert(qsearch_source.find("probcut_reduced_depth(") == std::string::npos);
     assert(qsearch_source.find("should_cutoff_probcut(") == std::string::npos);
