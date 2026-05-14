@@ -2614,3 +2614,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-100 ProbCut Candidate-Selection Interface Foundation (Disabled / No-op)
+
+- Added ProbCut candidate-selection interface foundation with disabled/no-op runtime behavior.
+- Added `select_probcut_candidate_context()` returning deterministic empty/no-candidate context.
+- No NNUE runtime behaviour changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
