@@ -666,3 +666,12 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - No ProbCut search, reduced-depth search execution, return, cutoff, or prune path was added.
 - qsearch remains free of ProbCut helper/probe wiring.
 - Reverse futility P0-83, MCP P0-91, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, NNUE, TT, MovePicker, and UCI behavior remain unchanged.
+
+## P0-108 ProbCut cutoff-decision observability (disabled / no-return contract)
+- Added deterministic main-negamax ProbCut cutoff-decision observability via `SearchHistory::record_probcut_cutoff_decision()` guarded by `if (probcut_cutoff)`.
+- `probcut_cutoff` remains computed only from empty/no-result reduced-search context (`probcut_result.has_result && should_cutoff_probcut(...)`).
+- No ProbCut return/cutoff/prune behavior was added.
+- No ProbCut search or reduced-depth search execution was added.
+- `selectivity_probcut_enabled` remains `false`.
+- qsearch remains clean of ProbCut helper/probe/cutoff-decision wiring.
+- Reverse futility (P0-83), MCP (P0-91), CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.
