@@ -675,3 +675,12 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - `selectivity_probcut_enabled` remains `false`.
 - qsearch remains clean of ProbCut helper/probe/cutoff-decision wiring.
 - Reverse futility (P0-83), MCP (P0-91), CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.
+
+## P0-109 ProbCut disabled cutoff return scaffold / empty-result no-behaviour contract
+- Added guarded future return scaffold only inside existing `if (probcut_cutoff)` in main negamax.
+- Guarded block keeps P0-108 observability (`record_probcut_cutoff_decision()`) and now returns `probcut_result.value`.
+- Under current defaults the return is unreachable (`selectivity_probcut_enabled = false`, no runtime probe, reduced result remains empty/no-result).
+- No ProbCut search/reduced-depth search and no candidate selection were added.
+- Runtime candidate context remains explicit empty/no-candidate.
+- qsearch remains clean of ProbCut helper/probe/cutoff wiring.
+- Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.

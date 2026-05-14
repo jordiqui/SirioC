@@ -2686,3 +2686,12 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - `selectivity_probcut_enabled` remains `false`; runtime behavior remains disabled/no-op.
 - qsearch remains clean of ProbCut helper/probe/cutoff-decision wiring.
 - Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.
+
+# P0-109 ProbCut Disabled Cutoff Return Scaffold / Empty Result No-Behaviour Contract
+- Added guarded future ProbCut return scaffold under `if (probcut_cutoff)` in main negamax.
+- The guarded block preserves P0-108 observability via `record_probcut_cutoff_decision()` and now includes `return probcut_result.value;`.
+- Return remains unreachable under current defaults: `selectivity_probcut_enabled = false`, guarded runtime probe path is false, and runtime reduced-search result remains empty/no-result (`has_result = false`).
+- No ProbCut search or reduced-depth search execution was added.
+- No candidate selection was added; runtime ProbCut candidate context remains empty/no-candidate.
+- qsearch remains clean of ProbCut helper/probe/cutoff wiring.
+- Reverse futility (P0-83), MCP (P0-91), CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.
