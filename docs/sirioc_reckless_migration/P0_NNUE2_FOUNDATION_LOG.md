@@ -2695,3 +2695,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No candidate selection was added; runtime ProbCut candidate context remains empty/no-candidate.
 - qsearch remains clean of ProbCut helper/probe/cutoff wiring.
 - Reverse futility (P0-83), MCP (P0-91), CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.
+
+# P0-110 ProbCut Reduced-Search Request Context Foundation / No Runtime Invocation Contract
+- Added `ProbCutReducedSearchRequest` plus deterministic empty/make helpers in centralized search parameters.
+- Runtime request in main negamax remains explicit empty/no-request and is discarded.
+- No ProbCut reduced-depth search invocation, no candidate selection, and no new runtime return/cutoff behavior were introduced.
+- `selectivity_probcut_enabled` remains `false`; existing P0-109 guarded return scaffold remains unreachable under defaults.
+- qsearch remains clean; NNUE runtime behavior remains unchanged.

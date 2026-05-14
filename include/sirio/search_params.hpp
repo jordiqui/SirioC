@@ -70,6 +70,12 @@ struct ProbCutReducedSearchResult {
     int value = 0;
 };
 
+struct ProbCutReducedSearchRequest {
+    bool has_request = false;
+    int beta = 0;
+    int depth = 0;
+};
+
 [[nodiscard]] inline constexpr ProbCutCandidateContext empty_probcut_candidate_context() {
     return ProbCutCandidateContext{};
 }
@@ -103,6 +109,15 @@ struct ProbCutReducedSearchResult {
 [[nodiscard]] inline constexpr ProbCutReducedSearchResult make_probcut_reduced_search_result(
     bool has_result, int value) {
     return ProbCutReducedSearchResult{has_result, value};
+}
+
+[[nodiscard]] inline constexpr ProbCutReducedSearchRequest empty_probcut_reduced_search_request() {
+    return ProbCutReducedSearchRequest{};
+}
+
+[[nodiscard]] inline constexpr ProbCutReducedSearchRequest make_probcut_reduced_search_request(
+    bool has_request, int beta, int depth) {
+    return ProbCutReducedSearchRequest{has_request, beta, depth};
 }
 
 [[nodiscard]] inline constexpr bool selectivity_reverse_futility_is_enabled() {
