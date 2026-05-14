@@ -1391,7 +1391,9 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_wiring_on
     assert(negamax_source.find("(void)probcut_beta;") != std::string::npos);
     assert(negamax_source.find("(void)probcut_depth;") != std::string::npos);
     assert(negamax_source.find("return probcut") == std::string::npos);
-    assert(negamax_source.find("should_cutoff_probcut(") == std::string::npos);
+    assert(negamax_source.find("should_cutoff_probcut(") != std::string::npos);
+    assert(negamax_source.find("probcut_result.has_result &&") != std::string::npos);
+    assert(negamax_source.find("(void)probcut_cutoff;") != std::string::npos);
     assert(negamax_source.find("probcut_reduction") == std::string::npos);
     assert(qsearch_source.find("select_probcut_candidate_context(") == std::string::npos);
     assert(qsearch_source.find("should_apply_probcut(") == std::string::npos);

@@ -423,3 +423,10 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Runtime reduced-search result remains empty/no-result.
 - `should_cutoff_probcut(...)` remains unwired from runtime.
 - No Capture/NoisyHistory scoring or runtime update behavior changed.
+
+## P0-107 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime update path remains unchanged.
+- P0-107 wires `should_cutoff_probcut(...)` only to an empty/no-result reduced-search context under guarded main negamax ProbCut block.
+- No return/cutoff/search/reduced-depth search behavior was added.
+- `selectivity_probcut_enabled` remains `false` and qsearch remains clean.
+- No Capture/NoisyHistory scoring or runtime update behavior changed.
