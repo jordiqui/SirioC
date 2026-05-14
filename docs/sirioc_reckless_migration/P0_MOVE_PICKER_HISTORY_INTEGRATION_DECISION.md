@@ -580,3 +580,16 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Move Count Pruning (P0-91) remains unchanged.
 - Singular extensions remain disabled.
 - No LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour changed in this step.
+
+## 17) P0-101 explicit-flags ProbCut selector foundation (runtime still no-op)
+- Added explicit-flags helper: `select_probcut_candidate_context_from_flags(...)`.
+- Helper delegates directly to `classify_probcut_candidate(...)` using already-classified booleans.
+- Runtime selector `select_probcut_candidate_context()` remains unchanged and still returns empty/no-candidate context.
+- No Board/Move/MovePicker/TT candidate extraction was added.
+- `selectivity_probcut_enabled` remains `false`.
+- No ProbCut search, reduced-depth search, return, or cutoff was added.
+- Future real runtime candidate extraction remains explicitly deferred.
+- Reverse futility P0-83 remains unchanged.
+- MCP P0-91 remains unchanged.
+- Singular extensions remain disabled.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed in this step.

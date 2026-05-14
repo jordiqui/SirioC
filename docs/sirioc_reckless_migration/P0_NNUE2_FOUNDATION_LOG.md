@@ -2622,3 +2622,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behaviour changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-101 ProbCut Explicit-Flags Selector Foundation (Disabled / No-op Runtime)
+
+- Added explicit-flags ProbCut selector foundation through `select_probcut_candidate_context_from_flags(...)`.
+- Current runtime behavior remains disabled/no-op (`selectivity_probcut_enabled = false`) and main runtime selector remains empty/no-candidate.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

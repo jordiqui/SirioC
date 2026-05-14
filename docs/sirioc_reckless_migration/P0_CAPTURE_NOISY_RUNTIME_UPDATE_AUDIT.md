@@ -390,3 +390,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime path remains unchanged.
 - P0-100 is ProbCut candidate-selection interface infrastructure only.
 - No Capture/NoisyHistory scoring or update behaviour changed.
+
+## 15) P0-101 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-101 adds ProbCut explicit-flags selector infrastructure only.
+- No Capture/NoisyHistory scoring or runtime update behavior changed.
