@@ -2647,3 +2647,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behaviour changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-104 ProbCut Cutoff Decision Helper Foundation (Disabled / No Runtime Integration)
+
+- Added deterministic ProbCut cutoff-decision helper contract in centralized search parameters.
+- Runtime behavior remains disabled/no-op for ProbCut in this patch.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

@@ -116,6 +116,10 @@ struct ProbCutCandidateContext {
     return reduced < 0 ? 0 : reduced;
 }
 
+[[nodiscard]] inline constexpr bool should_cutoff_probcut(int reduced_search_value, int probcut_beta) {
+    return reduced_search_value >= probcut_beta;
+}
+
 [[nodiscard]] inline constexpr int reverse_futility_margin(int depth, bool improving) {
     const int improving_reduction = improving ? reverse_futility_improving_margin_reduction : 0;
     const int raw_margin =
