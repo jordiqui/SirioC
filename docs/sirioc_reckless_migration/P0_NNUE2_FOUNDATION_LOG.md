@@ -2702,3 +2702,12 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No ProbCut reduced-depth search invocation, no candidate selection, and no new runtime return/cutoff behavior were introduced.
 - `selectivity_probcut_enabled` remains `false`; existing P0-109 guarded return scaffold remains unreachable under defaults.
 - qsearch remains clean; NNUE runtime behavior remains unchanged.
+
+## P0-111 ProbCut Empty Reduced-Search Request Observability / No Runtime Invocation Contract
+- Added deterministic SearchHistory observability for empty ProbCut reduced-search request state via `record_probcut_empty_reduced_search_request()` and test counter accessor.
+- Main negamax guarded ProbCut block now records empty request only when `!probcut_request.has_request`.
+- Runtime ProbCut request remains explicit empty/no-request (`empty_probcut_reduced_search_request()`).
+- No non-empty request, no candidate selection, and no reduced-depth search invocation were added.
+- `selectivity_probcut_enabled` remains `false`; P0-109 guarded return scaffold remains unreachable under defaults.
+- qsearch remains clean of ProbCut helper/probe/request/cutoff wiring.
+- Reverse futility (P0-83), MCP (P0-91), CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.

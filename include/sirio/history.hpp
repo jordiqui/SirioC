@@ -98,6 +98,7 @@ struct ProbCutRuntimeCounters {
     int probe_applied = 0;
     int empty_candidate_context_applied = 0;
     int cutoff_decision_applied = 0;
+    int empty_reduced_search_request_applied = 0;
 };
 
 class SearchHistory {
@@ -202,6 +203,8 @@ public:
     void record_probcut_empty_candidate_context();
     [[nodiscard]] int probcut_cutoff_decision_count_for_tests() const;
     void record_probcut_cutoff_decision();
+    [[nodiscard]] int probcut_empty_reduced_search_request_count_for_tests() const;
+    void record_probcut_empty_reduced_search_request();
     void reset_probcut_runtime_observability_for_tests();
 
 private:

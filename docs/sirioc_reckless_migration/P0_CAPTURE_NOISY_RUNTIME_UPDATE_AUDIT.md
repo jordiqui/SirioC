@@ -452,3 +452,12 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Main negamax runtime request remains explicit empty/no-request and discarded.
 - No reduced-depth search, no ProbCut candidate selection, and no capture/noisy runtime wiring changes were introduced.
 - Capture/NoisyHistory behaviour remains unchanged.
+
+## P0-111 ProbCut Empty Reduced-Search Request Observability / No Runtime Invocation Contract
+- Added deterministic SearchHistory observability for empty ProbCut reduced-search request state via `record_probcut_empty_reduced_search_request()` and test counter accessor.
+- Main negamax guarded ProbCut block now records empty request only when `!probcut_request.has_request`.
+- Runtime ProbCut request remains explicit empty/no-request (`empty_probcut_reduced_search_request()`).
+- No non-empty request, no candidate selection, and no reduced-depth search invocation were added.
+- `selectivity_probcut_enabled` remains `false`; P0-109 guarded return scaffold remains unreachable under defaults.
+- qsearch remains clean of ProbCut helper/probe/request/cutoff wiring.
+- Reverse futility (P0-83), MCP (P0-91), CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.
