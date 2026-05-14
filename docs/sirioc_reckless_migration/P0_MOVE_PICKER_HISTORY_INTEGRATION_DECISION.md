@@ -684,3 +684,14 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Runtime candidate context remains explicit empty/no-candidate.
 - qsearch remains clean of ProbCut helper/probe/cutoff wiring.
 - Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.
+
+## P0-110 ProbCut reduced-search request context foundation / no-runtime invocation contract
+- Added deterministic ProbCut reduced-search request context type and helper foundation.
+- Runtime request remains explicit empty/no-request (`empty_probcut_reduced_search_request()`) and is discarded.
+- No reduced-depth search invocation was added.
+- No candidate selection was added; runtime candidate context remains empty/no-candidate.
+- Runtime reduced-search result remains empty/no-result.
+- `selectivity_probcut_enabled` remains `false`.
+- Existing P0-109 guarded return scaffold remains unchanged and unreachable under defaults.
+- qsearch remains clean of ProbCut helper/probe/cutoff/request wiring.
+- Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.

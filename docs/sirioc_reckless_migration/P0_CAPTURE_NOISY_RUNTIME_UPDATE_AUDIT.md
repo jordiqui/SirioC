@@ -446,3 +446,9 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - No ProbCut search or reduced-depth search execution was added.
 - qsearch remains clean of ProbCut helper/probe/cutoff-decision wiring.
 - Capture/NoisyHistory behavior remains unchanged.
+
+## P0-110 note (capture/noisy runtime path unchanged)
+- P0-110 adds only a deterministic ProbCut reduced-search request context foundation in `search_params`.
+- Main negamax runtime request remains explicit empty/no-request and discarded.
+- No reduced-depth search, no ProbCut candidate selection, and no capture/noisy runtime wiring changes were introduced.
+- Capture/NoisyHistory behaviour remains unchanged.
