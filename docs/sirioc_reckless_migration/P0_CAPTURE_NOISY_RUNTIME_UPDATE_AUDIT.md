@@ -219,6 +219,11 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - P0-67 adds only read-only Capture/NoisyHistory consumption in MovePicker tactical/noisy scoring.
 - No new CaptureHistory runtime update site was introduced.
 
+## 15) P0-103 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-103 scope is ProbCut empty candidate-context observability only.
+- No Capture/NoisyHistory scoring or update behavior was changed.
+
 ## 15) P0-97 note (capture/noisy runtime path unchanged)
 - Capture/NoisyHistory runtime path remains unchanged.
 - P0-97 is ProbCut safety-predicate infrastructure only.

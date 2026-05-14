@@ -62,6 +62,14 @@
 - No evaluation backend topology changed.
 - No strength/Elo claim.
 
+# P0-103 ProbCut Empty Candidate-Context Observability (Disabled / No-op)
+
+- Added deterministic observability for runtime ProbCut empty candidate-context usage in main negamax.
+- Runtime ProbCut behavior remains disabled/no-op (`selectivity_probcut_enabled = false`).
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
+
 
 # P0-46 Search P0 Re-Entry Baseline
 

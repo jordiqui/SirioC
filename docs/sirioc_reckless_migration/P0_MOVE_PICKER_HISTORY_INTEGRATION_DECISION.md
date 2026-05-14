@@ -258,6 +258,20 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Zero-state MovePicker ordering contract remains protected.
 
 ## 16) P0-67 capture/noisy read-only tactical scoring consolidation
+
+## 17) P0-103 ProbCut empty candidate-context observability (disabled / no-op)
+- Added deterministic observability for the runtime ProbCut empty candidate-context path in main negamax.
+- Runtime ProbCut selector remains explicit false-flags:
+  - `select_probcut_candidate_context_from_flags(false, false, false, false)`.
+- Runtime ProbCut candidate context remains empty/no-candidate.
+- No Board/Move/MovePicker/TT candidate extraction was added.
+- `selectivity_probcut_enabled` remains `false`.
+- No ProbCut search, reduced-depth search, return, or cutoff was added.
+- Future real runtime candidate extraction remains deferred.
+- Reverse futility P0-83 remains unchanged.
+- Move Count Pruning P0-91 remains unchanged.
+- Singular extensions remain disabled.
+- No LMR, qsearch, MovePicker, TT, UCI, or NNUE behaviour changed.
 - CaptureHistory/NoisyHistory consumption is now centralized via a read-only tactical MovePicker scoring helper.
 - The tactical/noisy contribution is applied only in tactical MovePicker paths (captures/en-passant/promotions).
 - Zero-state tactical/noisy ordering remains unchanged under deterministic snapshot coverage.
