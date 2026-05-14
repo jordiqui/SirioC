@@ -2662,3 +2662,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-106 ProbCut Empty Reduced-Result Runtime Scaffold (Disabled / No Cutoff Contract)
+- Added guarded main-negamax runtime scaffold that constructs `empty_probcut_reduced_search_result()` and explicitly discards it.
+- Runtime reduced-search result remains empty/no-result.
+- `should_cutoff_probcut(...)` remains pure and unwired into runtime search.
+- ProbCut remains disabled/no-op under default selectivity state (`selectivity_probcut_enabled = false`).
+- No ProbCut reduced-depth search execution, return path, or cutoff behavior was introduced.
+- No LMR, qsearch, MovePicker, TT, UCI, NNUE, reverse futility, or MCP behavior changed in this step.

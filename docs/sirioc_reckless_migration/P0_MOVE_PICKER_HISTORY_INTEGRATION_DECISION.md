@@ -648,3 +648,11 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - Move Count Pruning P0-91 remains unchanged.
 - Singular extensions remain disabled.
 - No LMR, qsearch, MovePicker, TT, UCI, or NNUE behavior changed.
+
+## P0-106 ProbCut empty reduced-result runtime scaffold / no cutoff contract
+- Added an empty ProbCut reduced-result runtime scaffold in the existing guarded main-negamax ProbCut block.
+- Runtime reduced-search result remains explicit empty/no-result (`empty_probcut_reduced_search_result()`).
+- `should_cutoff_probcut(...)` remains unwired from runtime search.
+- `selectivity_probcut_enabled` remains `false`.
+- No ProbCut search, reduced-depth search, return path, or cutoff path was added.
+- Future reduced-search integration remains explicitly deferred.
