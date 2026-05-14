@@ -1305,6 +1305,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
 
         if (probcut_cutoff) {
             context.history.record_probcut_cutoff_decision();
+            return probcut_result.value;
         }
 
         (void)probcut_beta;
