@@ -1274,6 +1274,15 @@ void test_probcut_empty_candidate_context_observability_counter_lifecycle() {
     assert(history.probcut_empty_candidate_context_count_for_tests() == 0);
 }
 
+void test_probcut_cutoff_decision_observability_counter_lifecycle() {
+    sirio::SearchHistory history;
+    assert(history.probcut_cutoff_decision_count_for_tests() == 0);
+    history.record_probcut_cutoff_decision();
+    assert(history.probcut_cutoff_decision_count_for_tests() == 1);
+    history.clear();
+    assert(history.probcut_cutoff_decision_count_for_tests() == 0);
+}
+
 void test_search_main_negamax_has_guarded_reverse_futility_return_scaffold_wiring() {
     const std::string source = load_search_source_for_tests();
     assert(!source.empty());
@@ -1393,13 +1402,22 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_wiring_on
     assert(negamax_source.find("return probcut") == std::string::npos);
     assert(negamax_source.find("should_cutoff_probcut(") != std::string::npos);
     assert(negamax_source.find("probcut_result.has_result &&") != std::string::npos);
-    assert(negamax_source.find("(void)probcut_cutoff;") != std::string::npos);
+    assert(negamax_source.find("if (probcut_cutoff)") != std::string::npos);
+    assert(negamax_source.find("context.history.record_probcut_cutoff_decision();") != std::string::npos);
+    const std::size_t cutoff_guard_pos = negamax_source.find("if (probcut_cutoff)");
+    assert(cutoff_guard_pos != std::string::npos);
+    const std::size_t cutoff_record_pos = negamax_source.find("context.history.record_probcut_cutoff_decision();", cutoff_guard_pos);
+    assert(cutoff_record_pos != std::string::npos);
+    const std::size_t pre_guard_cutoff_record_pos = negamax_source.rfind("context.history.record_probcut_cutoff_decision();", cutoff_guard_pos);
+    assert(pre_guard_cutoff_record_pos == std::string::npos);
+    assert(negamax_source.find("return probcut") == std::string::npos);
     assert(negamax_source.find("probcut_reduction") == std::string::npos);
     assert(qsearch_source.find("select_probcut_candidate_context(") == std::string::npos);
     assert(qsearch_source.find("should_apply_probcut(") == std::string::npos);
     assert(qsearch_source.find("probcut_probe") == std::string::npos);
     assert(qsearch_source.find("record_probcut_probe") == std::string::npos);
     assert(qsearch_source.find("record_probcut_empty_candidate_context") == std::string::npos);
+    assert(qsearch_source.find("record_probcut_cutoff_decision") == std::string::npos);
     assert(qsearch_source.find("probcut_beta_threshold(") == std::string::npos);
     assert(qsearch_source.find("probcut_reduced_depth(") == std::string::npos);
     assert(qsearch_source.find("should_cutoff_probcut(") == std::string::npos);
@@ -1899,6 +1917,7 @@ void run_history_tests() {
     test_move_count_pruning_continue_observability_counter_lifecycle();
     test_probcut_probe_observability_counter_lifecycle();
     test_probcut_empty_candidate_context_observability_counter_lifecycle();
+    test_probcut_cutoff_decision_observability_counter_lifecycle();
     test_search_main_negamax_has_guarded_reverse_futility_return_scaffold_wiring();
     test_search_qsearch_has_no_reverse_futility_pruning_wiring();
     test_search_reverse_futility_return_is_guarded_and_localized();

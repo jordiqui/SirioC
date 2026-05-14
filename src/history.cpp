@@ -423,6 +423,12 @@ int SearchHistory::probcut_empty_candidate_context_count_for_tests() const {
 void SearchHistory::record_probcut_empty_candidate_context() {
     ++probcut_runtime_counters_.empty_candidate_context_applied;
 }
+int SearchHistory::probcut_cutoff_decision_count_for_tests() const {
+    return probcut_runtime_counters_.cutoff_decision_applied;
+}
+void SearchHistory::record_probcut_cutoff_decision() {
+    ++probcut_runtime_counters_.cutoff_decision_applied;
+}
 void SearchHistory::reset_probcut_runtime_observability_for_tests() {
     probcut_runtime_counters_ = {};
 }
