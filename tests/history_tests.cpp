@@ -1376,6 +1376,14 @@ void test_probcut_candidate_source_none_observability_counter_lifecycle() {
     history.clear();
     assert(history.probcut_candidate_source_none_count_for_tests() == 0);
 }
+void test_probcut_candidate_source_explicit_flags_observability_counter_lifecycle() {
+    sirio::SearchHistory history;
+    assert(history.probcut_candidate_source_explicit_flags_count_for_tests() == 0);
+    history.record_probcut_candidate_source_explicit_flags();
+    assert(history.probcut_candidate_source_explicit_flags_count_for_tests() == 1);
+    history.clear();
+    assert(history.probcut_candidate_source_explicit_flags_count_for_tests() == 0);
+}
 void test_probcut_empty_candidate_context_observability_counter_lifecycle() {
     sirio::SearchHistory history;
     assert(history.probcut_empty_candidate_context_count_for_tests() == 0);
@@ -1501,9 +1509,11 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_and_guard
     assert(negamax_source.find("const bool probcut_candidate_is_promotion = false;") != std::string::npos);
     assert(negamax_source.find("select_probcut_candidate_context_from_source(\n            probcut_candidate_source,\n            probcut_has_candidate_move,\n            probcut_candidate_is_capture,\n            probcut_candidate_is_noisy,\n            probcut_candidate_is_promotion)") !=
            std::string::npos);
-    assert(negamax_source.find("if (probcut_candidate_source == search_params::ProbCutCandidateSource::None)") ==
+    assert(negamax_source.find("if (probcut_candidate_source == search_params::ProbCutCandidateSource::ExplicitFlags)") !=
            std::string::npos);
     assert(negamax_source.find("context.history.record_probcut_candidate_source_none();") == std::string::npos);
+    assert(negamax_source.find("context.history.record_probcut_candidate_source_explicit_flags();") !=
+           std::string::npos);
     assert(negamax_source.find("select_probcut_candidate_context_from_source(false, false, false, false, false)") ==
            std::string::npos);
     assert(negamax_source.find("if (!probcut_candidate.has_candidate_move)") != std::string::npos);
@@ -2067,6 +2077,7 @@ void run_history_tests() {
     test_move_count_pruning_continue_observability_counter_lifecycle();
     test_probcut_probe_observability_counter_lifecycle();
     test_probcut_candidate_source_none_observability_counter_lifecycle();
+    test_probcut_candidate_source_explicit_flags_observability_counter_lifecycle();
     test_probcut_empty_candidate_context_observability_counter_lifecycle();
     test_probcut_cutoff_decision_observability_counter_lifecycle();
     test_search_main_negamax_has_guarded_reverse_futility_return_scaffold_wiring();

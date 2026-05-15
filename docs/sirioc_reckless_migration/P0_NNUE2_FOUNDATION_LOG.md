@@ -2764,3 +2764,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-119 ProbCut ExplicitFlags Source Observability (Disabled / Empty Candidate Contract)
+
+- Added ProbCut `ExplicitFlags` source observability in SearchHistory with runtime empty/no-candidate behavior preserved.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
