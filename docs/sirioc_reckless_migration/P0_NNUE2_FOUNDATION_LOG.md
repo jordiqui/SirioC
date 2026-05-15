@@ -2843,3 +2843,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behaviour changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-130 ProbCut eligible-candidate observability
+
+- ProbCut eligible-candidate observability added with empty/ineligible runtime behaviour.
+- No NNUE runtime behaviour changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

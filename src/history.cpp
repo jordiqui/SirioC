@@ -456,6 +456,12 @@ void SearchHistory::record_probcut_non_empty_candidate_flags_probe() {
 int SearchHistory::probcut_ineligible_candidate_count_for_tests() const {
     return probcut_runtime_counters_.ineligible_candidate_applied;
 }
+int SearchHistory::probcut_eligible_candidate_count_for_tests() const {
+    return probcut_runtime_counters_.eligible_candidate_applied;
+}
+void SearchHistory::record_probcut_eligible_candidate() {
+    ++probcut_runtime_counters_.eligible_candidate_applied;
+}
 void SearchHistory::record_probcut_ineligible_candidate() {
     ++probcut_runtime_counters_.ineligible_candidate_applied;
 }

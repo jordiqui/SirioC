@@ -954,3 +954,19 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - `selectivity_probcut_enabled` remains false.
 - qsearch remains clean.
 - Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, NNUE unchanged.
+
+## P0-130 ProbCut eligible-candidate observability (empty runtime contract preserved)
+- Added ProbCut eligible-candidate observability in main negamax.
+- Current runtime candidate remains ineligible because all placeholder flags remain false.
+- Runtime source remains `ProbCutCandidateSource::ExplicitFlags`.
+- Runtime candidate remains empty/no-candidate.
+- Runtime eligibility remains false.
+- Runtime request remains empty/no-request.
+- Eligible-candidate recorder is present but unreachable under current runtime.
+- Ineligible-candidate observability remains intact.
+- No real candidate extraction added.
+- No reduced-search invocation added.
+- No candidate selection added.
+- `selectivity_probcut_enabled` remains false.
+- qsearch remains clean.
+- Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, NNUE unchanged.
