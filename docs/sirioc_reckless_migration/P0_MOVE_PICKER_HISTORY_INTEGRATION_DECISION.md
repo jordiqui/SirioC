@@ -746,3 +746,15 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - `selectivity_probcut_enabled` remains false.
 - qsearch remains clean.
 - Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, NNUE unchanged.
+
+## P0-116 ProbCut candidate-source authority (runtime None-only)
+- Added explicit ProbCut candidate-source authority surface (`ProbCutCandidateSource`) for deterministic source auditing.
+- Runtime main-negamax source is explicitly `ProbCutCandidateSource::None`.
+- Runtime candidate context remains empty/no-candidate.
+- Runtime request remains empty/no-request.
+- No real candidate extraction added (no Board/Move/MovePicker/TT/generated-capture sourcing).
+- No reduced-search invocation added.
+- No candidate selection behavior added beyond source-authority routing helper.
+- `selectivity_probcut_enabled` remains false.
+- qsearch remains clean (no ProbCut source/candidate/request/cutoff helper wiring).
+- Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE are unchanged in behavior.
