@@ -1558,6 +1558,15 @@ void test_probcut_empty_candidate_flags_observability_counter_lifecycle() {
     history.clear();
     assert(history.probcut_empty_candidate_flags_count_for_tests() == 0);
 }
+void test_probcut_runtime_placeholder_flags_empty_observability_counter_lifecycle() {
+    sirio::SearchHistory history;
+    assert(history.probcut_runtime_placeholder_flags_empty_count_for_tests() == 0);
+    history.record_probcut_runtime_placeholder_flags_empty();
+    assert(history.probcut_runtime_placeholder_flags_empty_count_for_tests() == 1);
+    history.clear();
+    assert(history.probcut_runtime_placeholder_flags_empty_count_for_tests() == 0);
+}
+
 void test_probcut_non_empty_candidate_flags_probe_observability_counter_lifecycle() {
     sirio::SearchHistory history;
     assert(history.probcut_non_empty_candidate_flags_probe_count_for_tests() == 0);
@@ -1687,6 +1696,8 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_and_guard
     assert(negamax_source.find("const auto probcut_candidate_source =") != std::string::npos);
     assert(negamax_source.find("search_params::ProbCutCandidateSource::ExplicitFlags;") != std::string::npos);
     assert(negamax_source.find("const auto probcut_candidate_flags =") != std::string::npos);
+    assert(negamax_source.find("if (!probcut_runtime_has_candidate_move &&\n        !probcut_runtime_candidate_is_capture &&\n        !probcut_runtime_candidate_is_noisy &&\n        !probcut_runtime_candidate_is_promotion)") != std::string::npos);
+    assert(negamax_source.find("context.history.record_probcut_runtime_placeholder_flags_empty();") != std::string::npos);
     assert(negamax_source.find("const bool probcut_runtime_has_candidate_move = false;") != std::string::npos);
     assert(negamax_source.find("const bool probcut_runtime_candidate_is_capture = false;") != std::string::npos);
     assert(negamax_source.find("const bool probcut_runtime_candidate_is_noisy = false;") != std::string::npos);
@@ -2308,6 +2319,7 @@ void run_history_tests() {
     test_probcut_candidate_source_explicit_flags_observability_counter_lifecycle();
     test_probcut_empty_candidate_context_observability_counter_lifecycle();
     test_probcut_empty_candidate_flags_observability_counter_lifecycle();
+    test_probcut_runtime_placeholder_flags_empty_observability_counter_lifecycle();
     test_probcut_non_empty_candidate_flags_probe_observability_counter_lifecycle();
     test_probcut_ineligible_candidate_observability_counter_lifecycle();
     test_probcut_cutoff_decision_observability_counter_lifecycle();

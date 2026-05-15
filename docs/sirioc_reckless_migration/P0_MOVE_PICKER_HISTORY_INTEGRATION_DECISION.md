@@ -938,3 +938,19 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - `selectivity_probcut_enabled` remains false.
 - qsearch remains clean (no ProbCut runtime wiring added).
 - Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged in behavior.
+
+## P0-129 ProbCut Runtime Placeholder Flags Observability / Empty Runtime Contract
+- Added deterministic SearchHistory observability for all-false runtime ProbCut placeholder flags via `record_probcut_runtime_placeholder_flags_empty()` and `probcut_runtime_placeholder_flags_empty_count_for_tests()`.
+- All runtime placeholder variables remain explicitly `false`.
+- Runtime source remains `ProbCutCandidateSource::ExplicitFlags`.
+- Runtime candidate remains empty/no-candidate.
+- Runtime eligibility remains false.
+- Runtime request remains empty/no-request.
+- Empty candidate flags observability remains intact.
+- Non-empty candidate flags probe remains false and explicitly discarded.
+- No real runtime candidate extraction added.
+- No reduced-search invocation added.
+- No candidate selection added.
+- `selectivity_probcut_enabled` remains false.
+- qsearch remains clean.
+- Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, NNUE unchanged.

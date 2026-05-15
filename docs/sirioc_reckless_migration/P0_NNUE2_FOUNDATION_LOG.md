@@ -2837,3 +2837,9 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behaviour changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-129 ProbCut Runtime Placeholder Flags Observability / Empty Runtime Contract
+- ProbCut runtime placeholder-flags observability added with empty/no-candidate runtime behaviour.
+- No NNUE runtime behaviour changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
