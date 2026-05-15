@@ -466,3 +466,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime path remains unchanged.
 - P0-112 adds ProbCut reduced-search request-builder infrastructure only.
 - No Capture/NoisyHistory scoring or runtime update behavior was changed.
+
+## P0-113 note
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-113 scope is ProbCut request-builder empty runtime wiring only.
+- No Capture/NoisyHistory scoring or update behavior changed.
