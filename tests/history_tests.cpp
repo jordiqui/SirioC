@@ -1170,6 +1170,44 @@ void test_probcut_reduced_search_request_helpers_are_deterministic() {
     assert(first_made.depth == second_made.depth);
 }
 
+void test_probcut_reduced_search_request_builder_returns_empty_without_candidate() {
+    const auto request = sirio::search_params::make_probcut_reduced_search_request_from_parameters(false, 450, 3);
+    assert(!request.has_request);
+    assert(request.beta == 0);
+    assert(request.depth == 0);
+}
+
+void test_probcut_reduced_search_request_builder_returns_empty_for_zero_depth() {
+    const auto request = sirio::search_params::make_probcut_reduced_search_request_from_parameters(true, 450, 0);
+    assert(!request.has_request);
+    assert(request.beta == 0);
+    assert(request.depth == 0);
+}
+
+void test_probcut_reduced_search_request_builder_returns_empty_for_negative_depth() {
+    const auto request = sirio::search_params::make_probcut_reduced_search_request_from_parameters(true, 450, -2);
+    assert(!request.has_request);
+    assert(request.beta == 0);
+    assert(request.depth == 0);
+}
+
+void test_probcut_reduced_search_request_builder_returns_non_empty_for_positive_depth() {
+    const auto request = sirio::search_params::make_probcut_reduced_search_request_from_parameters(true, 450, 2);
+    assert(request.has_request);
+    assert(request.beta == 450);
+    assert(request.depth == 2);
+}
+
+void test_probcut_reduced_search_request_builder_is_deterministic() {
+    const auto first =
+        sirio::search_params::make_probcut_reduced_search_request_from_parameters(true, -220, 4);
+    const auto second =
+        sirio::search_params::make_probcut_reduced_search_request_from_parameters(true, -220, 4);
+    assert(first.has_request == second.has_request);
+    assert(first.beta == second.beta);
+    assert(first.depth == second.depth);
+}
+
 void test_probcut_helper_rejects_empty_candidate_context_defaults() {
     const auto empty = sirio::search_params::empty_probcut_candidate_context();
     assert(!sirio::search_params::should_apply_probcut(
@@ -1435,6 +1473,7 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_and_guard
            std::string::npos);
     assert(negamax_source.find("const auto probcut_request =") != std::string::npos);
     assert(negamax_source.find("search_params::empty_probcut_reduced_search_request()") != std::string::npos);
+    assert(negamax_source.find("make_probcut_reduced_search_request_from_parameters(") == std::string::npos);
     assert(negamax_source.find("if (!probcut_request.has_request)") != std::string::npos);
     assert(negamax_source.find("context.history.record_probcut_empty_reduced_search_request();") != std::string::npos);
     assert(negamax_source.find("(void)probcut_request;") != std::string::npos);
@@ -1466,6 +1505,7 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_and_guard
     assert(qsearch_source.find("record_probcut_cutoff_decision") == std::string::npos);
     assert(qsearch_source.find("record_probcut_empty_reduced_search_request") == std::string::npos);
     assert(qsearch_source.find("empty_probcut_reduced_search_request") == std::string::npos);
+    assert(qsearch_source.find("make_probcut_reduced_search_request_from_parameters(") == std::string::npos);
     assert(qsearch_source.find("probcut_beta_threshold(") == std::string::npos);
     assert(qsearch_source.find("probcut_reduced_depth(") == std::string::npos);
     assert(qsearch_source.find("should_cutoff_probcut(") == std::string::npos);
@@ -1954,6 +1994,11 @@ void run_history_tests() {
     test_probcut_reduced_search_request_make_helper_preserves_false_flag_and_fields();
     test_probcut_reduced_search_request_make_helper_preserves_true_flag_and_fields();
     test_probcut_reduced_search_request_helpers_are_deterministic();
+    test_probcut_reduced_search_request_builder_returns_empty_without_candidate();
+    test_probcut_reduced_search_request_builder_returns_empty_for_zero_depth();
+    test_probcut_reduced_search_request_builder_returns_empty_for_negative_depth();
+    test_probcut_reduced_search_request_builder_returns_non_empty_for_positive_depth();
+    test_probcut_reduced_search_request_builder_is_deterministic();
     test_probcut_helper_rejects_empty_candidate_context_defaults();
     test_probcut_helper_rejects_selected_empty_candidate_context_defaults();
     test_probcut_constants_are_deterministic_and_non_negative();

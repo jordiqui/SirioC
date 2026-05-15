@@ -461,3 +461,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - `selectivity_probcut_enabled` remains `false`; P0-109 guarded return scaffold remains unreachable under defaults.
 - qsearch remains clean of ProbCut helper/probe/request/cutoff wiring.
 - Reverse futility (P0-83), MCP (P0-91), CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.
+
+## 16) P0-112 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-112 adds ProbCut reduced-search request-builder infrastructure only.
+- No Capture/NoisyHistory scoring or runtime update behavior was changed.
