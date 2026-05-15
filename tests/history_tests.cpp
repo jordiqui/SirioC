@@ -1456,7 +1456,13 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_and_guard
     const std::string qsearch_source = source.substr(qsearch_pos);
 
     assert(negamax_source.find("const bool probcut_probe = search_params::should_apply_probcut(") != std::string::npos);
-    assert(negamax_source.find("select_probcut_candidate_context_from_flags(false, false, false, false)") !=
+    assert(negamax_source.find("const bool probcut_has_candidate_move = false;") != std::string::npos);
+    assert(negamax_source.find("const bool probcut_candidate_is_capture = false;") != std::string::npos);
+    assert(negamax_source.find("const bool probcut_candidate_is_noisy = false;") != std::string::npos);
+    assert(negamax_source.find("const bool probcut_candidate_is_promotion = false;") != std::string::npos);
+    assert(negamax_source.find("select_probcut_candidate_context_from_flags(\n            probcut_has_candidate_move,\n            probcut_candidate_is_capture,\n            probcut_candidate_is_noisy,\n            probcut_candidate_is_promotion)") !=
+           std::string::npos);
+    assert(negamax_source.find("select_probcut_candidate_context_from_flags(false, false, false, false)") ==
            std::string::npos);
     assert(negamax_source.find("if (!probcut_candidate.has_candidate_move)") != std::string::npos);
     assert(negamax_source.find("context.history.record_probcut_empty_candidate_context();") != std::string::npos);

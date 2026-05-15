@@ -734,3 +734,15 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - `selectivity_probcut_enabled` remains `false`.
 - `qsearch` remains clean (no ProbCut helper/recorder/request wiring).
 - Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, NNUE remain unchanged in this step.
+
+## P0-115 ProbCut runtime candidate placeholder variables (disabled / no-op)
+- Runtime ProbCut candidate selector now uses named local placeholder variables in main negamax.
+- All placeholder variables remain false.
+- Runtime candidate remains empty/no-candidate.
+- Runtime request remains empty/no-request.
+- No real candidate extraction added.
+- No reduced-search invocation added.
+- No candidate selection added.
+- `selectivity_probcut_enabled` remains false.
+- qsearch remains clean.
+- Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, NNUE unchanged.
