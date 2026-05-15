@@ -1292,6 +1292,12 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
     const bool probcut_runtime_candidate_is_capture = false;
     const bool probcut_runtime_candidate_is_noisy = false;
     const bool probcut_runtime_candidate_is_promotion = false;
+    if (!probcut_runtime_has_candidate_move &&
+        !probcut_runtime_candidate_is_capture &&
+        !probcut_runtime_candidate_is_noisy &&
+        !probcut_runtime_candidate_is_promotion) {
+        context.history.record_probcut_runtime_placeholder_flags_empty();
+    }
     const auto probcut_candidate_flags =
         search_params::make_probcut_candidate_flags(
             probcut_runtime_has_candidate_move,
