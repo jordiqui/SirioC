@@ -1289,7 +1289,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
         context.history.record_probcut_candidate_source_explicit_flags();
     }
     const auto probcut_candidate_flags =
-        search_params::empty_probcut_candidate_flags();
+        search_params::make_probcut_candidate_flags(false, false, false, false);
     const bool probcut_candidate_flags_non_empty =
         search_params::probcut_candidate_flags_are_non_empty(probcut_candidate_flags);
     if (probcut_candidate_flags_non_empty) {

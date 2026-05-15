@@ -1687,7 +1687,8 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_and_guard
     assert(negamax_source.find("const auto probcut_candidate_source =") != std::string::npos);
     assert(negamax_source.find("search_params::ProbCutCandidateSource::ExplicitFlags;") != std::string::npos);
     assert(negamax_source.find("const auto probcut_candidate_flags =") != std::string::npos);
-    assert(negamax_source.find("search_params::empty_probcut_candidate_flags()") != std::string::npos);
+    assert(negamax_source.find("search_params::make_probcut_candidate_flags(false, false, false, false)") != std::string::npos);
+    assert(negamax_source.find("search_params::empty_probcut_candidate_flags()") == std::string::npos);
     assert(negamax_source.find("const bool probcut_candidate_flags_non_empty =") != std::string::npos);
     assert(negamax_source.find("search_params::probcut_candidate_flags_are_non_empty(probcut_candidate_flags);") != std::string::npos);
     assert(negamax_source.find("if (probcut_candidate_flags_non_empty)") != std::string::npos);
