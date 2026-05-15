@@ -2726,3 +2726,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-114 ProbCut Request Builder Candidate-Gate Wiring (Disabled / No-op Runtime)
+
+- Runtime ProbCut reduced-search request builder now uses the runtime candidate gate (`probcut_candidate.has_candidate_move`) while candidate context remains empty/no-candidate.
+- Runtime behavior remains disabled/no-runtime-search for ProbCut (no non-empty runtime reduced-search request introduced).
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
