@@ -2801,3 +2801,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behaviour changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-124 ProbCut Candidate-Flags Empty/Non-Empty Helper Foundation (Disabled / No-op)
+
+- Added ProbCut candidate-flags helper foundation (empty/non-empty predicates) with empty/no-candidate runtime behavior retained.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

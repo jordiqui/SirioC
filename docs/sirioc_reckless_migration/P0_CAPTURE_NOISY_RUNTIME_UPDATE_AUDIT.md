@@ -522,3 +522,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime path remains unchanged.
 - P0-123 is ProbCut empty candidate-flags observability only.
 - No Capture/NoisyHistory scoring or update change.
+
+## 18) P0-124 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-124 is ProbCut candidate-flags helper infrastructure only.
+- No Capture/NoisyHistory scoring or update behavior changed.

@@ -118,6 +118,17 @@ struct ProbCutReducedSearchRequest {
     return ProbCutCandidateFlags{};
 }
 
+[[nodiscard]] inline constexpr bool probcut_candidate_flags_are_empty(
+    const ProbCutCandidateFlags& flags) {
+    return !flags.has_candidate_move && !flags.is_capture && !flags.is_noisy &&
+           !flags.is_promotion;
+}
+
+[[nodiscard]] inline constexpr bool probcut_candidate_flags_are_non_empty(
+    const ProbCutCandidateFlags& flags) {
+    return !probcut_candidate_flags_are_empty(flags);
+}
+
 [[nodiscard]] inline constexpr ProbCutCandidateFlags make_probcut_candidate_flags(
     bool has_candidate_move, bool is_capture, bool is_noisy, bool is_promotion) {
     return ProbCutCandidateFlags{has_candidate_move, is_capture, is_noisy, is_promotion};
