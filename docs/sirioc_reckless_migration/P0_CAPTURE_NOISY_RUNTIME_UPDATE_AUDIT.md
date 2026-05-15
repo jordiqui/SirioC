@@ -542,3 +542,9 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime path remains unchanged.
 - P0-127 is ProbCut explicit false candidate-flags builder wiring only.
 - No Capture/NoisyHistory scoring or update change.
+
+## P0-128 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-128 is limited to ProbCut runtime placeholder-flag wiring in main negamax.
+- No Capture/NoisyHistory scoring change.
+- No Capture/NoisyHistory runtime update policy change.
