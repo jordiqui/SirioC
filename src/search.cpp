@@ -1290,10 +1290,10 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
     }
     const auto probcut_candidate_flags =
         search_params::empty_probcut_candidate_flags();
-    if (!probcut_candidate_flags.has_candidate_move &&
-        !probcut_candidate_flags.is_capture &&
-        !probcut_candidate_flags.is_noisy &&
-        !probcut_candidate_flags.is_promotion) {
+    const bool probcut_candidate_flags_non_empty =
+        search_params::probcut_candidate_flags_are_non_empty(probcut_candidate_flags);
+    (void)probcut_candidate_flags_non_empty;
+    if (search_params::probcut_candidate_flags_are_empty(probcut_candidate_flags)) {
         context.history.record_probcut_empty_candidate_flags();
     }
     const auto probcut_candidate =

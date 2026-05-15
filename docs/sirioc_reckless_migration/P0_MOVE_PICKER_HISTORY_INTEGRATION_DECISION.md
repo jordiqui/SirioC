@@ -869,3 +869,19 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - `selectivity_probcut_enabled` remains false.
 - qsearch remains clean of ProbCut helper/recorder/source/eligibility/request/cutoff wiring.
 - Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, NNUE remain unchanged.
+
+## P0-125 runtime candidate-flags non-empty probe (no-op)
+- ProbCut runtime candidate-flags non-empty probe added.
+- Probe is computed from empty runtime flags and explicitly discarded.
+- Runtime still uses empty candidate flags.
+- Runtime source remains `ProbCutCandidateSource::ExplicitFlags`.
+- Runtime candidate remains empty/no-candidate.
+- Runtime eligibility remains false.
+- Runtime request remains empty/no-request.
+- Probe is not used as request-builder gate.
+- No real candidate extraction added.
+- No reduced-search invocation added.
+- No candidate selection added.
+- `selectivity_probcut_enabled` remains false.
+- qsearch remains clean.
+- Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, NNUE unchanged.
