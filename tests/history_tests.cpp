@@ -1020,6 +1020,90 @@ void test_probcut_candidate_selector_from_source_is_deterministic() {
     assert(first.is_promotion == second.is_promotion);
 }
 
+void test_empty_probcut_candidate_flags_returns_all_false() {
+    const auto flags = sirio::search_params::empty_probcut_candidate_flags();
+    assert(!flags.has_candidate_move);
+    assert(!flags.is_capture);
+    assert(!flags.is_noisy);
+    assert(!flags.is_promotion);
+}
+
+void test_make_probcut_candidate_flags_preserves_all_false_values() {
+    const auto flags = sirio::search_params::make_probcut_candidate_flags(false, false, false, false);
+    assert(!flags.has_candidate_move);
+    assert(!flags.is_capture);
+    assert(!flags.is_noisy);
+    assert(!flags.is_promotion);
+}
+
+void test_make_probcut_candidate_flags_preserves_candidate_flag_only() {
+    const auto flags = sirio::search_params::make_probcut_candidate_flags(true, false, false, false);
+    assert(flags.has_candidate_move);
+    assert(!flags.is_capture);
+    assert(!flags.is_noisy);
+    assert(!flags.is_promotion);
+}
+
+void test_make_probcut_candidate_flags_preserves_capture_flag() {
+    const auto flags = sirio::search_params::make_probcut_candidate_flags(true, true, false, false);
+    assert(flags.has_candidate_move);
+    assert(flags.is_capture);
+    assert(!flags.is_noisy);
+    assert(!flags.is_promotion);
+}
+
+void test_make_probcut_candidate_flags_preserves_noisy_flag() {
+    const auto flags = sirio::search_params::make_probcut_candidate_flags(true, false, true, false);
+    assert(flags.has_candidate_move);
+    assert(!flags.is_capture);
+    assert(flags.is_noisy);
+    assert(!flags.is_promotion);
+}
+
+void test_make_probcut_candidate_flags_preserves_promotion_flag() {
+    const auto flags = sirio::search_params::make_probcut_candidate_flags(true, false, false, true);
+    assert(flags.has_candidate_move);
+    assert(!flags.is_capture);
+    assert(!flags.is_noisy);
+    assert(flags.is_promotion);
+}
+
+void test_make_probcut_candidate_flags_preserves_all_true_values() {
+    const auto flags = sirio::search_params::make_probcut_candidate_flags(true, true, true, true);
+    assert(flags.has_candidate_move);
+    assert(flags.is_capture);
+    assert(flags.is_noisy);
+    assert(flags.is_promotion);
+}
+
+void test_probcut_candidate_flags_helpers_are_deterministic() {
+    const auto empty_a = sirio::search_params::empty_probcut_candidate_flags();
+    const auto empty_b = sirio::search_params::empty_probcut_candidate_flags();
+    assert(empty_a.has_candidate_move == empty_b.has_candidate_move);
+    assert(empty_a.is_capture == empty_b.is_capture);
+    assert(empty_a.is_noisy == empty_b.is_noisy);
+    assert(empty_a.is_promotion == empty_b.is_promotion);
+
+    const auto made_a = sirio::search_params::make_probcut_candidate_flags(true, false, true, false);
+    const auto made_b = sirio::search_params::make_probcut_candidate_flags(true, false, true, false);
+    assert(made_a.has_candidate_move == made_b.has_candidate_move);
+    assert(made_a.is_capture == made_b.is_capture);
+    assert(made_a.is_noisy == made_b.is_noisy);
+    assert(made_a.is_promotion == made_b.is_promotion);
+}
+
+void test_probcut_candidate_selector_from_source_and_flags_helper_matches_source_selector() {
+    const auto flags = sirio::search_params::make_probcut_candidate_flags(true, true, false, true);
+    const auto from_source = sirio::search_params::select_probcut_candidate_context_from_source(
+        sirio::search_params::ProbCutCandidateSource::ExplicitFlags, flags.has_candidate_move,
+        flags.is_capture, flags.is_noisy, flags.is_promotion);
+    const auto from_bridge = sirio::search_params::select_probcut_candidate_context_from_flags(
+        sirio::search_params::ProbCutCandidateSource::ExplicitFlags, flags);
+    assert(from_source.has_candidate_move == from_bridge.has_candidate_move);
+    assert(from_source.is_capture_or_noisy == from_bridge.is_capture_or_noisy);
+    assert(from_source.is_promotion == from_bridge.is_promotion);
+}
+
 void test_probcut_candidate_selector_from_flags_false_matches_empty_context() {
     const auto selected =
         sirio::search_params::select_probcut_candidate_context_from_flags(false, false, false, false);
@@ -1545,11 +1629,13 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_and_guard
     assert(negamax_source.find("const bool probcut_probe = search_params::should_apply_probcut(") != std::string::npos);
     assert(negamax_source.find("const auto probcut_candidate_source =") != std::string::npos);
     assert(negamax_source.find("search_params::ProbCutCandidateSource::ExplicitFlags;") != std::string::npos);
-    assert(negamax_source.find("const bool probcut_has_candidate_move = false;") != std::string::npos);
-    assert(negamax_source.find("const bool probcut_candidate_is_capture = false;") != std::string::npos);
-    assert(negamax_source.find("const bool probcut_candidate_is_noisy = false;") != std::string::npos);
-    assert(negamax_source.find("const bool probcut_candidate_is_promotion = false;") != std::string::npos);
-    assert(negamax_source.find("select_probcut_candidate_context_from_source(\n            probcut_candidate_source,\n            probcut_has_candidate_move,\n            probcut_candidate_is_capture,\n            probcut_candidate_is_noisy,\n            probcut_candidate_is_promotion)") !=
+    assert(negamax_source.find("const auto probcut_candidate_flags =") != std::string::npos);
+    assert(negamax_source.find("search_params::empty_probcut_candidate_flags()") != std::string::npos);
+    assert(negamax_source.find("const bool probcut_has_candidate_move = false;") == std::string::npos);
+    assert(negamax_source.find("const bool probcut_candidate_is_capture = false;") == std::string::npos);
+    assert(negamax_source.find("const bool probcut_candidate_is_noisy = false;") == std::string::npos);
+    assert(negamax_source.find("const bool probcut_candidate_is_promotion = false;") == std::string::npos);
+    assert(negamax_source.find("select_probcut_candidate_context_from_flags(\n            probcut_candidate_source,\n            probcut_candidate_flags)") !=
            std::string::npos);
     assert(negamax_source.find("if (probcut_candidate_source == search_params::ProbCutCandidateSource::ExplicitFlags)") !=
            std::string::npos);
@@ -2083,6 +2169,15 @@ void run_history_tests() {
     test_probcut_candidate_selector_from_source_none_returns_empty_context();
     test_probcut_candidate_selector_from_source_explicit_flags_delegates_to_flag_selector();
     test_probcut_candidate_selector_from_source_is_deterministic();
+    test_empty_probcut_candidate_flags_returns_all_false();
+    test_make_probcut_candidate_flags_preserves_all_false_values();
+    test_make_probcut_candidate_flags_preserves_candidate_flag_only();
+    test_make_probcut_candidate_flags_preserves_capture_flag();
+    test_make_probcut_candidate_flags_preserves_noisy_flag();
+    test_make_probcut_candidate_flags_preserves_promotion_flag();
+    test_make_probcut_candidate_flags_preserves_all_true_values();
+    test_probcut_candidate_flags_helpers_are_deterministic();
+    test_probcut_candidate_selector_from_source_and_flags_helper_matches_source_selector();
     test_probcut_candidate_selector_from_flags_false_matches_empty_context();
     test_probcut_candidate_classification_rejects_false_candidate_flags();
     test_probcut_candidate_classification_explicit_quiet_candidate_is_not_tactical();
