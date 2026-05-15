@@ -2748,3 +2748,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-117 ProbCut Candidate Source Observability (Runtime Source None)
+
+- Added deterministic ProbCut candidate-source observability for runtime source `None`.
+- Runtime source remains `ProbCutCandidateSource::None`.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

@@ -486,3 +486,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime update path remains unchanged.
 - P0-116 introduces ProbCut candidate-source authority infrastructure only.
 - No CaptureHistory/NoisyHistory scoring or runtime update behavior changed.
+
+## 35) P0-117 note
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-117 adds ProbCut candidate-source observability only.
+- No Capture/NoisyHistory scoring or update behavior was changed.
