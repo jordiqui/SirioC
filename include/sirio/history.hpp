@@ -99,6 +99,7 @@ struct ProbCutRuntimeCounters {
     int candidate_source_explicit_flags_applied = 0;
     int probe_applied = 0;
     int empty_candidate_context_applied = 0;
+    int empty_candidate_flags_applied = 0;
     int ineligible_candidate_applied = 0;
     int cutoff_decision_applied = 0;
     int empty_reduced_search_request_applied = 0;
@@ -208,6 +209,8 @@ public:
     void record_probcut_candidate_source_explicit_flags();
     [[nodiscard]] int probcut_empty_candidate_context_count_for_tests() const;
     void record_probcut_empty_candidate_context();
+    [[nodiscard]] int probcut_empty_candidate_flags_count_for_tests() const;
+    void record_probcut_empty_candidate_flags();
     [[nodiscard]] int probcut_ineligible_candidate_count_for_tests() const;
     void record_probcut_ineligible_candidate();
     [[nodiscard]] int probcut_cutoff_decision_count_for_tests() const;
