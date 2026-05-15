@@ -2734,3 +2734,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-115 ProbCut runtime candidate placeholder variables (disabled / no-op)
+
+- ProbCut runtime candidate placeholders added with disabled/no-runtime-search behaviour.
+- No NNUE runtime behaviour changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
