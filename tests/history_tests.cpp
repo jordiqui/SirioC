@@ -1028,6 +1028,46 @@ void test_empty_probcut_candidate_flags_returns_all_false() {
     assert(!flags.is_promotion);
 }
 
+void test_probcut_candidate_flags_empty_helper_accepts_empty_flags() {
+    const auto flags = sirio::search_params::empty_probcut_candidate_flags();
+    assert(sirio::search_params::probcut_candidate_flags_are_empty(flags));
+    assert(!sirio::search_params::probcut_candidate_flags_are_non_empty(flags));
+}
+
+void test_probcut_candidate_flags_non_empty_helper_accepts_candidate_move_flag() {
+    const auto flags = sirio::search_params::make_probcut_candidate_flags(true, false, false, false);
+    assert(!sirio::search_params::probcut_candidate_flags_are_empty(flags));
+    assert(sirio::search_params::probcut_candidate_flags_are_non_empty(flags));
+}
+
+void test_probcut_candidate_flags_non_empty_helper_accepts_capture_flag() {
+    const auto flags = sirio::search_params::make_probcut_candidate_flags(false, true, false, false);
+    assert(!sirio::search_params::probcut_candidate_flags_are_empty(flags));
+    assert(sirio::search_params::probcut_candidate_flags_are_non_empty(flags));
+}
+
+void test_probcut_candidate_flags_non_empty_helper_accepts_noisy_flag() {
+    const auto flags = sirio::search_params::make_probcut_candidate_flags(false, false, true, false);
+    assert(!sirio::search_params::probcut_candidate_flags_are_empty(flags));
+    assert(sirio::search_params::probcut_candidate_flags_are_non_empty(flags));
+}
+
+void test_probcut_candidate_flags_non_empty_helper_accepts_promotion_flag() {
+    const auto flags = sirio::search_params::make_probcut_candidate_flags(false, false, false, true);
+    assert(!sirio::search_params::probcut_candidate_flags_are_empty(flags));
+    assert(sirio::search_params::probcut_candidate_flags_are_non_empty(flags));
+}
+
+void test_probcut_candidate_flags_non_empty_helper_is_deterministic() {
+    const auto flags = sirio::search_params::make_probcut_candidate_flags(false, true, false, true);
+    const bool first_empty = sirio::search_params::probcut_candidate_flags_are_empty(flags);
+    const bool second_empty = sirio::search_params::probcut_candidate_flags_are_empty(flags);
+    const bool first_non_empty = sirio::search_params::probcut_candidate_flags_are_non_empty(flags);
+    const bool second_non_empty = sirio::search_params::probcut_candidate_flags_are_non_empty(flags);
+    assert(first_empty == second_empty);
+    assert(first_non_empty == second_non_empty);
+}
+
 void test_make_probcut_candidate_flags_preserves_all_false_values() {
     const auto flags = sirio::search_params::make_probcut_candidate_flags(false, false, false, false);
     assert(!flags.has_candidate_move);
@@ -2185,6 +2225,12 @@ void run_history_tests() {
     test_probcut_candidate_selector_from_source_explicit_flags_delegates_to_flag_selector();
     test_probcut_candidate_selector_from_source_is_deterministic();
     test_empty_probcut_candidate_flags_returns_all_false();
+    test_probcut_candidate_flags_empty_helper_accepts_empty_flags();
+    test_probcut_candidate_flags_non_empty_helper_accepts_candidate_move_flag();
+    test_probcut_candidate_flags_non_empty_helper_accepts_capture_flag();
+    test_probcut_candidate_flags_non_empty_helper_accepts_noisy_flag();
+    test_probcut_candidate_flags_non_empty_helper_accepts_promotion_flag();
+    test_probcut_candidate_flags_non_empty_helper_is_deterministic();
     test_make_probcut_candidate_flags_preserves_all_false_values();
     test_make_probcut_candidate_flags_preserves_candidate_flag_only();
     test_make_probcut_candidate_flags_preserves_capture_flag();

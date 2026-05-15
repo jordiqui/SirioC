@@ -855,3 +855,17 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - `selectivity_probcut_enabled` remains `false`.
 - qsearch remains clean.
 - Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, NNUE behavior remains unchanged.
+
+## 17) P0-124 ProbCut candidate-flags empty/non-empty helper foundation (no runtime behavior change)
+- Added deterministic ProbCut candidate-flags helper foundation for empty/non-empty detection in `search_params`.
+- Runtime still uses empty candidate flags (`empty_probcut_candidate_flags()`).
+- Runtime source remains `ProbCutCandidateSource::ExplicitFlags`.
+- Runtime candidate remains empty/no-candidate.
+- Runtime eligibility remains false.
+- Runtime request remains empty/no-request.
+- No real candidate extraction was added.
+- No reduced-search invocation was added.
+- No candidate selection was added.
+- `selectivity_probcut_enabled` remains false.
+- qsearch remains clean of ProbCut helper/recorder/source/eligibility/request/cutoff wiring.
+- Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, NNUE remain unchanged.
