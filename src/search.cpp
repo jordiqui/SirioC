@@ -1283,12 +1283,15 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
     }
     const bool is_pv_node = beta - alpha > 1;
     const bool improving = corrected_static_eval > parent_static_eval;
+    const auto probcut_candidate_source =
+        search_params::ProbCutCandidateSource::None;
     const bool probcut_has_candidate_move = false;
     const bool probcut_candidate_is_capture = false;
     const bool probcut_candidate_is_noisy = false;
     const bool probcut_candidate_is_promotion = false;
     const auto probcut_candidate =
-        search_params::select_probcut_candidate_context_from_flags(
+        search_params::select_probcut_candidate_context_from_source(
+            probcut_candidate_source,
             probcut_has_candidate_move,
             probcut_candidate_is_capture,
             probcut_candidate_is_noisy,

@@ -481,3 +481,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime path remains unchanged.
 - P0-115 is ProbCut candidate-placeholder variable wiring only.
 - No Capture/NoisyHistory scoring or update change.
+
+## P0-116 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime update path remains unchanged.
+- P0-116 introduces ProbCut candidate-source authority infrastructure only.
+- No CaptureHistory/NoisyHistory scoring or runtime update behavior changed.

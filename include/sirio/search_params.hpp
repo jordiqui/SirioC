@@ -65,6 +65,11 @@ struct ProbCutCandidateContext {
     bool is_promotion = false;
 };
 
+enum class ProbCutCandidateSource {
+    None,
+    ExplicitFlags
+};
+
 struct ProbCutReducedSearchResult {
     bool has_result = false;
     int value = 0;
@@ -100,6 +105,16 @@ struct ProbCutReducedSearchRequest {
 [[nodiscard]] inline constexpr ProbCutCandidateContext select_probcut_candidate_context_from_flags(
     bool has_candidate_move, bool is_capture, bool is_noisy, bool is_promotion) {
     return classify_probcut_candidate(has_candidate_move, is_capture, is_noisy, is_promotion);
+}
+
+[[nodiscard]] inline constexpr ProbCutCandidateContext select_probcut_candidate_context_from_source(
+    ProbCutCandidateSource source, bool has_candidate_move, bool is_capture, bool is_noisy,
+    bool is_promotion) {
+    if (source == ProbCutCandidateSource::None) {
+        return empty_probcut_candidate_context();
+    }
+    return select_probcut_candidate_context_from_flags(has_candidate_move, is_capture, is_noisy,
+                                                       is_promotion);
 }
 
 [[nodiscard]] inline constexpr ProbCutReducedSearchResult empty_probcut_reduced_search_result() {
