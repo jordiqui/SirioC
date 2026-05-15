@@ -2785,3 +2785,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-122 ProbCut Candidate Flags Context Foundation / Empty Runtime Flags Contract
+
+- Added ProbCut candidate flags context helper foundation in `search_params` with deterministic, data-only helpers.
+- Main negamax runtime now uses an empty flags context for ProbCut candidate construction, preserving empty/no-candidate behavior.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

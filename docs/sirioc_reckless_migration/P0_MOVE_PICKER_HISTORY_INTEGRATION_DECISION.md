@@ -826,3 +826,17 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - `selectivity_probcut_enabled` remains `false`.
 - `qsearch` remains free of ProbCut runtime wiring.
 - Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE behavior remain unchanged.
+
+## 15) P0-122 ProbCut candidate flags context foundation (empty runtime contract)
+- Added deterministic ProbCut candidate flags context data type and helpers in `search_params`.
+- Main negamax now uses `empty_probcut_candidate_flags()` for runtime candidate flags.
+- Runtime ProbCut candidate source remains `ProbCutCandidateSource::ExplicitFlags`.
+- Runtime candidate remains empty/no-candidate.
+- Runtime eligibility remains false.
+- Runtime reduced-search request remains empty/no-request.
+- No real candidate extraction added (no Board/Move/MovePicker/TT/generated-capture input path).
+- No ProbCut reduced-search invocation added.
+- No runtime candidate selection added.
+- `selectivity_probcut_enabled` remains false.
+- qsearch remains clean (no ProbCut helper/runtime wiring).
+- Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE behavior remain unchanged.

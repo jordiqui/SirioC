@@ -65,6 +65,13 @@ struct ProbCutCandidateContext {
     bool is_promotion = false;
 };
 
+struct ProbCutCandidateFlags {
+    bool has_candidate_move = false;
+    bool is_capture = false;
+    bool is_noisy = false;
+    bool is_promotion = false;
+};
+
 enum class ProbCutCandidateSource {
     None,
     ExplicitFlags
@@ -107,6 +114,15 @@ struct ProbCutReducedSearchRequest {
     return classify_probcut_candidate(has_candidate_move, is_capture, is_noisy, is_promotion);
 }
 
+[[nodiscard]] inline constexpr ProbCutCandidateFlags empty_probcut_candidate_flags() {
+    return ProbCutCandidateFlags{};
+}
+
+[[nodiscard]] inline constexpr ProbCutCandidateFlags make_probcut_candidate_flags(
+    bool has_candidate_move, bool is_capture, bool is_noisy, bool is_promotion) {
+    return ProbCutCandidateFlags{has_candidate_move, is_capture, is_noisy, is_promotion};
+}
+
 [[nodiscard]] inline constexpr ProbCutCandidateContext select_probcut_candidate_context_from_source(
     ProbCutCandidateSource source, bool has_candidate_move, bool is_capture, bool is_noisy,
     bool is_promotion) {
@@ -115,6 +131,12 @@ struct ProbCutReducedSearchRequest {
     }
     return select_probcut_candidate_context_from_flags(has_candidate_move, is_capture, is_noisy,
                                                        is_promotion);
+}
+
+[[nodiscard]] inline constexpr ProbCutCandidateContext select_probcut_candidate_context_from_flags(
+    ProbCutCandidateSource source, const ProbCutCandidateFlags& flags) {
+    return select_probcut_candidate_context_from_source(
+        source, flags.has_candidate_move, flags.is_capture, flags.is_noisy, flags.is_promotion);
 }
 
 [[nodiscard]] inline constexpr bool probcut_candidate_is_eligible(
