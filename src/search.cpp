@@ -1315,6 +1315,9 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
             search_params::empty_probcut_reduced_search_result();
         const bool probcut_candidate_eligible =
             search_params::probcut_candidate_is_eligible(probcut_candidate);
+        if (!probcut_candidate_eligible) {
+            context.history.record_probcut_ineligible_candidate();
+        }
         const auto probcut_request =
             search_params::make_probcut_reduced_search_request_from_parameters(
                 probcut_candidate_eligible,
