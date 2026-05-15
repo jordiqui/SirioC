@@ -798,3 +798,17 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - `selectivity_probcut_enabled` remains `false`.
 - qsearch remains free of ProbCut source/recorder/request helper usage.
 - Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE behavior remain unchanged.
+
+## P0-120 ProbCut Eligible Candidate Gate / Empty Runtime Request Contract
+- Added a pure `search_params::probcut_candidate_is_eligible(const ProbCutCandidateContext&)` helper.
+- Main-negamax ProbCut request-builder gate now uses candidate eligibility instead of raw `has_candidate_move`.
+- Runtime ProbCut candidate source remains `ProbCutCandidateSource::ExplicitFlags`.
+- All explicit candidate flags remain false.
+- Runtime candidate remains empty/no-candidate.
+- Runtime reduced-search request remains empty/no-request.
+- No real candidate extraction was added.
+- No reduced-search invocation was added.
+- No candidate selection was added.
+- `selectivity_probcut_enabled` remains false.
+- `qsearch` remains clean of ProbCut runtime wiring.
+- Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.

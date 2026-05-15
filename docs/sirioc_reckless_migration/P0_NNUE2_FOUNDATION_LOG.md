@@ -2771,3 +2771,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-120 ProbCut Eligible Candidate Gate / Empty Runtime Request Contract
+
+- Added a pure ProbCut candidate eligibility helper with empty/no-candidate runtime behavior preserved.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
