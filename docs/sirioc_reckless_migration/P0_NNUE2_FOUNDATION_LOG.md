@@ -2719,3 +2719,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-113 ProbCut request builder runtime wiring (disabled/no-runtime-search)
+- ProbCut runtime request builder is now wired in explicit no-candidate mode (`has_candidate=false`) in guarded main negamax runtime scaffolding.
+- Runtime remains disabled/no-runtime-search behavior; request state remains empty/no-request.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

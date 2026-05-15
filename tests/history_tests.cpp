@@ -1472,8 +1472,9 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_and_guard
     assert(negamax_source.find("const int probcut_depth = search_params::probcut_reduced_depth(depth_left);") !=
            std::string::npos);
     assert(negamax_source.find("const auto probcut_request =") != std::string::npos);
-    assert(negamax_source.find("search_params::empty_probcut_reduced_search_request()") != std::string::npos);
-    assert(negamax_source.find("make_probcut_reduced_search_request_from_parameters(") == std::string::npos);
+    assert(negamax_source.find("search_params::empty_probcut_reduced_search_request()") == std::string::npos);
+    assert(negamax_source.find("make_probcut_reduced_search_request_from_parameters(") != std::string::npos);
+    assert(negamax_source.find("make_probcut_reduced_search_request_from_parameters(\n                false,\n                probcut_beta,\n                probcut_depth)") != std::string::npos);
     assert(negamax_source.find("if (!probcut_request.has_request)") != std::string::npos);
     assert(negamax_source.find("context.history.record_probcut_empty_reduced_search_request();") != std::string::npos);
     assert(negamax_source.find("(void)probcut_request;") != std::string::npos);
