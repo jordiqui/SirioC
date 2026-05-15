@@ -441,6 +441,12 @@ int SearchHistory::probcut_empty_candidate_flags_count_for_tests() const {
 void SearchHistory::record_probcut_empty_candidate_flags() {
     ++probcut_runtime_counters_.empty_candidate_flags_applied;
 }
+int SearchHistory::probcut_non_empty_candidate_flags_probe_count_for_tests() const {
+    return probcut_runtime_counters_.non_empty_candidate_flags_probe_applied;
+}
+void SearchHistory::record_probcut_non_empty_candidate_flags_probe() {
+    ++probcut_runtime_counters_.non_empty_candidate_flags_probe_applied;
+}
 int SearchHistory::probcut_ineligible_candidate_count_for_tests() const {
     return probcut_runtime_counters_.ineligible_candidate_applied;
 }

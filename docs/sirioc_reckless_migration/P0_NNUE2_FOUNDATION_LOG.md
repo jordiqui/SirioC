@@ -2814,3 +2814,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behaviour changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-126 ProbCut Non-Empty Candidate-Flags Probe Observability (Disabled / No-op)
+
+- Added deterministic observability for the ProbCut non-empty candidate-flags probe, while runtime stays empty/no-candidate.
+- Runtime ProbCut candidate flags remain empty/all-false under defaults.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

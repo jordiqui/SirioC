@@ -885,3 +885,21 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - `selectivity_probcut_enabled` remains false.
 - qsearch remains clean.
 - Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, NNUE unchanged.
+
+## P0-126 ProbCut non-empty candidate-flags probe observability (disabled/no-op runtime)
+- Added deterministic `SearchHistory` observability for the non-empty ProbCut candidate-flags probe.
+- Runtime ProbCut source remains `ProbCutCandidateSource::ExplicitFlags`.
+- Runtime candidate flags still come from `empty_probcut_candidate_flags()` and remain all false.
+- Runtime non-empty flags probe remains false under defaults.
+- Runtime candidate remains empty/no-candidate.
+- Runtime candidate eligibility remains false.
+- Runtime reduced-search request remains empty/no-request.
+- Non-empty flags probe is not used as request-builder gate.
+- Request-builder gate remains `probcut_candidate_eligible`.
+- No real runtime candidate extraction/selection added.
+- No reduced-search invocation added.
+- No ProbCut search added.
+- `selectivity_probcut_enabled` remains false.
+- qsearch remains clean (no ProbCut wiring additions).
+- Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.
+- Originality/provenance: change is original SirioC observability wiring and tests.
