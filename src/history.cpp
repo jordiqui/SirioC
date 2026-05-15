@@ -423,6 +423,12 @@ int SearchHistory::probcut_candidate_source_none_count_for_tests() const {
 void SearchHistory::record_probcut_candidate_source_none() {
     ++probcut_runtime_counters_.candidate_source_none_applied;
 }
+int SearchHistory::probcut_candidate_source_explicit_flags_count_for_tests() const {
+    return probcut_runtime_counters_.candidate_source_explicit_flags_applied;
+}
+void SearchHistory::record_probcut_candidate_source_explicit_flags() {
+    ++probcut_runtime_counters_.candidate_source_explicit_flags_applied;
+}
 int SearchHistory::probcut_empty_candidate_context_count_for_tests() const {
     return probcut_runtime_counters_.empty_candidate_context_applied;
 }

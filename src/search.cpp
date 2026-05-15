@@ -1285,6 +1285,9 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, Move *best_mo
     const bool improving = corrected_static_eval > parent_static_eval;
     const auto probcut_candidate_source =
         search_params::ProbCutCandidateSource::ExplicitFlags;
+    if (probcut_candidate_source == search_params::ProbCutCandidateSource::ExplicitFlags) {
+        context.history.record_probcut_candidate_source_explicit_flags();
+    }
     const bool probcut_has_candidate_move = false;
     const bool probcut_candidate_is_capture = false;
     const bool probcut_candidate_is_noisy = false;
