@@ -919,3 +919,22 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - `selectivity_probcut_enabled` remains false.
 - `qsearch` remains clean.
 - Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, NNUE unchanged.
+
+## P0-128 ProbCut runtime placeholder candidate flags (ExplicitFlags / empty contract preserved)
+- Main negamax now defines named runtime placeholder candidate-flag variables:
+  - `probcut_runtime_has_candidate_move`
+  - `probcut_runtime_candidate_is_capture`
+  - `probcut_runtime_candidate_is_noisy`
+  - `probcut_runtime_candidate_is_promotion`
+- All runtime placeholder variables remain explicitly `false`.
+- Runtime ProbCut candidate source remains `ProbCutCandidateSource::ExplicitFlags`.
+- Runtime candidate remains empty/no-candidate.
+- Runtime eligibility remains false.
+- Runtime reduced-search request remains empty/no-request.
+- Empty candidate-flags observability remains intact.
+- Non-empty candidate-flags probe remains wired, remains false, and remains explicitly discarded.
+- No real runtime candidate extraction/selection was added.
+- No reduced-search invocation was added.
+- `selectivity_probcut_enabled` remains false.
+- qsearch remains clean (no ProbCut runtime wiring added).
+- Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged in behavior.
