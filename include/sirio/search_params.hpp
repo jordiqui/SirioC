@@ -120,6 +120,14 @@ struct ProbCutReducedSearchRequest {
     return ProbCutReducedSearchRequest{has_request, beta, depth};
 }
 
+[[nodiscard]] inline constexpr ProbCutReducedSearchRequest make_probcut_reduced_search_request_from_parameters(
+    bool has_candidate, int probcut_beta, int probcut_depth) {
+    if (!has_candidate || probcut_depth <= 0) {
+        return empty_probcut_reduced_search_request();
+    }
+    return make_probcut_reduced_search_request(true, probcut_beta, probcut_depth);
+}
+
 [[nodiscard]] inline constexpr bool selectivity_reverse_futility_is_enabled() {
     return selectivity_reverse_futility_enabled;
 }

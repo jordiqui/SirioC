@@ -2711,3 +2711,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - `selectivity_probcut_enabled` remains `false`; P0-109 guarded return scaffold remains unreachable under defaults.
 - qsearch remains clean of ProbCut helper/probe/request/cutoff wiring.
 - Reverse futility (P0-83), MCP (P0-91), CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.
+
+# P0-112 ProbCut Reduced-Search Request Builder Helper (Disabled / No Runtime Wiring)
+
+- Added a deterministic ProbCut reduced-search request builder helper in centralized `search_params` with explicit no-request behavior when candidate is absent or reduced depth is non-positive.
+- Runtime ProbCut behavior remains disabled/no-op (`selectivity_probcut_enabled = false`) and runtime request remains empty/no-request.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.

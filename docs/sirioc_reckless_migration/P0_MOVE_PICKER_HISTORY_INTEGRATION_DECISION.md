@@ -704,3 +704,12 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - `selectivity_probcut_enabled` remains `false`; P0-109 guarded return scaffold remains unreachable under defaults.
 - qsearch remains clean of ProbCut helper/probe/request/cutoff wiring.
 - Reverse futility (P0-83), MCP (P0-91), CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.
+
+## 16) P0-112 note (ProbCut request-builder helper only)
+- Added `make_probcut_reduced_search_request_from_parameters(...)` helper in `search_params` for deterministic reduced-search request construction from explicit parameters.
+- Runtime ProbCut request remains `empty_probcut_reduced_search_request()` (empty/no-request) and builder is intentionally not wired into runtime yet.
+- No reduced-search invocation was added.
+- No candidate selection was added.
+- `selectivity_probcut_enabled` remains `false`.
+- `qsearch` remains free of ProbCut helpers/recorders/request-builders/cutoff helpers/parameter helpers.
+- Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE behavior remain unchanged in this step.
