@@ -758,3 +758,14 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - `selectivity_probcut_enabled` remains false.
 - qsearch remains clean (no ProbCut source/candidate/request/cutoff helper wiring).
 - Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE are unchanged in behavior.
+
+## 35) P0-117 ProbCut candidate-source observability (source None / no runtime behavior change)
+- Added deterministic SearchHistory observability for runtime ProbCut candidate source `None`.
+- Runtime ProbCut source remains `search_params::ProbCutCandidateSource::None`.
+- Runtime ProbCut candidate remains empty/no-candidate.
+- Runtime reduced-search request remains empty/no-request.
+- No real candidate extraction or candidate selection was added.
+- No reduced-search invocation was added.
+- `selectivity_probcut_enabled` remains `false`.
+- qsearch remains free of ProbCut wiring.
+- Reverse futility, MCP, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, NNUE are unchanged.
