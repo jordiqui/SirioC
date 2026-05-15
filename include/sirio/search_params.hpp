@@ -117,6 +117,12 @@ struct ProbCutReducedSearchRequest {
                                                        is_promotion);
 }
 
+[[nodiscard]] inline constexpr bool probcut_candidate_is_eligible(
+    const ProbCutCandidateContext& candidate) {
+    return candidate.has_candidate_move && candidate.is_capture_or_noisy &&
+           !candidate.is_promotion;
+}
+
 [[nodiscard]] inline constexpr ProbCutReducedSearchResult empty_probcut_reduced_search_result() {
     return ProbCutReducedSearchResult{};
 }

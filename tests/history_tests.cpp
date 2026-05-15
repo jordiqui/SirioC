@@ -1133,6 +1133,39 @@ void test_probcut_candidate_selector_from_flags_matches_classifier() {
     }
 }
 
+
+void test_probcut_candidate_eligibility_empty_context_is_false() {
+    const auto candidate = sirio::search_params::empty_probcut_candidate_context();
+    assert(!sirio::search_params::probcut_candidate_is_eligible(candidate));
+}
+
+void test_probcut_candidate_eligibility_has_candidate_false_is_false() {
+    const auto candidate = sirio::search_params::make_probcut_candidate_context(false, true, false);
+    assert(!sirio::search_params::probcut_candidate_is_eligible(candidate));
+}
+
+void test_probcut_candidate_eligibility_non_tactical_candidate_is_false() {
+    const auto candidate = sirio::search_params::make_probcut_candidate_context(true, false, false);
+    assert(!sirio::search_params::probcut_candidate_is_eligible(candidate));
+}
+
+void test_probcut_candidate_eligibility_promotion_candidate_is_false() {
+    const auto candidate = sirio::search_params::make_probcut_candidate_context(true, true, true);
+    assert(!sirio::search_params::probcut_candidate_is_eligible(candidate));
+}
+
+void test_probcut_candidate_eligibility_only_true_for_tactical_non_promotion_candidate() {
+    const auto candidate = sirio::search_params::make_probcut_candidate_context(true, true, false);
+    assert(sirio::search_params::probcut_candidate_is_eligible(candidate));
+}
+
+void test_probcut_candidate_eligibility_is_deterministic() {
+    const auto candidate = sirio::search_params::make_probcut_candidate_context(true, true, false);
+    const bool first = sirio::search_params::probcut_candidate_is_eligible(candidate);
+    const bool second = sirio::search_params::probcut_candidate_is_eligible(candidate);
+    assert(first == second);
+}
+
 void test_probcut_reduced_search_result_empty_helper_is_defaulted() {
     const auto result = sirio::search_params::empty_probcut_reduced_search_result();
     assert(!result.has_result);
@@ -1523,6 +1556,9 @@ void test_search_main_negamax_has_probcut_disabled_probe_observability_and_guard
     assert(negamax_source.find("probcut_candidate.has_candidate_move") != std::string::npos);
     assert(negamax_source.find("probcut_candidate.is_capture_or_noisy") != std::string::npos);
     assert(negamax_source.find("probcut_candidate.is_promotion") != std::string::npos);
+    assert(negamax_source.find("const bool probcut_candidate_eligible =") != std::string::npos);
+    assert(negamax_source.find("search_params::probcut_candidate_is_eligible(probcut_candidate);") != std::string::npos);
+    assert(negamax_source.find("make_probcut_reduced_search_request_from_parameters(\n                probcut_candidate.has_candidate_move,") == std::string::npos);
     assert(negamax_source.find("if (probcut_probe)") != std::string::npos);
     assert(negamax_source.find("context.history.record_probcut_probe();") != std::string::npos);
     assert(negamax_source.find("const int probcut_beta = search_params::probcut_beta_threshold(beta);") !=
@@ -2049,6 +2085,12 @@ void run_history_tests() {
     test_probcut_candidate_selector_from_flags_explicit_promotion_candidate_is_preserved();
     test_probcut_candidate_selector_from_flags_preserves_all_flags();
     test_probcut_candidate_selector_from_flags_matches_classifier();
+    test_probcut_candidate_eligibility_empty_context_is_false();
+    test_probcut_candidate_eligibility_has_candidate_false_is_false();
+    test_probcut_candidate_eligibility_non_tactical_candidate_is_false();
+    test_probcut_candidate_eligibility_promotion_candidate_is_false();
+    test_probcut_candidate_eligibility_only_true_for_tactical_non_promotion_candidate();
+    test_probcut_candidate_eligibility_is_deterministic();
     test_probcut_reduced_search_result_empty_helper_is_defaulted();
     test_probcut_reduced_search_result_make_helper_preserves_false_flag_and_value();
     test_probcut_reduced_search_result_make_helper_preserves_true_flag_and_value();
