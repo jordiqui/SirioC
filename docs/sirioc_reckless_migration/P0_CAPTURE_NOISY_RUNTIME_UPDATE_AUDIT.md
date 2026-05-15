@@ -506,3 +506,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime path remains unchanged.
 - P0-120 adds ProbCut candidate-eligibility gating infrastructure only.
 - No Capture/NoisyHistory scoring or runtime update policy change was made.
+
+## P0-121 note
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-121 adds ProbCut ineligible-candidate observability only.
+- No Capture/NoisyHistory scoring or runtime update behavior changed.
