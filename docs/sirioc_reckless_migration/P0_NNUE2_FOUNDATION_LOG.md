@@ -2756,3 +2756,11 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behavior changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-118 ProbCut Runtime Source Transition (ExplicitFlags / Empty Candidate)
+
+- ProbCut runtime source in main negamax changed to `ProbCutCandidateSource::ExplicitFlags` with explicit placeholder flags remaining false.
+- Runtime ProbCut candidate and reduced-search request behavior remains empty/no-op.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
