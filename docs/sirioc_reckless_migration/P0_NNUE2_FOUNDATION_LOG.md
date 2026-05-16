@@ -2850,3 +2850,10 @@ This milestone adds `docs/sirioc_reckless_migration/P0_EVALUATION_TRACK_READINES
 - No NNUE runtime behaviour changed.
 - No evaluation backend topology changed.
 - No strength/Elo claim.
+
+# P0-132 ProbCut Empty Reduced-Search Result Observability (Disabled / No-op)
+- Added empty ProbCut reduced-search result observability in main negamax.
+- Runtime reduced-search result remains empty/no-result.
+- No NNUE runtime behavior changed.
+- No evaluation backend topology changed.
+- No strength/Elo claim.
