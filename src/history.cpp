@@ -483,6 +483,12 @@ int SearchHistory::probcut_empty_reduced_search_result_count_for_tests() const {
 void SearchHistory::record_probcut_empty_reduced_search_result() {
     ++probcut_runtime_counters_.empty_reduced_search_result_applied;
 }
+int SearchHistory::probcut_non_empty_reduced_search_result_count_for_tests() const {
+    return probcut_runtime_counters_.non_empty_reduced_search_result_applied;
+}
+void SearchHistory::record_probcut_non_empty_reduced_search_result() {
+    ++probcut_runtime_counters_.non_empty_reduced_search_result_applied;
+}
 void SearchHistory::reset_probcut_runtime_observability_for_tests() {
     probcut_runtime_counters_ = {};
 }
