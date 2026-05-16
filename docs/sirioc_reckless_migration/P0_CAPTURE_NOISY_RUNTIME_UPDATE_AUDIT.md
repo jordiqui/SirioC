@@ -558,3 +558,8 @@ P0-61 is documentation-only. No search behaviour changed. No NNUE behaviour chan
 - Capture/NoisyHistory runtime path remains unchanged.
 - P0-130 is ProbCut eligible-candidate observability only.
 - No Capture/NoisyHistory scoring or update change.
+
+## 15) P0-132 note (capture/noisy runtime path unchanged)
+- Capture/NoisyHistory runtime path remains unchanged.
+- P0-132 is ProbCut empty-result observability only.
+- No Capture/NoisyHistory scoring or update behavior changed.
