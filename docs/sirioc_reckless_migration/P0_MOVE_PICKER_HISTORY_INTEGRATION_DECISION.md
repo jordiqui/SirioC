@@ -981,3 +981,15 @@ P0-57 is documentation-only. No search behaviour is changed in this patch. No NN
 - `selectivity_probcut_enabled` remains `false`.
 - qsearch remains free of ProbCut runtime wiring.
 - Reverse futility, MCP, singular extensions, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.
+
+## P0-133 ProbCut non-empty reduced-search result observability (no activation)
+- Added observability for future non-empty ProbCut reduced-search result path.
+- Runtime ProbCut reduced-search result remains empty/no-result under current placeholders.
+- Non-empty reduced-search result recorder is unreachable under current placeholders.
+- No non-empty reduced-search result was introduced.
+- No ProbCut reduced-search invocation was introduced.
+- No ProbCut cutoff was added.
+- No ProbCut candidate extraction was added.
+- `selectivity_probcut_enabled` remains `false`.
+- qsearch remains clean of ProbCut wiring.
+- Reverse futility, MCP, singular extensions, CorrectionHistory, Capture/NoisyHistory, ContinuationHistory, TT, MovePicker, UCI, and NNUE remain unchanged.
